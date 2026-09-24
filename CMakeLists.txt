@@ -100,6 +100,9 @@ pkg_check_modules(LIBLANGTAG REQUIRED IMPORTED_TARGET liblangtag>=0.4.0)
 # tl parses XML with libxml2 directly (tools/source/xml/XmlWalker.cxx).
 find_package(LibXml2 REQUIRED)
 
+# sax wraps expat as well as libxml2.
+find_package(EXPAT REQUIRED)
+
 # --- modules -----------------------------------------------------------------
 #
 # The order is the bootstrap order, not the order the modules appear in the
@@ -123,6 +126,16 @@ add_subdirectory(binaryurp)
 add_subdirectory(ucbhelper)
 add_subdirectory(comphelper)
 add_subdirectory(stoc)
+add_subdirectory(i18nutil)
+add_subdirectory(sax)
+
+# i18npool is partially ported: saxparser, the locale-data generator it feeds,
+# and both libraries are written, but four more code generators are still
+# missing (see i18npool/CMakeLists.txt).  Gated so the build stays honest until
+# they are done.
+if (LIBRESTUDIO_HAVE_I18NPOOL)
+    add_subdirectory(i18npool)
+endif ()
 add_subdirectory(bridges)
 add_subdirectory(cppuhelper)
 add_subdirectory(basegfx)
@@ -146,7 +159,7 @@ add_custom_command(
     OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/services.rdb"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${services_RDB}" "${LIBRESTUDIO_PROGRAM_DIR}/services.rdb"
-    DEPENDS services_rdb
+    DEPENDS "${services_RDB}" services_rdb
     COMMENT "Installing services.rdb"
     VERBATIM)
 add_custom_target(program_services_rdb ALL
@@ -156,11 +169,20 @@ add_custom_command(
     OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/types.rdb"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${udkapi_RDB}" "${LIBRESTUDIO_PROGRAM_DIR}/types.rdb"
-    DEPENDS udkapi_rdb
+    DEPENDS "${udkapi_RDB}" udkapi_rdb
     COMMENT "Installing types.rdb"
     VERBATIM)
 add_custom_target(program_types_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types.rdb")
+
+# saxparser runs as part of the build and resolves com.sun.star.xml.sax.Parser
+# through the service manager, so the registry it reads has to be the one this
+# build just produced — not the stale copy from a previous one.  That makes the
+# locale data depend on the installed registry and on libsaxlo itself, neither
+# of which the executable links against.
+if (LIBRESTUDIO_HAVE_I18NPOOL)
+    add_dependencies(i18npool_localedata program_services_rdb sax)
+endif ()
 
 librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/unorc")
 
