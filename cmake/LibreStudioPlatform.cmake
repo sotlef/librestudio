@@ -111,9 +111,13 @@ endmacro()
 
 # A helper for the library naming rules in solenv/gbuild/platform/unxgcc.mk.
 #
-#   UNO  -> libuno_<name>.so.<UDK_MAJOR>     (sal, cppu)
-#   RT   -> lib<name>gcc3.so.<UDK_MAJOR>     (salhelper, cppuhelper)
-#   OOO  -> lib<name>lo.so                   (everything else)
+#   UNO  -> libuno_<name>.so.<UDK_MAJOR>          (sal, cppu)
+#   RT   -> libuno_<name>gcc3.so.<UDK_MAJOR>      (salhelper, cppuhelper)
+#   OOO  -> lib<name>lo.so                        (everything else)
+#
+# RepositoryFixes.mk redirects every RTVERLIBS entry — cppuhelper, salhelper,
+# purpenvhelper — to the libuno_ prefix on GCC, so the UNO runtime libraries all
+# share it.
 #
 # The name matters beyond aesthetics: .component files reference the runtime
 # filename through vnd.sun.star.expand, and the UNO service manager dlopens it.
@@ -125,7 +129,7 @@ function(librestudio_set_library_output_name target name layer)
             SOVERSION "${LIBRESTUDIO_UDK_MAJOR}")
     elseif (layer STREQUAL "RT")
         set_target_properties(${target} PROPERTIES
-            OUTPUT_NAME "${name}${LIBRESTUDIO_CPPU_ENV}"
+            OUTPUT_NAME "uno_${name}${LIBRESTUDIO_CPPU_ENV}"
             VERSION "${LIBRESTUDIO_UDK_MAJOR}"
             SOVERSION "${LIBRESTUDIO_UDK_MAJOR}")
     elseif (layer STREQUAL "OOO")

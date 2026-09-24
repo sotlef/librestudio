@@ -80,14 +80,17 @@ if (NOT FROZEN_INCLUDE_DIR)
 endif ()
 
 find_package(ZLIB REQUIRED)
-find_package(Boost 1.69 REQUIRED)
+find_package(Boost 1.69 REQUIRED COMPONENTS locale)
 find_package(Threads REQUIRED)
-find_package(ICU 66 REQUIRED COMPONENTS uc)
+find_package(ICU 66 REQUIRED COMPONENTS uc i18n)
 find_package(PkgConfig REQUIRED)
 
 # liblangtag is used directly by i18nlangtag; it pulls libxml2 in through its
 # own pkg-config file, which is why the UNO core links libxml2 without using it.
 pkg_check_modules(LIBLANGTAG REQUIRED IMPORTED_TARGET liblangtag>=0.4.0)
+
+# tl parses XML with libxml2 directly (tools/source/xml/XmlWalker.cxx).
+find_package(LibXml2 REQUIRED)
 
 # --- modules -----------------------------------------------------------------
 #
@@ -114,6 +117,10 @@ add_subdirectory(comphelper)
 add_subdirectory(stoc)
 add_subdirectory(bridges)
 add_subdirectory(cppuhelper)
+add_subdirectory(basegfx)
+add_subdirectory(tools)
+add_subdirectory(unotools)
+add_subdirectory(sot)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
@@ -151,4 +158,5 @@ librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/unorc")
 
 # --- smoke test --------------------------------------------------------------
 
+add_subdirectory(cpputools)
 add_subdirectory(smoketest)
