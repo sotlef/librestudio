@@ -1,0 +1,12 @@
+/*
+liblangtag integration.
+*/
+
+#ifndef CONFIG_LIBLANGTAG_H
+#define CONFIG_LIBLANGTAG_H
+
+/* Workaround for liblangtag before 0.5.5, whose headers used a bare "inline"
+   that broke under some compilers.  Not needed for newer versions. */
+#define LIBLANGTAG_INLINE_FIX @LIBLANGTAG_INLINE_FIX@
+
+#endif

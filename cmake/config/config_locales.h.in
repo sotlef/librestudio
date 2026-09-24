@@ -1,0 +1,10 @@
+/*
+Locales compiled into sal's text encoding tables.
+*/
+
+#ifndef CONFIG_LOCALES_H
+#define CONFIG_LOCALES_H
+
+#define WITH_LOCALE_ALL @WITH_LOCALE_ALL@
+
+#endif

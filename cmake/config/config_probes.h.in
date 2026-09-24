@@ -1,0 +1,10 @@
+/*
+SystemTap probes.
+*/
+
+#ifndef CONFIG_PROBES_H
+#define CONFIG_PROBES_H
+
+#define USE_SDT_PROBES 0
+
+#endif

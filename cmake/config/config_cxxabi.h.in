@@ -1,0 +1,23 @@
+/*
+Which __cxxabiv1 entry points the C++ runtime exposes.
+
+The bridge sources under bridges/source/cpp_uno/gcc3_linux_x86-64 reach into
+libstdc++'s ABI to throw and to walk the exception chain; the names have changed
+across toolchain versions, so each one is probed separately at configure time.
+*/
+
+#ifndef CONFIG_CXXABI_H
+#define CONFIG_CXXABI_H
+
+#define HAVE_CXXABI_H_CXA_GET_GLOBALS @HAVE_CXXABI_H_CXA_GET_GLOBALS@
+#define HAVE_CXXABI_H_CXA_THROW @HAVE_CXXABI_H_CXA_THROW@
+#define HAVE_CXXABI_H_CXA_EXCEPTION @HAVE_CXXABI_H_CXA_EXCEPTION@
+#define HAVE_CXXABI_H_CXA_EH_GLOBALS @HAVE_CXXABI_H_CXA_EH_GLOBALS@
+#define HAVE_CXXABI_H_CXA_ALLOCATE_EXCEPTION @HAVE_CXXABI_H_CXA_ALLOCATE_EXCEPTION@
+#define HAVE_CXXABI_H_CXA_CURRENT_EXCEPTION_TYPE @HAVE_CXXABI_H_CXA_CURRENT_EXCEPTION_TYPE@
+#define HAVE_CXXABI_H_CLASS_TYPE_INFO @HAVE_CXXABI_H_CLASS_TYPE_INFO@
+#define HAVE_CXXABI_H_SI_CLASS_TYPE_INFO @HAVE_CXXABI_H_SI_CLASS_TYPE_INFO@
+#define HAVE_CXXABI_H_VMI_CLASS_TYPE_INFO @HAVE_CXXABI_H_VMI_CLASS_TYPE_INFO@
+#define HAVE_CXXABI_H_BASE_CLASS_TYPE_INFO @HAVE_CXXABI_H_BASE_CLASS_TYPE_INFO@
+
+#endif

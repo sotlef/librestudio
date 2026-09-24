@@ -1,0 +1,10 @@
+/*
+GPGME support in comphelper.
+*/
+
+#ifndef CONFIG_GPGME_H
+#define CONFIG_GPGME_H
+
+#define HAVE_FEATURE_GPGME @HAVE_FEATURE_GPGME@
+
+#endif

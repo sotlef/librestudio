@@ -1,0 +1,13 @@
+/*
+Emscripten-specific threading support; not applicable to native builds, but
+comphelper/source/misc/emscriptenthreading.cxx includes this header
+unconditionally.
+*/
+
+#ifndef CONFIG_EMSCRIPTEN_H
+#define CONFIG_EMSCRIPTEN_H
+
+#define HAVE_EMSCRIPTEN_JSPI 0
+#define HAVE_EMSCRIPTEN_PROXY_TO_PTHREAD 0
+
+#endif

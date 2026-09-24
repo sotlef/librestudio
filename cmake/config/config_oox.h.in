@@ -1,0 +1,11 @@
+/*
+Crypto backend used by comphelper.
+*/
+
+#ifndef CONFIG_OOX_H
+#define CONFIG_OOX_H
+
+#define USE_TLS_NSS @USE_TLS_NSS@
+#define USE_TLS_OPENSSL @USE_TLS_OPENSSL@
+
+#endif

@@ -1,0 +1,20 @@
+/*
+Global configuration file.
+Only for settings that apply to every source file and are unlikely to change
+often, such as whether a certain C++ feature is available.
+*/
+
+#ifndef CONFIG_GLOBAL_H
+#define CONFIG_GLOBAL_H
+
+#define HAVE_GCC_BUILTIN_ATOMIC @HAVE_GCC_BUILTIN_ATOMIC@
+#define HAVE_GCC_WSFINAE_INCOMPLETE @HAVE_GCC_WSFINAE_INCOMPLETE@
+#define HAVE_SYSLOG_H @HAVE_SYSLOG_H@
+#define HAVE_CPP_CONSTEVAL @HAVE_CPP_CONSTEVAL@
+#define HAVE_CPP_CONSTINIT_SORTED_VECTOR @HAVE_CPP_CONSTINIT_SORTED_VECTOR@
+#define HAVE_CPP_STRONG_ORDER @HAVE_CPP_STRONG_ORDER@
+#define HAVE_P1155R3 @HAVE_P1155R3@
+#define HAVE_DLAPI @HAVE_DLAPI@
+#define HAVE_UNIX_DLAPI @HAVE_UNIX_DLAPI@
+
+#endif

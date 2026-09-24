@@ -1,0 +1,32 @@
+/*
+Directory names inside an installation.
+
+These are not free choices: cppuhelper/source/paths.cxx and rtl/bootstrap.cxx
+look for unorc and types.rdb relative to them, and the SDK ships the same
+values.  Kept identical to the non-macOS branch of configure.ac.
+*/
+
+#ifndef CONFIG_FOLDERS_H
+#define CONFIG_FOLDERS_H
+
+#define LIBO_BIN_FOLDER "program"
+#define LIBO_ETC_FOLDER "program"
+#define LIBO_LIBEXEC_FOLDER "program"
+#define LIBO_LIB_FOLDER "program"
+#define LIBO_SHARE_FOLDER "share"
+#define LIBO_SHARE_HELP_FOLDER "help"
+#define LIBO_SHARE_DOTNET_FOLDER "program/dotnet"
+#define LIBO_SHARE_JAVA_FOLDER "program/classes"
+#define LIBO_SHARE_PRESETS_FOLDER "presets"
+#define LIBO_SHARE_RESOURCE_FOLDER "program/resource"
+#define LIBO_SHARE_SHELL_FOLDER "program/shell"
+#define LIBO_URE_BIN_FOLDER "program"
+#define LIBO_URE_ETC_FOLDER "program"
+#define LIBO_URE_LIB_FOLDER "program"
+#define LIBO_URE_MISC_FOLDER "program"
+#define LIBO_URE_SHARE_JAVA_FOLDER "program/classes"
+
+#define SRC_ROOT "@CMAKE_SOURCE_DIR@"
+#define BUILDDIR "@CMAKE_BINARY_DIR@"
+
+#endif

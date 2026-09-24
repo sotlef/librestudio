@@ -1,0 +1,15 @@
+/*
+GUI toolkit plug-ins; none of them are built by the core-only configuration.
+*/
+
+#ifndef CONFIG_VCLPLUG_H
+#define CONFIG_VCLPLUG_H
+
+#define ENABLE_GTK3 0
+#define ENABLE_GTK4 0
+#define ENABLE_QT5 0
+#define ENABLE_QT6 0
+#define ENABLE_KF5 0
+#define ENABLE_KF6 0
+
+#endif
