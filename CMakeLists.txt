@@ -1,3 +1,5 @@
+# This file is part of the LibreStudio project.
+#
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -31,6 +33,12 @@ option(LIBRESTUDIO_ENABLE_GPGME
 set(LIBRESTUDIO_TLS_BACKEND "NSS" CACHE STRING
     "Crypto backend for comphelper (NSS or OPENSSL)")
 set_property(CACHE LIBRESTUDIO_TLS_BACKEND PROPERTY STRINGS NSS OPENSSL)
+
+# i18npool is not ported yet.  It is not optional for document work: the OLE2
+# storage reader upper-cases entry names through com.sun.star.i18n services, so
+# sot cannot open a file without it.  Set this to ON once the module builds, and
+# the storage check in sot/ starts running.
+option(LIBRESTUDIO_HAVE_I18NPOOL "i18npool has been ported" OFF)
 
 # CTest has to be brought in at the top level: enable_testing() called from a
 # subdirectory does not produce the root CTestTestfile.cmake, and ctest then

@@ -1,4 +1,12 @@
 /*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
 Which __cxxabiv1 entry points the C++ runtime exposes.
 
 The bridge sources under bridges/source/cpp_uno/gcc3_linux_x86-64 reach into
