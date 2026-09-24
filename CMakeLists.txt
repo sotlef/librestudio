@@ -34,12 +34,6 @@ set(LIBRESTUDIO_TLS_BACKEND "NSS" CACHE STRING
     "Crypto backend for comphelper (NSS or OPENSSL)")
 set_property(CACHE LIBRESTUDIO_TLS_BACKEND PROPERTY STRINGS NSS OPENSSL)
 
-# i18npool is not ported yet.  It is not optional for document work: the OLE2
-# storage reader upper-cases entry names through com.sun.star.i18n services, so
-# sot cannot open a file without it.  Set this to ON once the module builds, and
-# the storage check in sot/ starts running.
-option(LIBRESTUDIO_HAVE_I18NPOOL "i18npool has been ported" OFF)
-
 # CTest has to be brought in at the top level: enable_testing() called from a
 # subdirectory does not produce the root CTestTestfile.cmake, and ctest then
 # reports "No tests were found" no matter what the subdirectories registered.
@@ -129,13 +123,7 @@ add_subdirectory(stoc)
 add_subdirectory(i18nutil)
 add_subdirectory(sax)
 
-# i18npool is partially ported: saxparser, the locale-data generator it feeds,
-# and both libraries are written, but four more code generators are still
-# missing (see i18npool/CMakeLists.txt).  Gated so the build stays honest until
-# they are done.
-if (LIBRESTUDIO_HAVE_I18NPOOL)
-    add_subdirectory(i18npool)
-endif ()
+add_subdirectory(i18npool)
 add_subdirectory(bridges)
 add_subdirectory(cppuhelper)
 add_subdirectory(basegfx)
@@ -165,6 +153,13 @@ add_custom_command(
 add_custom_target(program_services_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/services.rdb")
 
+# types.rdb holds the UDK types and stays a copy of udkapi's registry; the
+# office API types live beside it in types/offapi.rdb, and unorc names both.
+# That is the layout upstream installs — odk/settings/std.mk points at
+# program/types/offapi.rdb, and the iOS packaging copies program/types.rdb
+# across as udkapi.rdb next to it.  A single merged types.rdb is what the
+# installed office ships on the desktop, but nothing in the bootstrap requires
+# one file: UNO_TYPES is a list.
 add_custom_command(
     OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/types.rdb"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -175,14 +170,23 @@ add_custom_command(
 add_custom_target(program_types_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types.rdb")
 
+add_custom_command(
+    OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/types/offapi.rdb"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBRESTUDIO_PROGRAM_DIR}/types"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${offapi_RDB}" "${LIBRESTUDIO_PROGRAM_DIR}/types/offapi.rdb"
+    DEPENDS "${offapi_RDB}" offapi_rdb
+    COMMENT "Installing types/offapi.rdb"
+    VERBATIM)
+add_custom_target(program_offapi_rdb ALL
+    DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types/offapi.rdb")
+
 # saxparser runs as part of the build and resolves com.sun.star.xml.sax.Parser
 # through the service manager, so the registry it reads has to be the one this
 # build just produced — not the stale copy from a previous one.  That makes the
 # locale data depend on the installed registry and on libsaxlo itself, neither
 # of which the executable links against.
-if (LIBRESTUDIO_HAVE_I18NPOOL)
-    add_dependencies(i18npool_localedata program_services_rdb sax)
-endif ()
+add_dependencies(i18npool_localedata program_services_rdb sax)
 
 librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/unorc")
 

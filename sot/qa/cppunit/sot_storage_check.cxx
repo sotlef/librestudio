@@ -23,7 +23,10 @@
 
 #include <sal/config.h>
 
+#include <com/sun/star/lang/XMultiComponentFactory.hpp>
+#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
+#include <comphelper/processfactory.hxx>
 #include <cppuhelper/bootstrap.hxx>
 #include <rtl/ref.hxx>
 #include <rtl/ustring.hxx>
@@ -43,6 +46,7 @@ namespace
 int g_failures = 0;
 int g_files = 0;
 int g_streams = 0;
+int g_shortReads = 0;
 
 void fail(const std::string& what)
 {
@@ -65,6 +69,7 @@ bool checkStream(const rtl::Reference<SotStorage>& storage, const OUString& name
     }
 
     std::vector<unsigned char> data(size);
+    sal_uInt64 readable = 0;
     if (size > 0)
     {
         stream->Seek(0);
@@ -74,18 +79,23 @@ bool checkStream(const rtl::Reference<SotStorage>& storage, const OUString& name
             fail("stream reports a different size than the directory entry");
             return false;
         }
-        if (stream->ReadBytes(data.data(), size) != size || stream->GetError())
-        {
-            fail("short or failed read");
-            return false;
-        }
     }
+
+    // A short read is not a failure here.  Several of the files under data/pass
+    // are damaged on purpose — badchain-1.compound has a directory sector that
+    // is not even a directory — and upstream reads them the same way, taking as
+    // much as it can and checking only that what came back reads the same
+    // again.  Requiring the full size would report those files as broken when
+    // the point of keeping them is that they still open.
+    readable = size > 0 ? stream->ReadBytes(data.data(), size) : 0;
+    if (readable < size)
+        ++g_shortReads;
 
     // Now read it back one byte at a time, from the end.
     rtl::Reference<SotStorageStream> backwards(storage->OpenSotStream(name));
     if (backwards.is())
     {
-        for (sal_uInt64 i = size; i > 0; --i)
+        for (sal_uInt64 i = readable; i > 0; --i)
         {
             backwards->Seek(i - 1);
             unsigned char c = 0;
@@ -162,9 +172,9 @@ bool checkFile(const std::string& path)
 
 // The concrete expectation upstream records in test_sot.cxx's testSize: the
 // Book stream of this file is 13312 bytes, and seeking behaves.
-bool checkKnownSizes(const std::string& dataDir)
+bool checkKnownSizes(const std::string& passDir)
 {
-    const std::string path = dataDir + "/fdo84229-1.compound";
+    const std::string path = passDir + "/fdo84229-1.compound";
     std::printf("%s (known sizes)\n", path.c_str());
 
     SvFileStream file(rtl::OUString::createFromAscii(path.c_str()), StreamMode::READ);
@@ -226,6 +236,18 @@ int main(int argc, char** argv)
             std::printf("cannot bootstrap the UNO context\n");
             return 2;
         }
+
+        // Publishing the context process-wide is not optional here.  The
+        // upper-casing in StgEntry::Load goes through CharClass, which asks
+        // comphelper::getProcessComponentContext() for the i18n service rather
+        // than taking a context as a parameter — inside the office the desktop
+        // has already set that up.  desktop/qa/desktop_app/test_desktop_app.cxx
+        // is the same three lines for the same reason.
+        css::uno::Reference<css::lang::XMultiComponentFactory> factory(
+            context->getServiceManager());
+        css::uno::Reference<css::lang::XMultiServiceFactory> serviceManager(
+            factory, css::uno::UNO_QUERY_THROW);
+        comphelper::setProcessServiceFactory(serviceManager);
     }
     catch (const css::uno::Exception& e)
     {
@@ -266,9 +288,10 @@ int main(int argc, char** argv)
     for (const std::string& file : files)
         checkFile(file);
 
-    checkKnownSizes(dataDir);
+    checkKnownSizes(passDir);
 
-    std::printf("\n%d files, %d streams, %d failures\n", g_files, g_streams, g_failures);
+    std::printf("\n%d files, %d streams, %d failures, %d streams short\n", g_files, g_streams,
+                g_failures, g_shortReads);
     std::printf("%s\n", g_failures == 0 ? "SOT CHECK PASSED" : "SOT CHECK FAILED");
     return g_failures == 0 ? 0 : 1;
 }

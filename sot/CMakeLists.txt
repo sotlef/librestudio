@@ -60,9 +60,6 @@ install(TARGETS sot LIBRARY DESTINATION program)
 # own test_sot.cxx cannot be used yet: it builds on unotest's fixtures, and
 # unotest links vcl.
 #
-# The check is built but deliberately not registered with CTest, because it
-# cannot pass yet — see the guard below.  Building it keeps it honest: the day
-# i18npool is ported, the guard flips and it runs.
 add_executable(sot_storage_check qa/cppunit/sot_storage_check.cxx)
 
 target_include_directories(sot_storage_check PRIVATE
@@ -73,10 +70,13 @@ target_include_directories(sot_storage_check PRIVATE
 add_dependencies(sot_storage_check udkapi_normal_headers offapi_normal_headers)
 
 # tl as well as sot: the check uses SvFileStream from tools/stream.hxx directly.
-# The full set of direct dependencies: cppu and cppuhelper own the reference-
-# counting and exception types the check touches, and -Wl,-z,defs requires them
-# to be named rather than inherited.
-target_link_libraries(sot_storage_check PRIVATE sot tl cppu cppuhelper sal salhelper)
+# comphelper is where the process service factory lives — the check publishes
+# the context through it, because sot reaches for that context rather than
+# taking one as an argument.  cppu and cppuhelper own the reference-counting and
+# exception types the check touches.  -Wl,-z,defs requires all of them to be
+# named rather than inherited.
+target_link_libraries(sot_storage_check PRIVATE
+    sot tl comphelper cppu cppuhelper sal salhelper)
 
 # Why this needs i18npool, and why that is not a build detail:
 #
@@ -84,13 +84,18 @@ target_link_libraries(sot_storage_check PRIVATE sot tl cppu cppuhelper sal salhe
 # each entry name (sot/source/sdstor/stgelem.cxx:311) through a CharClass, which
 # asks the component context for com.sun.star.i18n.CharacterClassification — a
 # service i18npool provides.  Without it the first file open throws
-# DeploymentException, which is where this check currently stops.  Upstream says
-# the same thing in its own way: CppunitTest_sot_test_sot.mk asks for
+# DeploymentException.  Upstream says the same thing in its own way:
+# CppunitTest_sot_test_sot.mk asks for
 # gb_CppunitTest_use_components(sot_test_sot, i18npool/util/i18npool).
 #
-# So porting i18npool is a prerequisite for reading documents at all, not just
-# for this test.
-if (BUILD_TESTING AND LIBRESTUDIO_HAVE_I18NPOOL)
+# Nothing links i18npool: it has to be reachable through services.rdb and unorc
+# instead, which is why the registries are named here — including the office API
+# types, which is where com.sun.star.i18n lives and which are in
+# types/offapi.rdb rather than in types.rdb.
+if (BUILD_TESTING)
+    add_dependencies(sot_storage_check
+        program_services_rdb program_types_rdb program_offapi_rdb)
+
     add_test(NAME sot_storage_check
         COMMAND sot_storage_check "${CMAKE_SOURCE_DIR}/sot/qa/cppunit/data")
 endif ()
