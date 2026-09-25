@@ -93,6 +93,21 @@ add_custom_target(i18npool_localedata DEPENDS ${I18NPOOL_LOCALEDATA_SOURCES})
 # package can ship only what it needs (Library_localedata_{en,es,euro,others}.mk).
 # They are plug-ins loaded by i18npool, hence no component file of their own.
 #
+# They are PLAIN, not OOO, and that is not a detail: Repository.mk registers
+# them with gb_Helper_register_plugins_for_install(PLAINLIBS_OOO, ...), so the
+# file is liblocaledata_en.so and not liblocaledata_enlo.so — and the name they
+# are opened by is written out in the source, not derived.  i18npool's
+# loadFunctionSymbolByName ends in
+#
+#     module->loadRelative(&thisModule, getLibraryName(i.pLib))
+#
+# with lcl_DATA_EN spelled SAL_DLLPREFIX "localedata_en" SAL_DLLEXTENSION.  No
+# SVLIBRARY there, no "lo"; osl_loadModuleRelativeAscii joins the module's
+# directory with that string and hands it to dlopen, so a library named the
+# usual way is simply not found — and the failure surfaces far away, as
+# i18npool::LocaleDataImpl::getFunctionSymbol throwing RuntimeException because
+# it could not even fall back to en_US.
+#
 # Each of the other three links localedata_en: a locale whose own description
 # leaves something out falls back to the en_US getter for it, so those symbols
 # have to resolve at link time.
@@ -127,7 +142,7 @@ add_library(localedata_en SHARED ${LOCALEDATA_EN_SOURCES})
 target_include_directories(localedata_en PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_en i18npool_localedata)
 target_link_libraries(localedata_en PRIVATE sal)
-librestudio_set_library_output_name(localedata_en localedata_en OOO)
+librestudio_set_library_output_name(localedata_en localedata_en PLAIN)
 install(TARGETS localedata_en LIBRARY DESTINATION program)
 
 set(LOCALEDATA_ES_SOURCES
@@ -158,7 +173,7 @@ add_library(localedata_es SHARED ${LOCALEDATA_ES_SOURCES})
 target_include_directories(localedata_es PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_es i18npool_localedata)
 target_link_libraries(localedata_es PRIVATE sal localedata_en)
-librestudio_set_library_output_name(localedata_es localedata_es OOO)
+librestudio_set_library_output_name(localedata_es localedata_es PLAIN)
 install(TARGETS localedata_es LIBRARY DESTINATION program)
 
 set(LOCALEDATA_EURO_SOURCES
@@ -262,7 +277,7 @@ add_library(localedata_euro SHARED ${LOCALEDATA_EURO_SOURCES})
 target_include_directories(localedata_euro PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_euro i18npool_localedata)
 target_link_libraries(localedata_euro PRIVATE sal localedata_en)
-librestudio_set_library_output_name(localedata_euro localedata_euro OOO)
+librestudio_set_library_output_name(localedata_euro localedata_euro PLAIN)
 install(TARGETS localedata_euro LIBRARY DESTINATION program)
 
 set(LOCALEDATA_OTHERS_SOURCES
@@ -415,7 +430,7 @@ add_library(localedata_others SHARED ${LOCALEDATA_OTHERS_SOURCES})
 target_include_directories(localedata_others PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_others i18npool_localedata)
 target_link_libraries(localedata_others PRIVATE sal localedata_en)
-librestudio_set_library_output_name(localedata_others localedata_others OOO)
+librestudio_set_library_output_name(localedata_others localedata_others PLAIN)
 install(TARGETS localedata_others LIBRARY DESTINATION program)
 
 # --- the collation rules -----------------------------------------------------
