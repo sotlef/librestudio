@@ -897,6 +897,14 @@ install(TARGETS vcl LIBRARY DESTINATION program)
 # The whole library is under ENABLE_GEN, as it is under $(if $(ENABLE_GEN), ...)
 # in Module_vcl.mk.
 
+# libSM and libICE ship no pkg-config file on this distribution, so they are
+# found by name.  Both back ends ask for them — Library_vclplug_gen.mk lines
+# 70-75 and 147-152, Library_vclplug_gtk3.mk line 57 — so they are found once,
+# outside either block.  -lm and -ldl are the unix branch of the same rule and
+# stay with the library that asks for them.
+find_library(SM_LIBRARY NAMES SM REQUIRED)
+find_library(ICE_LIBRARY NAMES ICE REQUIRED)
+
 if (ENABLE_GEN)
     set(VCLPLUG_GEN_SOURCES
         vcl/unx/generic/app/X11DisplayConnectionDispatch
@@ -974,12 +982,6 @@ if (ENABLE_GEN)
         pkg_check_modules(FONTCONFIG_GEN REQUIRED IMPORTED_TARGET fontconfig)
     endif ()
 
-    # Lines 70-75 and 147-152.  libSM and libICE ship no pkg-config file on
-    # this distribution, so they are found by name; -lm and -ldl are the unix
-    # branch.
-    find_library(SM_LIBRARY NAMES SM REQUIRED)
-    find_library(ICE_LIBRARY NAMES ICE REQUIRED)
-
     target_link_libraries(vclplug_gen PRIVATE
         vcl
         tl utl sot ucbhelper basegfx comphelper cppuhelper i18nlangtag i18nutil
@@ -1020,6 +1022,118 @@ if (ENABLE_GEN)
     # as a UNO service.
     librestudio_set_library_output_name(vclplug_gen vclplug_gen OOO)
     install(TARGETS vclplug_gen LIBRARY DESTINATION program)
+endif ()
+
+# --- vclplug_gtk3 --------------------------------------------------------------
+
+# The back end that puts libvcl on a GTK desktop.  Same shape as vclplug_gen: a
+# plug-in, dlopen()ed by name, with vcl on its link line because
+# gb_Library_set_plugin_for(vclplug_gtk3,vcl) is the non-_nodep variant.
+#
+# What it is made of is not the same.  Two thirds of the objects are the
+# accessibility bridge — vcl/unx/gtk3/a11y/atk* wraps every VCL accessible
+# object in an ATK one, which is how a screen reader reads an office window —
+# and the rest is the GTK file and folder pickers, the native GTK widgets drawn
+# where the toolkit asks for them, the GTK window and instance classes, and the
+# global-menu and HUD integration.  Nothing is generated: no .ui file, no
+# resource, and the widgets are built in code.
+#
+# GSTREAMER_1_0_CFLAGS is in the .mk's include list but no object in its list
+# includes a gst header, so it is left out rather than looked for.
+#
+# The switch agrees with config_vclplug.h, which has to be so: libvcl builds its
+# autodetection and fallback lists under ENABLE_GTK3, so a back end that is
+# linked but not named there is never loaded.
+
+if (ENABLE_GTK3)
+    set(VCLPLUG_GTK3_SOURCES
+        vcl/unx/gtk3/a11y/atkaction
+        vcl/unx/gtk3/a11y/atkcomponent
+        vcl/unx/gtk3/a11y/atkeditabletext
+        vcl/unx/gtk3/a11y/atkfactory
+        vcl/unx/gtk3/a11y/atkhypertext
+        vcl/unx/gtk3/a11y/atkimage
+        vcl/unx/gtk3/a11y/atklistener
+        vcl/unx/gtk3/a11y/atkregistry
+        vcl/unx/gtk3/a11y/atkselection
+        vcl/unx/gtk3/a11y/atktable
+        vcl/unx/gtk3/a11y/atktablecell
+        vcl/unx/gtk3/a11y/atktextattributes
+        vcl/unx/gtk3/a11y/atktext
+        vcl/unx/gtk3/a11y/atkvalue
+        vcl/unx/gtk3/a11y/atkwrapper
+        vcl/unx/gtk3/fpicker/resourceprovider
+        vcl/unx/gtk3/fpicker/SalGtkFilePicker
+        vcl/unx/gtk3/fpicker/SalGtkFolderPicker
+        vcl/unx/gtk3/fpicker/SalGtkPicker
+        vcl/unx/gtk3/customcellrenderer
+        vcl/unx/gtk3/gtkdata
+        vcl/unx/gtk3/gtkinst
+        vcl/unx/gtk3/gtksys
+        vcl/unx/gtk3/gtkcairo
+        vcl/unx/gtk3/custom-theme
+        vcl/unx/gtk3/salnativewidgets-gtk
+        vcl/unx/gtk3/gtkframe
+        vcl/unx/gtk3/gtkobject
+        vcl/unx/gtk3/gtksalmenu
+        vcl/unx/gtk3/glomenu
+        vcl/unx/gtk3/gloactiongroup
+        vcl/unx/gtk3/hudawareness)
+
+    librestudio_expand_cxx(VCLPLUG_GTK3_SOURCES)
+    add_library(vclplug_gtk3 SHARED ${VCLPLUG_GTK3_SOURCES})
+
+    target_include_directories(vclplug_gtk3 PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${CMAKE_SOURCE_DIR}/vcl/unx"
+        "${CMAKE_SOURCE_DIR}/vcl/unx/gtk3"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(vclplug_gtk3
+        officecfg_headers udkapi_normal_headers offapi_normal_headers)
+
+    # Lines 33-39: the plug-in marker, the guard the toolkit headers carry, and
+    # the two switches configure.ac appends to GTK3_CFLAGS.  The
+    # -Wno-deprecated-declarations is upstream's own note to itself that
+    # vcl/unx/gtk3/*.cxx forwards into deprecated GTK interfaces.
+    target_compile_definitions(vclplug_gtk3 PRIVATE
+        VCLPLUG_GTK_IMPLEMENTATION
+        VCL_INTERNALS
+        GDK_DISABLE_DEPRECATED
+        GTK_DISABLE_DEPRECATED)
+    target_compile_options(vclplug_gtk3 PRIVATE -Wno-deprecated-declarations)
+
+    # configure.ac line 12716.  cairo is named here as well as being linked into
+    # libvcl through USE_HEADLESS_CODE; configure.ac asks for it twice for the
+    # same reason.
+    pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET
+        gtk+-3.0>=3.24 gmodule-no-export-2.0 glib-2.0>=2.38 atk>=2.36 cairo)
+
+    target_link_libraries(vclplug_gtk3 PRIVATE
+        vcl
+        tl utl sot ucbhelper basegfx comphelper cppuhelper i18nlangtag i18nutil
+        cppu sal
+        Boost::boost
+        PkgConfig::GTK3
+        PkgConfig::EPOXY PkgConfig::DBUS PkgConfig::GRAPHITE
+        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        PkgConfig::X11 PkgConfig::XEXT
+        "${SM_LIBRARY}" "${ICE_LIBRARY}"
+        m dl)
+
+    # The GTK3 plug-in does not use EGL itself — configure.ac wants it only for
+    # a bundled epoxy, and epoxy here is the system one — so there is nothing to
+    # check for here that the epoxy package has not already answered.
+
+    # $(if $(ENABLE_JAVA), jvmaccess) from the library list.
+    if (LIBRESTUDIO_ENABLE_JAVA)
+        target_link_libraries(vclplug_gtk3 PRIVATE jvmaccess)
+    endif ()
+
+    # No component file here either.
+    librestudio_set_library_output_name(vclplug_gtk3 vclplug_gtk3 OOO)
+    install(TARGETS vclplug_gtk3 LIBRARY DESTINATION program)
 endif ()
 
 # --- svptest -------------------------------------------------------------------

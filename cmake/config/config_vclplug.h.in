@@ -20,8 +20,10 @@ two things that are not desktops at all and are read all over vcl:
                      it, so leaving it undefined breaks the build rather than
                      merely changing behaviour.
 
-ENABLE_GEN follows whether the X11 back end is built — it is, so libvcl's
-plug-in loader knows to look for it.  ENABLE_HEADLESS is off because there is no
+ENABLE_GEN and ENABLE_GTK3 follow whether those back ends are built.  They are
+not an optimisation: vcl/source/app/salplug.cxx builds its desktop-autodetection
+list and its fallback list under these macros, so a back end that is linked but
+not named here will never be loaded.  ENABLE_HEADLESS is off because there is no
 headless plug-in library in this tree: the headless back end lives inside libvcl
 itself, under USE_HEADLESS_CODE above.
 */
@@ -34,7 +36,7 @@ itself, under USE_HEADLESS_CODE above.
 
 #define ENABLE_GEN @ENABLE_GEN_CONFIG@
 #define ENABLE_HEADLESS 0
-#define ENABLE_GTK3 0
+#define ENABLE_GTK3 @ENABLE_GTK3_CONFIG@
 #define ENABLE_GTK4 0
 #define ENABLE_GTK3_KDE5 0
 #define ENABLE_KF5 0

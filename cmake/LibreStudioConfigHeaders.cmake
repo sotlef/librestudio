@@ -246,6 +246,28 @@ set(ENABLE_WASM_STRIP_SPLASH FALSE CACHE BOOL
 # Linux GUI build.
 set(ENABLE_GEN TRUE CACHE BOOL "configure.ac's ENABLE_GEN: build the X11 plug-in")
 
+# ENABLE_GTK3 is the same kind of switch, and it carries more weight than the
+# name suggests: vcl/source/app/salplug.cxx puts gtk3 at the head of both the
+# desktop-autodetection list and the fallback list under this macro, so with it
+# off libvcl will not even try to load a GTK3 back end that is sitting next to
+# it.  Upstream's default follows test_gtk3, which follows using_x11, and then
+# requires gtk+-3.0 outright — a build asked for GTK3 without it fails to
+# configure.  Deriving the default from the packages being present keeps that
+# answer where they are and still lets the build configure where they are not;
+# asking for it explicitly on a machine without them fails in pkg_check_modules
+# in vcl/CMakeLists.txt, which is the same failure, later and with a better
+# message.  The X11 and GUI halves of the condition are upstream's too: gtk3's
+# check is reached only when test_gtk3 has followed using_x11 on, and a build
+# without a toolkit has no use for a toolkit back end.
+pkg_check_modules(GTK3_DETECT gtk+-3.0>=3.24 gmodule-no-export-2.0 glib-2.0>=2.38 atk>=2.36 cairo)
+if (USING_X11 AND NOT DISABLE_GUI AND GTK3_DETECT_FOUND)
+    set(_enable_gtk3_default TRUE)
+else ()
+    set(_enable_gtk3_default FALSE)
+endif ()
+set(ENABLE_GTK3 ${_enable_gtk3_default} CACHE BOOL
+    "configure.ac's ENABLE_GTK3: build the GTK3 plug-in")
+
 # And RandR is derived, as configure.ac derives it, from the library being
 # there — a display that changes size should not need to be told about.
 pkg_check_modules(XRANDR_DETECT xrandr)
@@ -262,7 +284,8 @@ set(ENABLE_RANDR ${_enable_randr_default} CACHE BOOL
 # TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
 # and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
 # same shape as HAVE_FEATURE_JAVA above.
-foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN)
+foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN
+        ENABLE_GTK3)
     if (${_switch})
         set(${_switch}_CONFIG 1)
     else ()
