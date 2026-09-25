@@ -221,8 +221,31 @@ endforeach ()
 # USING_X11 and USE_HEADLESS_CODE are what config_vclplug.h exists for; both are
 # on for a Linux desktop build.  configure.ac defines USE_HEADLESS_CODE whenever
 # freetype and fontconfig are used, which is exactly this case.
-set(USING_X11 1)
-set(USE_HEADLESS_CODE 1)
+# Cache variables rather than plain ones, so that they show up in cmake -L and
+# can be flipped to check what depends on them.  A value that only exists for
+# the length of a configure run cannot be tested, and an untested condition is
+# indistinguishable from a comment.
+#
+# The two below are derived, as configure.ac derives them: USING_X11 from the
+# presence of an X11 backend, USE_HEADLESS_CODE from the build using freetype
+# and fontconfig — which a Linux desktop build does, hence the name being
+# misleading.  DISABLE_GUI is the one a person chooses, upstream's --disable-gui.
+set(USING_X11 TRUE CACHE BOOL "configure.ac's USING_X11: this build has an X11 backend")
+set(USE_HEADLESS_CODE TRUE CACHE BOOL
+    "configure.ac's USE_HEADLESS_CODE: the build uses freetype and fontconfig, which is what selects the generic font handling, the printer back ends and the code the X11 plug-in shares")
+option(DISABLE_GUI "configure.ac's --disable-gui: build without a toolkit" OFF)
+
+# The header values are worked out separately, and have to be 0 or 1 rather than
+# TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
+# and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
+# same shape as HAVE_FEATURE_JAVA above.
+foreach (_switch USING_X11 USE_HEADLESS_CODE)
+    if (${_switch})
+        set(${_switch}_CONFIG 1)
+    else ()
+        set(${_switch}_CONFIG 0)
+    endif ()
+endforeach ()
 
 set(ENABLE_CAIRO_CANVAS 1)      # cairo is linked into libvcl through
                                 # USE_HEADLESS_CODE, and upstream's option is on

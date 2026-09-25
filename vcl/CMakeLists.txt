@@ -558,95 +558,137 @@ set(VCL_SOURCES
     vcl/backendtest/outputdevice/rectangle
     vcl/backendtest/GraphicsRenderTests
 
-    # --- USING_X11, Library_vcl.mk lines 691-708 -----------------------------
-    #
-    # The desktop detector is X11 code that nevertheless belongs to libvcl
-    # rather than to the plug-in: it is what tells the toolkit which desktop is
-    # running.  $(if $(ENABLE_CPDB), vcl/unx/generic/printer/cpdmgr) is absent —
-    # that is upstream's option for the Common Print Dialog Backends, and this
-    # build does not turn it on.
-
-    vcl/unx/generic/desktopdetect/desktopdetector
-
-    # --- the GUI backends, Library_vcl.mk lines 716-740 ----------------------
-    #
-    # The DISABLE_GUI branch would add vcl/headless/headlessinst here instead of
-    # these two; this build is a GUI one.
-
-    vcl/source/opengl/OpenGLContext
-    vcl/source/opengl/OpenGLHelper
-
-    # $(if $(filter SKIA,$(BUILD_TYPE)), vcl/skia/salbmp zone gdiimpl) is
-    # absent, BUILD_TYPE being DESKTOP.  Note that vcl/skia/SkiaHelper above is
-    # *not* conditional: it compiles in every build and guards its Skia calls
-    # internally.  $(if $(filter LINUX SOLARIS %BSD,$(OS)), ...) is the branch
-    # that does apply — the session inhibitor talks to the desktop's idle
-    # handling to keep the screen from blanking mid-presentation.
-
-    vcl/unx/generic/window/sessioninhibitor
-
-    # --- the headless code, Library_vcl.mk lines 650-683 and 747-761 ----------
-    #
-    # USE_HEADLESS_CODE does not mean "a build without a GUI".  configure.ac
-    # defines it whenever the build uses freetype and fontconfig, which is what
-    # a Linux desktop build does, so it is on here as well: it is what puts the
-    # generic font handling, the printer back ends and the pieces the X11
-    # plug-in shares into libvcl rather than into the plug-in.  Reading it as
-    # the DISABLE_GUI case and leaving this block out costs about thirty
-    # objects, and the link then fails on X11Helper::getFrameClassName(), which
-    # vcl/unx/generic/window/sessioninhibitor.cxx above calls and which only
-    # this block defines.
-    #
-    # $(if $(ENABLE_CUPS), vcl/unx/generic/printer/cupsmgr) is here because CUPS
-    # is present, and printerinfomanager because the line above it picks between
-    # it and vcl/null/printerinfomanager depending on whether CUPS or CPDB is
-    # on — with CUPS on, it is the real one.
-
-    vcl/unx/generic/printer/cupsmgr
-    vcl/unx/generic/printer/printerinfomanager
-
-    # vcl_headless_code, lines 650-664.  The $(if $(filter-out iOS,$(OS)), ...)
-    # around the middle five is the branch that applies.
-    vcl/headless/svpframe
-    vcl/headless/svpbmp
-    vcl/headless/svpgdi
-    vcl/headless/SvpGraphicsBackend
-    vcl/headless/CairoCommon
-    vcl/headless/BitmapHelper
-    vcl/headless/svpdummies
-    vcl/headless/svpinst
-    vcl/headless/svpvd
-    vcl/unx/generic/app/X11Helper
-    vcl/unx/generic/app/gendisp
-    vcl/unx/generic/app/geninst
-
-    # vcl_headless_generic_code, lines 666-683.
-    vcl/headless/svpprn
-    vcl/headless/svptext
-    vcl/unx/generic/app/gendata
-    vcl/unx/generic/gdi/cairotextrender
-    vcl/unx/generic/gdi/generictextrender
-    vcl/unx/generic/font/GenericFont
-    vcl/unx/generic/font/GenericFontFace
-    vcl/unx/generic/font/GenericFontList
-    vcl/unx/generic/font/fontsubst
-    vcl/unx/generic/font/fontconfig
-    vcl/unx/generic/font/fontmanager
-    vcl/unx/generic/print/helper
-    vcl/unx/generic/print/genpspgraphics
-    vcl/unx/generic/print/genprnpsp
-    vcl/unx/generic/print/prtsetup
-    vcl/unx/generic/printer/jobdata
-    vcl/unx/generic/printer/ppdparser
-
-    # --- the PDF backend, Library_vcl.mk line 760 ----------------------------
-    #
-    # $(if $(filter PDFIUM,$(BUILD_TYPE)),,Dummy)PDFiumLibrary picks the name:
-    # with PDFIUM it is PDFiumLibrary, and otherwise the stub that reports the
-    # feature as unavailable.  DESKTOP means the stub.
-
-    vcl/source/pdf/DummyPDFiumLibrary
 )
+# --- the switches of Library_vcl.mk -------------------------------------------
+#
+# The rest of this file decides what belongs to the library the way the .mk
+# does: with conditionals.  Each one is an if() on a named variable, so that
+# changing a switch changes the build — a condition written into a comment
+# instead is a condition that silently stops being true when someone flips the
+# flag.
+#
+# Most of these are not vcl's to decide.  USE_HEADLESS_CODE, USING_X11,
+# ENABLE_CUPS, ENABLE_CPDB, ENABLE_WASM_STRIP_SPLASH and DISABLE_GUI are set in
+# cmake/LibreStudioConfigHeaders.cmake, because the config headers answer the
+# same questions for the whole tree and vcl is not their only reader.  They
+# carry the values configure.ac would compute on this machine.
+#
+# The platform branches — WNT, MACOSX, iOS, ANDROID, HAIKU — are the one
+# deliberate exception, and they are listed at the end of the file rather than
+# written out.  cmake/LibreStudioPlatform.cmake pins this build to Linux/x86_64
+# and stops with an error anywhere else, so those branches could be written but
+# never compiled; leaving them out is honest, whereas writing them would claim
+# support the rest of the build refuses to give.
+
+# configure.ac's BUILD_TYPE, which is DESKTOP plus any of OPENCL, SKIA, PDFIUM
+# and AFDKO that were asked for.  Only DESKTOP is supported here yet.
+set(LIBRESTUDIO_BUILD_TYPE "DESKTOP" CACHE STRING
+    "configure.ac's BUILD_TYPE: DESKTOP, plus OPENCL, SKIA, PDFIUM or AFDKO")
+
+option(LIBRESTUDIO_ENABLE_BREAKPAD "Link the breakpad crash reporter" OFF)
+option(LIBRESTUDIO_SYSTEM_LIBFIXMATH
+    "Use a system libfixmath instead of the fix16 bundled in tools/" OFF)
+
+# --- the conditional sources --------------------------------------------------
+
+if (USING_X11)
+    # Library_vcl.mk lines 691-697.  The desktop detector is X11 code that
+    # belongs to libvcl rather than to the plug-in: it is what tells the toolkit
+    # which desktop is running.
+    list(APPEND VCL_SOURCES
+        vcl/unx/generic/desktopdetect/desktopdetector)
+
+    if (ENABLE_CPDB)
+        list(APPEND VCL_SOURCES vcl/unx/generic/printer/cpdmgr)
+    endif ()
+else ()
+    message(FATAL_ERROR
+        "Library_vcl.mk has no branch for a build without X11; the headless "
+        "and Windows cases would need writing first")
+endif ()
+
+if (NOT DISABLE_GUI)
+    # Library_vcl.mk lines 723-734.
+    list(APPEND VCL_SOURCES
+        vcl/source/opengl/OpenGLContext
+        vcl/source/opengl/OpenGLHelper)
+
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        list(APPEND VCL_SOURCES
+            vcl/skia/salbmp
+            vcl/skia/zone
+            vcl/skia/gdiimpl)
+    endif ()
+
+    if (UNIX AND NOT APPLE)
+        list(APPEND VCL_SOURCES vcl/unx/generic/window/sessioninhibitor)
+    endif ()
+else ()
+    list(APPEND VCL_SOURCES vcl/headless/headlessinst)
+endif ()
+
+if (USE_HEADLESS_CODE)
+    # Library_vcl.mk lines 747-759 — and this is not the DISABLE_GUI case.
+    # configure.ac defines USE_HEADLESS_CODE whenever the build uses freetype
+    # and fontconfig, which is what a Linux desktop build does, so a GUI build
+    # has it on too.  It is what puts the generic font handling, the printer
+    # back ends and the pieces the X11 plug-in shares into libvcl rather than
+    # into the plug-in.
+    if (ENABLE_CUPS)
+        list(APPEND VCL_SOURCES vcl/unx/generic/printer/cupsmgr)
+    endif ()
+
+    # $(if $(filter TRUE,$(ENABLE_CPDB) $(ENABLE_CUPS)), a, b) — with neither
+    # printing back end there is nothing to ask, so the null one is used.
+    if (ENABLE_CPDB OR ENABLE_CUPS)
+        list(APPEND VCL_SOURCES vcl/unx/generic/printer/printerinfomanager)
+    else ()
+        list(APPEND VCL_SOURCES vcl/null/printerinfomanager)
+    endif ()
+
+    # vcl_headless_code, lines 650-664, and vcl_headless_generic_code, lines
+    # 666-683.  The $(if $(filter-out iOS,$(OS)), ...) around the middle of the
+    # first only ever drops five entries for iOS.
+    list(APPEND VCL_SOURCES
+        vcl/headless/svpframe
+        vcl/headless/svpbmp
+        vcl/headless/svpgdi
+        vcl/headless/SvpGraphicsBackend
+        vcl/headless/CairoCommon
+        vcl/headless/BitmapHelper
+        vcl/headless/svpdummies
+        vcl/headless/svpinst
+        vcl/headless/svpvd
+        vcl/unx/generic/app/X11Helper
+        vcl/unx/generic/app/gendisp
+        vcl/unx/generic/app/geninst
+
+        vcl/headless/svpprn
+        vcl/headless/svptext
+        vcl/unx/generic/app/gendata
+        vcl/unx/generic/gdi/cairotextrender
+        vcl/unx/generic/gdi/generictextrender
+        vcl/unx/generic/font/GenericFont
+        vcl/unx/generic/font/GenericFontFace
+        vcl/unx/generic/font/GenericFontList
+        vcl/unx/generic/font/fontsubst
+        vcl/unx/generic/font/fontconfig
+        vcl/unx/generic/font/fontmanager
+        vcl/unx/generic/print/helper
+        vcl/unx/generic/print/genpspgraphics
+        vcl/unx/generic/print/genprnpsp
+        vcl/unx/generic/print/prtsetup
+        vcl/unx/generic/printer/jobdata
+        vcl/unx/generic/printer/ppdparser)
+endif ()
+
+# Library_vcl.mk line 760: $(if $(filter PDFIUM,$(BUILD_TYPE)),,Dummy)PDFiumLibrary
+# picks the name — PDFiumLibrary with PDFIUM, the stub otherwise.
+if ("PDFIUM" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+    list(APPEND VCL_SOURCES vcl/source/pdf/PDFiumLibrary)
+else ()
+    list(APPEND VCL_SOURCES vcl/source/pdf/DummyPDFiumLibrary)
+endif ()
 
 librestudio_expand_cxx(VCL_SOURCES)
 # vcl/source/filter/jpeg/transupp is the single C object, which is why
@@ -658,18 +700,16 @@ add_library(vcl SHARED
 
 # --- externals ----------------------------------------------------------------
 #
-# The three add_externals blocks of the .mk, in its order.  Their gbuild names
-# map onto pkg-config modules the way RepositoryExternal.mk defines them — gio
-# is gio-2.0, graphite is graphite2 — except for jpeg, png and tiff, which come
-# from CMake's own find modules.
+# The four add_externals blocks of the .mk, in its order, each under the same
+# condition as there.  The gbuild names map onto pkg-config modules the way
+# RepositoryExternal.mk defines them — gio is gio-2.0, graphite is graphite2 —
+# except for jpeg, png and tiff, which come from CMake's own find modules.
 
+# Library_vcl.mk lines 92-108: no condition around any of these.
 find_package(PNG REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(JPEG REQUIRED)
 
-# Library_vcl.mk lines 92-108.  harfbuzz is not here: it has to be 14.3 or newer
-# and the system is older, so the top-level CMakeLists.txt bundles it and hands
-# the result over in LIBRESTUDIO_HARFBUZZ_TARGETS — see the comment there.
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 pkg_check_modules(GRAPHITE REQUIRED IMPORTED_TARGET graphite2)
 pkg_check_modules(LCMS2 REQUIRED IMPORTED_TARGET lcms2)
@@ -678,54 +718,67 @@ pkg_check_modules(LIBWEBP REQUIRED IMPORTED_TARGET libwebp)
 # libjxl is not optional and not guarded by an #if anywhere: the reader in
 # vcl/source/filter/jxl/reader.cxx includes it unconditionally.  It comes in two
 # halves, and the second is not optional either — JxlResizableParallelRunner and
-# its friends, which the reader uses to decode across threads, are in
+# its friends, which the reader decodes across threads with, are in
 # libjxl_threads rather than in libjxl.
 pkg_check_modules(JXL REQUIRED IMPORTED_TARGET libjxl)
 pkg_check_modules(JXL_THREADS REQUIRED IMPORTED_TARGET libjxl_threads)
+# harfbuzz is not here: it has to be 14.3 or newer and the system is older, so
+# the top-level CMakeLists.txt bundles it and hands the result over in
+# LIBRESTUDIO_HARFBUZZ_TARGETS — see the comment there.
 
-# Library_vcl.mk lines 699-702, the USING_X11 block.  valgrind is headers only:
-# vcl/source/app/watchdog.cxx asks the valgrind client whether the program is
-# running under valgrind, so that the watchdog does not fire there.  There is no
-# library to link.
-pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
-find_path(VALGRIND_INCLUDE_DIR valgrind/valgrind.h)
-if (NOT VALGRIND_INCLUDE_DIR)
-    message(FATAL_ERROR
-        "valgrind headers are required by vcl/source/app/watchdog.cxx")
+if (USING_X11)
+    # Lines 699-702.  valgrind is headers only: vcl/source/app/watchdog.cxx asks
+    # the valgrind client whether the program is running under valgrind, so that
+    # the watchdog does not fire there.  There is no library to link.
+    pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
+    pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
+    pkg_check_modules(XEXT REQUIRED IMPORTED_TARGET xext)
+    find_path(VALGRIND_INCLUDE_DIR valgrind/valgrind.h)
+    if (NOT VALGRIND_INCLUDE_DIR)
+        message(FATAL_ERROR
+            "valgrind headers are required by vcl/source/app/watchdog.cxx")
+    endif ()
 endif ()
 
-# Library_vcl.mk lines 736-739, the GUI branch of the DISABLE_GUI choice.
-# $(if $(filter SKIA,$(BUILD_TYPE)),skia) is absent with it.
-pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
+if (NOT DISABLE_GUI)
+    # Lines 736-739.  $(if $(filter SKIA,$(BUILD_TYPE)),skia) is in the same
+    # place and is added when that build type is asked for.
+    pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        pkg_check_modules(SKIA REQUIRED IMPORTED_TARGET skia)
+    endif ()
+endif ()
 
-# Library_vcl.mk lines 763-773, the externals of the USE_HEADLESS_CODE branch:
-# the headless back end draws with cairo, the fonts come from fontconfig, and
-# $(if $(ENABLE_CUPS),cups) is there because CUPS is.  $(if $(ENABLE_CPDB),cpdb)
-# is not — the option is off — and neither are pdfium or afdko, which belong to
-# build types this one is not.
-pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo)
-pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
-pkg_check_modules(CUPS_LIB REQUIRED IMPORTED_TARGET cups)
-
-# Library_vcl.mk lines 704-707 and 710-714 — the X11 libraries, and the -lm
-# that every unix build adds.  Lines 775-780 add -lm a second time for the same
-# platforms; once is enough here.
-pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
-pkg_check_modules(XEXT REQUIRED IMPORTED_TARGET xext)
+if (USE_HEADLESS_CODE)
+    # Lines 763-773: the headless back end draws with cairo, the fonts come from
+    # fontconfig, and the printing back ends bring their own libraries.
+    pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo)
+    pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
+    if (ENABLE_CUPS)
+        pkg_check_modules(CUPS_LIB REQUIRED IMPORTED_TARGET cups)
+    endif ()
+    if (ENABLE_CPDB)
+        pkg_check_modules(CPDB REQUIRED IMPORTED_TARGET cpdb)
+    endif ()
+endif ()
 
 target_include_directories(vcl PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${FROZEN_INCLUDE_DIR}"
-    "${VALGRIND_INCLUDE_DIR}"
     "${OFFICECFG_INCLUDE_DIR}"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
 add_dependencies(vcl
     officecfg_headers udkapi_normal_headers offapi_normal_headers)
 
-# Library_vcl.mk lines 45-52.  Two of the six entries do not apply: with a
-# bundled libfixmath rather than a system one there is no -DSYSTEM_LIBFIXMATH,
-# and -DDO_USE_TTF_ON_WIN32 is for the Windows headless build.
+if (USING_X11)
+    target_include_directories(vcl PRIVATE "${VALGRIND_INCLUDE_DIR}")
+endif ()
+
+# Library_vcl.mk lines 45-52.  -DDO_USE_TTF_ON_WIN32 belongs to the Windows
+# headless build and is not written out; -DSYSTEM_LIBFIXMATH to a system
+# libfixmath rather than the fix16 bundled in the tree, which is what is used
+# unless the option above asks otherwise.
 #
 # CUI_DLL_NAME and TK_DLL_NAME are library names vcl passes to dlopen by hand.
 # gb_Library_get_runtime_filename() produced them upstream; both follow the
@@ -737,12 +790,17 @@ target_compile_definitions(vcl PRIVATE
     CUI_DLL_NAME="libcuilo.so"
     TK_DLL_NAME="libtklo.so")
 
-# Library_vcl.mk lines 60-83.  Three entries there are conditional and none of
-# them applies: crashreport is for BREAKPAD, which this build does not use;
-# jvmaccess is for ENABLE_JAVA; opencl is for a BUILD_TYPE of OPENCL.  The cairo
-# entry at the end of that list is for the Windows headless build, as are the
-# static fontconfig and freetype of lines 85-90.  The externals of lines 92-108
-# are linked below.
+if (LIBRESTUDIO_SYSTEM_LIBFIXMATH)
+    find_library(LIBFIXMATH_LIBRARY NAMES fixmath REQUIRED)
+    target_compile_definitions(vcl PRIVATE SYSTEM_LIBFIXMATH)
+    target_link_libraries(vcl PRIVATE "${LIBFIXMATH_LIBRARY}")
+endif ()
+
+# Library_vcl.mk lines 60-83, plus the conditional entries of that list and of
+# the add_libs blocks.  crashreport is for BREAKPAD, jvmaccess for ENABLE_JAVA,
+# opencl for a BUILD_TYPE of OPENCL, and cairo and fontconfig at the end of the
+# .mk's list are for the Windows headless build — the unix headless build pulls
+# them in above, through the externals block.
 target_link_libraries(vcl PRIVATE
     basegfx comphelper cppu cppuhelper drawinglayercore i18nlangtag i18nutil
     sal salhelper sax sot svl tl ucbhelper utl xmlreader
@@ -753,9 +811,46 @@ target_link_libraries(vcl PRIVATE
     ${LIBRESTUDIO_HARFBUZZ_TARGETS}
     PkgConfig::GIO PkgConfig::GRAPHITE PkgConfig::LCMS2
     PkgConfig::LIBEOT PkgConfig::LIBWEBP PkgConfig::JXL PkgConfig::JXL_THREADS
-    PkgConfig::DBUS PkgConfig::EPOXY PkgConfig::X11 PkgConfig::XEXT
-    PkgConfig::CAIRO PkgConfig::FONTCONFIG PkgConfig::CUPS_LIB
     m)
+
+if (LIBRESTUDIO_ENABLE_BREAKPAD)
+    target_link_libraries(vcl PRIVATE crashreport)
+endif ()
+
+if (LIBRESTUDIO_ENABLE_JAVA)
+    target_link_libraries(vcl PRIVATE jvmaccess)
+endif ()
+
+if ("OPENCL" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+    target_link_libraries(vcl PRIVATE opencl)
+endif ()
+
+if (USING_X11)
+    target_link_libraries(vcl PRIVATE
+        PkgConfig::DBUS PkgConfig::X11 PkgConfig::XEXT)
+endif ()
+
+if (NOT DISABLE_GUI)
+    target_link_libraries(vcl PRIVATE PkgConfig::EPOXY)
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        target_link_libraries(vcl PRIVATE PkgConfig::SKIA)
+    endif ()
+endif ()
+
+if (USE_HEADLESS_CODE)
+    target_link_libraries(vcl PRIVATE PkgConfig::CAIRO PkgConfig::FONTCONFIG)
+    if (ENABLE_CUPS)
+        target_link_libraries(vcl PRIVATE PkgConfig::CUPS_LIB)
+    endif ()
+    if (ENABLE_CPDB)
+        target_link_libraries(vcl PRIVATE PkgConfig::CPDB)
+    endif ()
+endif ()
+
+if ("AFDKO" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+    # $(if $(filter AFDKO,$(BUILD_TYPE)),afdko libxml2) from line 772.
+    target_link_libraries(vcl PRIVATE LibXml2::LibXml2)
+endif ()
 
 # vcl.common.component is the component file, and vcl.common.component.unx the
 # list of implementations this platform adds to it — the two are combined
@@ -773,38 +868,15 @@ install(TARGETS vcl LIBRARY DESTINATION program)
 
 # --- what is not here ---------------------------------------------------------
 #
-# Every remaining branch of Library_vcl.mk, so that their absence reads as a
-# decision rather than an oversight.  Each is a platform or a build type this
-# build is not.
+# The platform branches: OS=WNT (Library_vcl.mk lines 854-876, the Win32
+# sources, system libraries, resource file and icon-theme package), OS=MACOSX
+# (839-851, the Quartz sources and the Cocoa, CoreFoundation and Metal
+# frameworks), OS=iOS (806-836), OS=ANDROID (794-803) and OS=HAIKU (787-791).
 #
-#   OS=WNT       lines 854-876: the Win32 sources, its system libraries, the
-#                resource file, and the icon-theme package dependency.  The
-#                Windows component implementations replace the unx ones.
-#   OS=MACOSX    lines 839-851: the Quartz objective-C++ sources and the Cocoa,
-#                CoreFoundation and Metal frameworks.
-#   OS=iOS       lines 806-836: the Quartz and ios sources, the headless code
-#                again, and the UIKit and CoreFoundation frameworks.
-#   OS=ANDROID   lines 794-803: the android sources and -llog -landroid.
-#   OS=HAIKU     lines 787-791: -lbe.
+# cmake/LibreStudioPlatform.cmake pins this build to Linux/x86_64 and stops with
+# an error on anything else, so these could be written but never compiled.
+# Writing them would claim support the rest of the build refuses to give; the
+# list above is where to start when that changes.
 #
-#   DISABLE_GUI  lines 716-720 — a build without a toolkit at all.  It takes
-#                vcl/headless/headlessinst instead of the OpenGL sources, and
-#                the headless component implementation.  USE_HEADLESS_CODE goes
-#                with it: lines 650-683 define the headless and unx-generic
-#                object lists, lines 747-761 pull them in, and lines 763-773
-#                pull in cairo, cups and fontconfig for them.  None of that
-#                happens when a GUI is built, which is why this file needs
-#                neither cairo nor fontconfig.
-#
-#   BUILD_TYPE   OPENCL adds the opencl library (line 70); SKIA adds the Skia
-#                objects and the skia external (lines 726-730, 738);
-#                PDFIUM swaps the stub for PDFiumLibrary (line 760) and adds
-#                the pdfium external (line 771); AFDKO adds afdko and libxml2
-#                (line 772).  DESKTOP is none of these.
-#
-#   Features     ENABLE_JAVA adds jvmaccess (line 69), BREAKPAD adds
-#                crashreport (line 65), ENABLE_CPDB adds cpdmgr and the cpdb
-#                external (lines 694, 767), ENABLE_CUPS the cups ones (line
-#                749, 768), ENABLE_WASM_STRIP_SPLASH removes introwin (line
-#                205), and a system libfixmath adds -DSYSTEM_LIBFIXMATH and
-#                links it (lines 50, 685-689).
+# Everything else the .mk switches on is expressed above as a condition rather
+# than described, so it is not repeated here.
