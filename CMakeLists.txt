@@ -309,6 +309,11 @@ add_subdirectory(sfx2)
 # already declared well before either of those.
 add_subdirectory(editeng)
 
+# formula (for/forui) is the formula-calculation engine shared by Calc and any
+# other formula-capable document; forui needs sfx (declared just above), for
+# needs only libraries declared long before this point.
+add_subdirectory(formula)
+
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
 # before it.
