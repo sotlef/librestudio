@@ -151,6 +151,7 @@ add_subdirectory(tools)
 add_subdirectory(unotools)
 add_subdirectory(sot)
 add_subdirectory(svl)
+add_subdirectory(drawinglayer)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
