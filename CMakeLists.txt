@@ -303,6 +303,12 @@ add_subdirectory(basic)
 # to be declared first.
 add_subdirectory(sfx2)
 
+# editeng is the shared rich-text editing engine that svx and the app modules
+# build on; it needs sfx (declared just above) and lng (declared with xmloff)
+# -- everything else it links (xo, drawinglayer, svt, tk, sot, svl, ...) was
+# already declared well before either of those.
+add_subdirectory(editeng)
+
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
 # before it.
