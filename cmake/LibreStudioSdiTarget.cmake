@@ -15,13 +15,18 @@
 #                              # other .sdi files in its own directory, so
 #                              # svidl runs with that directory as its cwd
 #     EXPORTS    <file.sdi>   # the slot ID master list, e.g. sfx2/sdi/sfx.sdi
-#     OUTPUT_DIR <dir>)
+#     OUTPUT_DIR <dir>
+#     [INCLUDES  <dir>...])   # extra -I search dirs, for a module's .sdi
+#                              # files that #include another module's (e.g.
+#                              # svx/sdi/svxslots.sdi includes sfxitems.sdi
+#                              # from sfx2/sdi -- gb_SdiTarget_set_include's
+#                              # equivalent for svx)
 #
 # Produces <OUTPUT_DIR>/<SDI-basename>.hxx (the header) and
 # <OUTPUT_DIR>/<SDI-basename> (the binary slot map). Sets <target>_HEADER and
 # <target>_INCLUDE_DIR (== OUTPUT_DIR, for the #include <foo.hxx> consumers use).
 function(librestudio_add_sdi_target target)
-    cmake_parse_arguments(_sdi "" "SDI;EXPORTS;OUTPUT_DIR" "" ${ARGN})
+    cmake_parse_arguments(_sdi "" "SDI;EXPORTS;OUTPUT_DIR" "INCLUDES" ${ARGN})
 
     if (NOT _sdi_SDI OR NOT _sdi_EXPORTS OR NOT _sdi_OUTPUT_DIR)
         message(FATAL_ERROR
@@ -36,11 +41,18 @@ function(librestudio_add_sdi_target target)
 
     file(GLOB _sdi_includes CONFIGURE_DEPENDS "${_sdi_dir}/*.sdi")
 
+    set(_extra_i_flags "")
+    foreach (_inc ${_sdi_INCLUDES})
+        list(APPEND _extra_i_flags "-I${_inc}")
+        file(GLOB _more_includes CONFIGURE_DEPENDS "${_inc}/*.sdi")
+        list(APPEND _sdi_includes ${_more_includes})
+    endforeach ()
+
     add_custom_command(
         OUTPUT "${_map}" "${_header}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_sdi_OUTPUT_DIR}"
         COMMAND "$<TARGET_FILE:svidl>" -quiet
-                "-I${CMAKE_SOURCE_DIR}/include" "-I${_sdi_dir}"
+                "-I${CMAKE_SOURCE_DIR}/include" "-I${_sdi_dir}" ${_extra_i_flags}
                 "-fs${_header}" "-fx${_sdi_EXPORTS}" "-fm${_map}"
                 "${_sdi_SDI}"
         WORKING_DIRECTORY "${_sdi_dir}"
