@@ -268,6 +268,12 @@ add_subdirectory(cppcanvas)
 # names against the whole project, not just what came before it).
 add_subdirectory(drawinglayer)
 
+# chart2 (chart2api only) -> xmloff (xo) -> unoxml: xo links chart2api, and
+# unoxml links xo, so the three have to be declared in that order.
+add_subdirectory(chart2)
+add_subdirectory(xmloff)
+add_subdirectory(unoxml)
+
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
 # before it.

@@ -35,14 +35,19 @@ set(LIBRESTUDIO_COMPONENT_PREFIX_OOO    "vnd.sun.star.expand:\$LO_LIB_DIR/")
 #     COMPONENT <file.component>
 #     LIBRARY   <cmake-target>
 #     [LAYER    URELIB|OOO]        # default: URELIB
-#     [IMPLEMENTATION <file>])     # the <file.component>.<implid> that names
-#                                  # the implementations this platform provides
+#     [IMPLEMENTATION <file>...])  # one or more <file.component>.<implid> files
+#                                  # naming the implementations this platform
+#                                  # provides; gbuild accumulates these too, one
+#                                  # per gb_Library_add_componentimpl(s) call, so
+#                                  # several are just concatenated before the
+#                                  # optionals comparison (cat $(1).optionals
+#                                  # $(COMPONENTIMPL) in ComponentTarget.mk).
 #
 # Rewrites <file.component> into the build tree with the uri of the library
 # filled in, and records it for the registry packed by
 # librestudio_finalize_components().
 function(librestudio_add_component name)
-    cmake_parse_arguments(_comp "" "COMPONENT;LIBRARY;LAYER;IMPLEMENTATION" "" ${ARGN})
+    cmake_parse_arguments(_comp "" "COMPONENT;LIBRARY;LAYER" "IMPLEMENTATION" ${ARGN})
 
     if (NOT _comp_COMPONENT OR NOT _comp_LIBRARY)
         message(FATAL_ERROR
@@ -85,7 +90,11 @@ function(librestudio_add_component name)
         endif ()
         string(REPLACE "\n" ";" _optionals "${_optionals}")
 
-        file(STRINGS "${_comp_IMPLEMENTATION}" _built)
+        set(_built "")
+        foreach (_impl IN LISTS _comp_IMPLEMENTATION)
+            file(STRINGS "${_impl}" _impl_lines)
+            list(APPEND _built ${_impl_lines})
+        endforeach ()
         list(FILTER _built EXCLUDE REGEX "^#")
 
         # Exactly the names that appear on one side only — sort | uniq -u.
