@@ -21,11 +21,13 @@
 #   * LO_LIB_DIR does the same for office-layer components such as comphelper;
 #   * UNO_TYPES and UNO_SERVICES name the registries.
 #
-# UNO_TYPES is a list, and both entries are needed: the UNO core's own types are
-# in types.rdb, while every service in this tree that speaks an interface from
-# the office API — com.sun.star.i18n among them — needs the second registry, and
-# without it the service manager fails to build the component at all.  A single
-# merged types.rdb would do as well; see the comment on program_types_rdb in the
+# UNO_TYPES is a list, and every entry is needed: the UNO core's own types are
+# in types.rdb, every service in this tree that speaks an interface from the
+# office API — com.sun.star.i18n among them — needs offapi's registry, and
+# basic's VBA-compatibility objects (ooo.vba.* interfaces, instantiated at
+# macro runtime) need oovbaapi's.  Without any one of them, the service
+# manager fails to build the corresponding component at all.  A single merged
+# types.rdb would do as well; see the comment on program_types_rdb in the
 # top-level CMakeLists.txt for why this build keeps them apart.
 #
 # ${ORIGIN} is expanded by the bootstrap code to the directory the ini file was
@@ -48,7 +50,7 @@ function(librestudio_generate_unorc output_file)
 URE_INTERNAL_LIB_DIR=\${ORIGIN}
 URE_INTERNAL_JAVA_DIR=\${ORIGIN}/classes
 LO_LIB_DIR=\${ORIGIN}
-UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb
+UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb \${ORIGIN}/types/oovbaapi.rdb
 UNO_SERVICES=\${ORIGIN}/services.rdb
 CONFIGURATION_LAYERS=xcsxcu:\${ORIGIN}/../share/registry
 ")

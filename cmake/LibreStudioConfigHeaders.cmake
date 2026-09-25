@@ -422,6 +422,8 @@ endforeach ()
 set(_config_headers
     config_global
     config_features
+    config_extensions
+    config_collab
     config_folders
     config_options
     config_locales

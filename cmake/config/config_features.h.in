@@ -20,7 +20,10 @@ defined so that "#if HAVE_FEATURE_x" and "#ifdef HAVE_FEATURE_x" agree.
 #define HAVE_FEATURE_AFDKO 0
 #define HAVE_FEATURE_AVMEDIA 0
 #define HAVE_FEATURE_DBCONNECTIVITY 0
-#define HAVE_FEATURE_SCRIPTING 0
+/* basic (sb) is built, matching BUILD_TYPE's default SCRIPTING entry
+   (configure.ac:3538, enable_scripting defaults to yes) -- SbiGlobals's
+   factory members (basic/source/inc/sbintern.hxx) only exist under this. */
+#define HAVE_FEATURE_SCRIPTING 1
 #define HAVE_FEATURE_MULTIUSER_ENVIRONMENT @HAVE_FEATURE_MULTIUSER_ENVIRONMENT@
 #define HAVE_FEATURE_AVAHI 0
 #define HAVE_FEATURE_MACOSX_SANDBOX 0

@@ -46,6 +46,7 @@ include(LibreStudioTarballs)
 include(LibreStudioUnoApi)
 include(LibreStudioComponent)
 include(LibreStudioUnorc)
+include(LibreStudioSdiTarget)
 
 # createcomponent.xslt and packcomponents.xslt from solenv/bin are driven by
 # xsltproc, both here and by the officecfg schemas.
@@ -232,6 +233,10 @@ add_subdirectory(codemaker)
 add_subdirectory(udkapi)
 add_subdirectory(cppu)
 add_subdirectory(offapi)
+# oovbaapi (VBA-compatibility types) only needs udkapi/offapi's .rdb files,
+# same as offapi only needs udkapi's -- declaring it here keeps it with its
+# sibling UnoApi modules, well ahead of basic (sb), its first consumer.
+add_subdirectory(oovbaapi)
 add_subdirectory(officecfg)
 add_subdirectory(i18nlangtag)
 add_subdirectory(xmlreader)
@@ -249,6 +254,10 @@ add_subdirectory(cppuhelper)
 add_subdirectory(basegfx)
 add_subdirectory(tools)
 add_subdirectory(unotools)
+# idl (svidl only) needs nothing beyond comphelper/tl/sal + the SDK API
+# headers, all of which exist by this point; it is a build-time host tool
+# (compiles sfx2's *.sdi slot definitions), not a library other modules link.
+add_subdirectory(idl)
 add_subdirectory(sot)
 add_subdirectory(svl)
 add_subdirectory(configmgr)
@@ -273,6 +282,21 @@ add_subdirectory(drawinglayer)
 add_subdirectory(chart2)
 add_subdirectory(xmloff)
 add_subdirectory(unoxml)
+
+# framework (fwk) sits on the same tier as toolkit/svtools/vcl, its heaviest
+# dependencies -- nothing here depends on chart2/xmloff/unoxml, it is simply
+# declared after them because sfx2, its own first consumer, comes later still.
+add_subdirectory(framework)
+
+# basic (sb) needs xmlscript (declared much earlier) and oovbaapi (declared
+# next to udkapi/offapi above); it has no dependency on fwk, but is declared
+# after it since sfx2, the first consumer of both, needs both declared first.
+add_subdirectory(basic)
+
+# sfx2 (sfx) is the application-framework tier: it links fwk, sb, drawinglayer,
+# docmodel and svidl's compiled slot headers (idl/) -- everything above it has
+# to be declared first.
+add_subdirectory(sfx2)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
@@ -323,6 +347,20 @@ add_custom_command(
     VERBATIM)
 add_custom_target(program_offapi_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types/offapi.rdb")
+
+# basic (sb) instantiates real UNO objects that speak ooo.vba.* interfaces at
+# VBA-macro runtime, so the service manager's reflection needs this registry
+# the same way it needs offapi's for com.sun.star interfaces.
+add_custom_command(
+    OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/types/oovbaapi.rdb"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBRESTUDIO_PROGRAM_DIR}/types"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${oovbaapi_RDB}" "${LIBRESTUDIO_PROGRAM_DIR}/types/oovbaapi.rdb"
+    DEPENDS "${oovbaapi_RDB}" oovbaapi_rdb
+    COMMENT "Installing types/oovbaapi.rdb"
+    VERBATIM)
+add_custom_target(program_oovbaapi_rdb ALL
+    DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types/oovbaapi.rdb")
 
 # saxparser runs as part of the build and resolves com.sun.star.xml.sax.Parser
 # through the service manager, so the registry it reads has to be the one this
