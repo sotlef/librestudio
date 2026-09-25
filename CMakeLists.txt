@@ -98,7 +98,22 @@ endif ()
 librestudio_fetch_tarball(zxcvbn_c zxcvbn-c-2.6.tar.gz
     11e39f6776f9c82c68b2acb94336e32697d4ab6cdb4ac16f9583ccbdd735113a)
 
+# argon2 hashes the passwords of password-protected ODF packages.  Its tarball
+# ships a Makefile — that is what upstream drives — but this build compiles the
+# sources itself, next to the only library that uses them.
+librestudio_fetch_tarball(argon2 phc-winner-argon2-20190702.tar.gz
+    daf972a89577f8772602bf2eb38b6a3dd3d922bf5724d45e7f9589b5e830442c)
+
 find_package(ZLIB REQUIRED)
+
+# package2 compresses zip entries with zstd as well as with zlib.  On this
+# distribution libzstd ships no pkg-config file, so its two halves are found
+# directly rather than through pkg_check_modules.
+find_path(ZSTD_INCLUDE_DIR zstd.h)
+find_library(ZSTD_LIBRARY NAMES zstd)
+if (NOT ZSTD_INCLUDE_DIR OR NOT ZSTD_LIBRARY)
+    message(FATAL_ERROR "zstd is required by package2 but was not found")
+endif ()
 find_package(Boost 1.69 REQUIRED COMPONENTS locale)
 find_package(Threads REQUIRED)
 find_package(ICU 66 REQUIRED COMPONENTS uc i18n)
@@ -152,6 +167,10 @@ add_subdirectory(unotools)
 add_subdirectory(sot)
 add_subdirectory(svl)
 add_subdirectory(drawinglayer)
+add_subdirectory(configmgr)
+add_subdirectory(package)
+add_subdirectory(xmlscript)
+add_subdirectory(docmodel)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared

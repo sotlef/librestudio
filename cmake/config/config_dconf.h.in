@@ -1,0 +1,25 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether configmgr reads the configuration through dconf.  Upstream makes this
+--enable-dconf, defaulting to on when libdconf is found; this build does not
+have the option yet and leaves it off, which means the file-based backend.  The
+difference is where the configuration comes from, not what the configuration
+manager can do, so nothing depends on it being on.
+
+When it is turned on, configmgr/source/dconf.cxx has to be added to that
+library's sources in configmgr/CMakeLists.txt as well.
+*/
+
+#ifndef INCLUDED_CONFIG_DCONF_H
+#define INCLUDED_CONFIG_DCONF_H
+
+#define ENABLE_DCONF @ENABLE_DCONF@
+
+#endif

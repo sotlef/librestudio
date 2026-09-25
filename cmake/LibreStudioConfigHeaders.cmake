@@ -110,6 +110,11 @@ endforeach ()
 
 # --- remaining values --------------------------------------------------------
 
+# configmgr can read the configuration through dconf instead of through files.
+# Upstream turns that on when libdconf is found; there is no option for it here
+# yet, and dconf is not installed on this machine either.
+set(ENABLE_DCONF 0)
+
 # Runtime optimisations change sal's threading and reference-counting internals.
 # Upstream leaves them off unless --enable-runtime-optimizations is given.
 set(ENABLE_RUNTIME_OPTIMIZATIONS 0)
@@ -211,6 +216,7 @@ set(_config_headers
     config_oox
     config_gpgme
     config_crypto
+    config_dconf
     config_liblangtag
     config_emscripten
     config_vclplug)
