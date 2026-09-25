@@ -25,7 +25,7 @@ if (BUILD_TESTING)
     # The test needs the registries and unorc in place, not just the
     # executable, so it depends on the whole core.
     add_dependencies(librestudio_smoke
-        services_rdb program_services_rdb program_types_rdb gcc3_uno)
+        services_rdb program_services_rdb program_types_rdb gcc3_uno officecfg_registry)
 
     add_test(NAME librestudio_smoke COMMAND librestudio_smoke)
     set_tests_properties(librestudio_smoke PROPERTIES

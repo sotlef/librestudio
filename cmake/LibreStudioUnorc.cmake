@@ -30,6 +30,16 @@
 #
 # ${ORIGIN} is expanded by the bootstrap code to the directory the ini file was
 # found in, so the file stays correct wherever the tree is moved.
+#
+# CONFIGURATION_LAYERS is what configmgr reads to find the registry, and without
+# it there is none: InitVCL() builds the default style settings, asks for
+# /org.openoffice.VCL/DefaultFonts, and gets a RuntimeException from a
+# configuration that has nowhere to look.  Upstream writes the same value into
+# fundamentalrc, in the longer form with the extension, user and res layers —
+# see instsetoo_native/CustomTarget_setup.mk — of which this build produces the
+# first.  The value is not a path but a list of <type>:<url>, and xcsxcu is the
+# type that reads .xcd files from the url and, failing those, the .xcs and .xcu
+# trees beside them.
 
 function(librestudio_generate_unorc output_file)
     set(_content
@@ -40,6 +50,7 @@ URE_INTERNAL_JAVA_DIR=\${ORIGIN}/classes
 LO_LIB_DIR=\${ORIGIN}
 UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb
 UNO_SERVICES=\${ORIGIN}/services.rdb
+CONFIGURATION_LAYERS=xcsxcu:\${ORIGIN}/../share/registry
 ")
     file(WRITE "${output_file}" "${_content}")
 endfunction ()
