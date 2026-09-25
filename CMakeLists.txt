@@ -283,6 +283,11 @@ add_subdirectory(chart2)
 add_subdirectory(xmloff)
 add_subdirectory(unoxml)
 
+# linguistic (lng) only needs xo (xmloff) beyond what's declared well above it
+# -- placed here, next to its one same-tier dependency, well ahead of editeng,
+# its first consumer.
+add_subdirectory(linguistic)
+
 # framework (fwk) sits on the same tier as toolkit/svtools/vcl, its heaviest
 # dependencies -- nothing here depends on chart2/xmloff/unoxml, it is simply
 # declared after them because sfx2, its own first consumer, comes later still.
