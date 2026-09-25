@@ -251,7 +251,6 @@ add_subdirectory(tools)
 add_subdirectory(unotools)
 add_subdirectory(sot)
 add_subdirectory(svl)
-add_subdirectory(drawinglayer)
 add_subdirectory(configmgr)
 add_subdirectory(package)
 add_subdirectory(xmlscript)
@@ -259,6 +258,15 @@ add_subdirectory(docmodel)
 add_subdirectory(vcl)
 add_subdirectory(toolkit)
 add_subdirectory(svtools)
+add_subdirectory(canvas)
+add_subdirectory(cppcanvas)
+# drawinglayer comes after canvas/cppcanvas: drawinglayercore (built here)
+# needs nothing from them, but the full drawinglayer library, defined in the
+# same CMakeLists.txt, links svt, tk, canvastools and cppcanvas -- declaring
+# it here keeps the subdirectory list reading in dependency order even though
+# CMake itself does not require it (target_link_libraries resolves target
+# names against the whole project, not just what came before it).
+add_subdirectory(drawinglayer)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
