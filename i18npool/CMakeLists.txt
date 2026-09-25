@@ -51,7 +51,10 @@ target_include_directories(saxparser PRIVATE
     "${CMAKE_SOURCE_DIR}/i18npool/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(saxparser udkapi_normal_headers offapi_normal_headers)
+# gcc3_uno is not linked, it is dlopen()ed when the UNO environment is first
+# asked for — see the note in bridges/CMakeLists.txt.  It has to be built before
+# this program runs, and this program runs in the middle of the build.
+add_dependencies(saxparser udkapi_normal_headers offapi_normal_headers gcc3_uno)
 target_link_libraries(saxparser PRIVATE cppu cppuhelper sal)
 
 # --- locale data -------------------------------------------------------------

@@ -17,7 +17,10 @@
 # of the bindings.
 add_executable(uno "${CMAKE_SOURCE_DIR}/cpputools/source/unoexe/unoexe.cxx")
 target_include_directories(uno PRIVATE "${udkapi_comprehensive_HEADERS_INCLUDE_DIR}")
-add_dependencies(uno udkapi_comprehensive_headers)
+# gcc3_uno is dlopen()ed when the UNO environment is first asked for rather than
+# linked — see the note in bridges/CMakeLists.txt — so running this tool needs
+# the bridge built even though nothing on its link line says so.
+add_dependencies(uno udkapi_comprehensive_headers gcc3_uno)
 target_link_libraries(uno PRIVATE cppu cppuhelper sal salhelper)
 
 # gb_Executable_use_api(sp2bv, udkapi): the normal variant is enough here.

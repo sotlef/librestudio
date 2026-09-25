@@ -85,3 +85,17 @@ target_link_libraries(gcc3_uno PRIVATE cppu sal ${CMAKE_DL_LIBS})
 librestudio_set_library_output_name(gcc3_uno gcc3_uno PLAIN)
 
 install(TARGETS gcc3_uno LIBRARY DESTINATION program)
+
+# Nothing links this library — it is found at run time.  cppu's loadEnv()
+# (cppu/source/uno/lbenv.cxx) builds the library name from
+# CPPU_CURRENT_LANGUAGE_BINDING_NAME and dlopen()s it, and every program that
+# bootstraps UNO passes through there.  Two consequences worth knowing:
+#
+# When the library is missing, the failure is a segfault, not a link error: the
+# environment comes back null, and uno_getMapping is handed a null to build a
+# name out of.  Nothing is logged, because the SAL logging that would have
+# complained is compiled out of a release build.  And ninja cannot see the
+# dependency, so anything that runs such a program before the build is over —
+# a generator invoked from add_custom_command, a tool run by hand against a
+# half-built tree — needs it said out loud with add_dependencies.  The places in
+# this tree where that is so say it.

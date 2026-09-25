@@ -94,7 +94,7 @@ target_link_libraries(sot_storage_check PRIVATE
 # types/offapi.rdb rather than in types.rdb.
 if (BUILD_TESTING)
     add_dependencies(sot_storage_check
-        program_services_rdb program_types_rdb program_offapi_rdb)
+        program_services_rdb program_types_rdb program_offapi_rdb gcc3_uno)
 
     add_test(NAME sot_storage_check
         COMMAND sot_storage_check "${CMAKE_SOURCE_DIR}/sot/qa/cppunit/data")
