@@ -1021,3 +1021,27 @@ if (ENABLE_GEN)
     librestudio_set_library_output_name(vclplug_gen vclplug_gen OOO)
     install(TARGETS vclplug_gen LIBRARY DESTINATION program)
 endif ()
+
+# --- svptest -------------------------------------------------------------------
+
+# The smallest program that starts VCL: it bootstraps UNO, calls InitVCL(), puts
+# up a window, paints gradients and lines into it and runs the event loop until
+# the window is closed.  That it runs at all is the end-to-end check for this
+# module — the library linking proves much less, because the back end is chosen
+# at run time and the toolkit is only initialised when something asks for a
+# window.
+#
+# Module_vcl.mk declares it among a group of workbench programs, under a guard
+# for cross-compiling and iOS/Android; none of those apply here.
+add_executable(svptest "${CMAKE_SOURCE_DIR}/vcl/workben/svptest.cxx")
+
+target_include_directories(svptest PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(svptest udkapi_normal_headers offapi_normal_headers)
+
+target_link_libraries(svptest PRIVATE
+    vcl tl sal comphelper cppu cppuhelper)
+
+install(TARGETS svptest RUNTIME DESTINATION program)
