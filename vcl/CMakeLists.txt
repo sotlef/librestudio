@@ -1145,23 +1145,38 @@ endif ()
 # at run time and the toolkit is only initialised when something asks for a
 # window.
 #
-# It builds and links, and it stops inside InitVCL() and exits 1 without a word.
-# The word is missing because there is none to be had: SAL_WARN and SAL_INFO
-# compile to nothing unless SAL_LOG_WARN and SAL_LOG_INFO are defined, gbuild
-# defines them for ENABLE_SAL_LOG, and configure.ac sets that only for a debug
-# build.  A release build has no SAL logging at all, and no runtime SAL_LOG
-# setting can switch on what the compiler removed — so the log is not where to
-# look, a debugger is.
+# It builds and links, and without two more things it stops inside InitVCL()
+# and exits 1 without a word.  The word is missing because there is none to be
+# had: SAL_WARN and SAL_INFO compile to nothing unless SAL_LOG_WARN and
+# SAL_LOG_INFO are defined, gbuild defines them for ENABLE_SAL_LOG, and
+# configure.ac sets that only for a debug build.  A release build has no SAL
+# logging at all, and no runtime SAL_LOG setting can switch on what the
+# compiler removed — so the log is not where to look, a debugger is.
 #
-# Read that way, it is not a VCL failure: configmgr cannot resolve
+# The first thing found this way: configmgr cannot resolve
 # /org.openoffice.VCL/DefaultFonts — the set is in
 # officecfg/registry/schema/org/openoffice/VCL.xcs, the data next to it in
-# VCL.xcu — and the uno::RuntimeException it throws reaches InitVCL, which is
-# building the default style settings at the time.  Nothing in this build has
-# yet turned the officecfg .xcu files into .xcd and told configmgr to read them,
-# so the first thing a VCL program does is ask for a configuration that is not
-# installed.  That is the gap this module's CMakeLists.txt already names, seen
-# from below, and it is where the module's next step is.
+# VCL.xcu — because nothing had turned the officecfg .xcu files into .xcd and
+# told configmgr to read them.  officecfg/CMakeLists.txt now builds that
+# main.xcd, and officecfg_registry below makes sure it exists before the
+# program runs.
+#
+# The second, found only once the first was fixed: even with main.xcd built
+# and unorc's CONFIGURATION_LAYERS pointing at it, the very same
+# "cannot find /org.openoffice.Setup/L10N" kept happening — because
+# configmgr never even opened the registry directory (confirmed with
+# strace -e trace=openat,access: not one call touched share/registry).
+# CONFIGURATION_LAYERS is read through rtl::Bootstrap's *default* ini, which
+# is resolved in sal/rtl/bootstrap.cxx's getIniFileName() as
+# "<the executable's own directory>/<its name without extension>rc" — here
+# "svptestrc" — and that is a different file from unorc, which cppuhelper's
+# defaultBootstrap_InitialComponentContext() locates on its own (via
+# cppuhelper/source/paths.cxx, next to libcppuhelpergcc3.so) and reads
+# explicitly, never registering it as the process-wide default.  strace showed
+# four ENOENT attempts at "svptestrc" and confirmed it. Every VCL program below
+# that bootstraps UNO and touches configuration needs its own "<name>rc" with
+# the same content, so librestudio_generate_unorc() is called again for each
+# one, further down, right after they are all defined.
 #
 # Module_vcl.mk declares it among a group of workbench programs, under a guard
 # for cross-compiling and iOS/Android; none of those apply here.
@@ -1171,7 +1186,7 @@ target_include_directories(svptest PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(svptest udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(svptest udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 
 target_link_libraries(svptest PRIVATE
     vcl tl sal comphelper cppu cppuhelper)
@@ -1212,7 +1227,7 @@ target_include_directories(icontest PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(icontest udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(icontest udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(icontest PRIVATE
     comphelper cppu cppuhelper sal tl ucbhelper vcl vclmain)
 
@@ -1224,7 +1239,7 @@ target_include_directories(visualbackendtest PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(visualbackendtest udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(visualbackendtest udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(visualbackendtest PRIVATE
     basegfx comphelper cppu cppuhelper tl sal salhelper vcl vclmain)
 
@@ -1237,7 +1252,7 @@ target_include_directories(fftester PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(fftester PRIVATE
     tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGETS})
 
@@ -1249,7 +1264,7 @@ target_include_directories(listfonts PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(listfonts udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(listfonts udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(listfonts PRIVATE
     tl sal vcl cppu cppuhelper comphelper i18nlangtag)
 
@@ -1260,7 +1275,7 @@ target_include_directories(listglyphs PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(listglyphs PRIVATE
     tl sal vcl cppu cppuhelper comphelper i18nlangtag
     ${LIBRESTUDIO_HARFBUZZ_TARGETS} PkgConfig::GRAPHITE)
@@ -1272,12 +1287,22 @@ target_include_directories(svpclient PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(svpclient udkapi_normal_headers offapi_normal_headers gcc3_uno)
+add_dependencies(svpclient udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(svpclient PRIVATE
     tl sal vcl cppu cppuhelper comphelper)
 
 install(TARGETS icontest visualbackendtest fftester listfonts listglyphs svpclient
     RUNTIME DESTINATION program)
+
+# Each of these bootstraps UNO and, through it, configmgr — which reads
+# CONFIGURATION_LAYERS from rtl::Bootstrap's default ini, not from unorc (see
+# the long comment above svptest for why the two are different files).  Give
+# each program its own "<name>rc" with the same content as unorc so that
+# default ini resolves to something that actually names the registry.
+foreach (_vcl_workbench_prog IN ITEMS
+    svptest icontest visualbackendtest fftester listfonts listglyphs svpclient)
+    librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/${_vcl_workbench_prog}rc")
+endforeach ()
 
 # Five more are not built, and each for a reason that is not about vcl:
 #
