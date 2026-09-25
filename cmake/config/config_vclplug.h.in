@@ -7,17 +7,46 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
 /*
-GUI toolkit plug-ins; none of them are built by the core-only configuration.
+Settings about which desktops have support enabled — and, less obviously, about
+two things that are not desktops at all and are read all over vcl:
+
+  USING_X11          why the unix-specific code is compiled at all.
+  USE_HEADLESS_CODE  not "a build without a GUI".  configure.ac defines it
+                     whenever the build uses freetype and fontconfig, which is
+                     what a Linux desktop build does.  It selects the generic
+                     font handling, the printer back ends and the pieces the
+                     X11 plug-in shares, and it is why cairo and fontconfig end
+                     up in libvcl.  vcl/inc/sysdata.hxx guards a member with
+                     it, so leaving it undefined breaks the build rather than
+                     merely changing behaviour.
+
+ENABLE_GEN and ENABLE_HEADLESS are off here although upstream enables both for
+this configuration: they tell libvcl's plug-in loader which back ends to look
+for, and no plug-in is built yet.  Turning them on would only name libraries
+that do not exist.
 */
 
 #ifndef CONFIG_VCLPLUG_H
 #define CONFIG_VCLPLUG_H
 
+#define USING_X11 @USING_X11@
+#define USE_HEADLESS_CODE @USE_HEADLESS_CODE@
+
+#define ENABLE_GEN 0
+#define ENABLE_HEADLESS 0
 #define ENABLE_GTK3 0
 #define ENABLE_GTK4 0
-#define ENABLE_QT5 0
-#define ENABLE_QT6 0
+#define ENABLE_GTK3_KDE5 0
 #define ENABLE_KF5 0
 #define ENABLE_KF6 0
+#define ENABLE_QT5 0
+#define ENABLE_QT6 0
+#define ENABLE_WIN 0
+
+#define ENABLE_GSTREAMER_1_0 0
+#define ENABLE_QT6_MULTIMEDIA 0
+#define QT5_HAVE_GOBJECT 0
+#define QT5_USING_X11 0
+#define QT6_USING_X11 0
 
 #endif

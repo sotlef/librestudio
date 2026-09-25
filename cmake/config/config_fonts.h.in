@@ -1,0 +1,21 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether the third-party fonts shipped alongside the office are included.
+Upstream asks --with-fonts and answers yes by default, which is what this
+build does too: the packages are what make documents that name a font the
+system does not have look the way their author saw them.
+*/
+
+#ifndef CONFIG_FONTS_H
+#define CONFIG_FONTS_H
+
+#define HAVE_MORE_FONTS @HAVE_MORE_FONTS@
+
+#endif

@@ -1,0 +1,19 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether to use the non-standard RGBA32 cairo pixel order.  Upstream turns it on
+for Android alone, unless asked for explicitly.
+*/
+
+#ifndef CONFIG_CAIRO_RGBA_H
+#define CONFIG_CAIRO_RGBA_H
+
+#define ENABLE_CAIRO_RGBA @ENABLE_CAIRO_RGBA@
+
+#endif

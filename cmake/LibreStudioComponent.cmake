@@ -21,6 +21,7 @@
 
 set(LIBRESTUDIO_CREATE_COMPONENT_XSLT "${CMAKE_SOURCE_DIR}/solenv/bin/createcomponent.xslt")
 set(LIBRESTUDIO_PACK_COMPONENTS_XSLT "${CMAKE_SOURCE_DIR}/solenv/bin/packcomponents.xslt")
+set(LIBRESTUDIO_OPTIONALS_XSLT "${CMAKE_SOURCE_DIR}/solenv/bin/optionalimplementations.xslt")
 
 # The prefixes come from gb_Library__COMPONENTPREFIXES in
 # solenv/gbuild/Library.mk, keyed by the layer the library belongs to: UNO
@@ -33,13 +34,15 @@ set(LIBRESTUDIO_COMPONENT_PREFIX_OOO    "vnd.sun.star.expand:\$LO_LIB_DIR/")
 # librestudio_add_component(<name>
 #     COMPONENT <file.component>
 #     LIBRARY   <cmake-target>
-#     [LAYER    URELIB|OOO])       # default: URELIB
+#     [LAYER    URELIB|OOO]        # default: URELIB
+#     [IMPLEMENTATION <file>])     # the <file.component>.<implid> that names
+#                                  # the implementations this platform provides
 #
 # Rewrites <file.component> into the build tree with the uri of the library
 # filled in, and records it for the registry packed by
 # librestudio_finalize_components().
 function(librestudio_add_component name)
-    cmake_parse_arguments(_comp "" "COMPONENT;LIBRARY;LAYER" "" ${ARGN})
+    cmake_parse_arguments(_comp "" "COMPONENT;LIBRARY;LAYER;IMPLEMENTATION" "" ${ARGN})
 
     if (NOT _comp_COMPONENT OR NOT _comp_LIBRARY)
         message(FATAL_ERROR
@@ -57,6 +60,57 @@ function(librestudio_add_component name)
         message(FATAL_ERROR "librestudio_add_component(${name}): unknown LAYER '${_comp_LAYER}'")
     endif ()
 
+    # A component file may mark an implementation <optional/>: one that some
+    # platforms provide and others do not.  createcomponent.xslt drops every
+    # implementation whose name appears anywhere in the `filtered` parameter,
+    # so that string has to name the optionals this build does *not* provide.
+    #
+    # Upstream works it out as `cat <optionals> <impl> | sort | uniq -u`, where
+    # optionals comes from optionalimplementations.xslt — through xsl:message,
+    # which is why it arrives on stderr — and impl is the file given as
+    # IMPLEMENTATION.  Both are files of the source tree, so the same value is
+    # computed here at configure time instead; createcomponent.xslt then has
+    # nothing left to interpolate at build time.
+    set(_filtered "")
+    if (_comp_IMPLEMENTATION)
+        execute_process(
+            COMMAND "${XSLTPROC_EXECUTABLE}" --nonet
+                    "${LIBRESTUDIO_OPTIONALS_XSLT}" "${_comp_COMPONENT}"
+            OUTPUT_QUIET ERROR_VARIABLE _optionals
+            RESULT_VARIABLE _optionals_status)
+        if (NOT _optionals_status EQUAL 0)
+            message(FATAL_ERROR
+                "librestudio_add_component(${name}): optionalimplementations.xslt "
+                "failed on ${_comp_COMPONENT}")
+        endif ()
+        string(REPLACE "\n" ";" _optionals "${_optionals}")
+
+        file(STRINGS "${_comp_IMPLEMENTATION}" _built)
+        list(FILTER _built EXCLUDE REGEX "^#")
+
+        # Exactly the names that appear on one side only — sort | uniq -u.
+        set(_seen "")
+        set(_twice "")
+        foreach (_line IN LISTS _optionals _built)
+            if (_line IN_LIST _seen)
+                list(APPEND _twice "${_line}")
+            else ()
+                list(APPEND _seen "${_line}")
+            endif ()
+        endforeach ()
+        foreach (_line IN LISTS _seen)
+            if (NOT _line IN_LIST _twice)
+                list(APPEND _filtered "${_line}")
+            endif ()
+        endforeach ()
+        string(REPLACE ";" " " _filtered "${_filtered}")
+
+        # Both files are read while configuring, so CMake has to run again when
+        # either changes; nothing else would notice.
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            "${_comp_COMPONENT}" "${_comp_IMPLEMENTATION}")
+    endif ()
+
     set(_out "${CMAKE_CURRENT_BINARY_DIR}/components/${name}.component")
 
     # The uri is $<TARGET_FILE_NAME:...> rather than a hardcoded name so that it
@@ -69,11 +123,11 @@ function(librestudio_add_component name)
         COMMAND "${XSLTPROC_EXECUTABLE}" --nonet
                 --stringparam uri "${_prefix}$<TARGET_FILE_NAME:${_comp_LIBRARY}>"
                 --stringparam cppu_env "${LIBRESTUDIO_CPPU_ENV}"
-                --stringparam filtered ""
+                --stringparam filtered "${_filtered}"
                 -o "${_out}"
                 "${LIBRESTUDIO_CREATE_COMPONENT_XSLT}"
                 "${_comp_COMPONENT}"
-        DEPENDS "${_comp_COMPONENT}" ${_comp_LIBRARY}
+        DEPENDS "${_comp_COMPONENT}" ${_comp_LIBRARY} ${_comp_IMPLEMENTATION}
         COMMENT "createcomponent.xslt: ${name}.component"
         VERBATIM)
 

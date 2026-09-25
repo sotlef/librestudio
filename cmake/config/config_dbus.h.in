@@ -1,0 +1,24 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether libdbus is used, for the desktop integration vcl and the session
+manager talk to.  Upstream enables it when dbus-1 >= 0.60 is found and
+--disable-dbus was not given.
+
+DBUS_HAVE_GLIB is a separate matter: it needs dbus-glib, which upstream only
+looks for on macOS in recent versions.  It is not installed here.
+*/
+
+#ifndef INCLUDED_CONFIG_DBUS_H
+#define INCLUDED_CONFIG_DBUS_H
+
+#define ENABLE_DBUS @ENABLE_DBUS@
+#define DBUS_HAVE_GLIB @DBUS_HAVE_GLIB@
+
+#endif

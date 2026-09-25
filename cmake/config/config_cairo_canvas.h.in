@@ -1,0 +1,23 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether the cairo canvas surface backend is built.  Upstream defines this
+whenever cairo is available and --disable-cairo-canvas was not given, so it is
+on by default; cairo is linked into libvcl here through USE_HEADLESS_CODE, and
+the flag is on to match.  It guards virtual methods on SalGraphics that the
+back ends override — the implementations live in the toolkit plug-ins, which
+this build does not have yet, so for now nothing overrides them.
+*/
+
+#ifndef CONFIG_CAIRO_CANVAS_H
+#define CONFIG_CAIRO_CANVAS_H
+
+#define ENABLE_CAIRO_CANVAS @ENABLE_CAIRO_CANVAS@
+
+#endif

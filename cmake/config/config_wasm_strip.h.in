@@ -1,0 +1,31 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+The pieces a wasm build may leave out to keep the download small.  All of them
+are zero here: this build is not wasm, and none of the code they guard is
+trimmed.
+
+ENABLE_WASM_STRIP_SPLASH is the one the source list of Library_vcl.mk reads —
+with it off, vcl/source/window/introwin.cxx is built.
+*/
+
+#ifndef CONFIG_FEATURE_WASM_STRIP_H
+#define CONFIG_FEATURE_WASM_STRIP_H
+
+#define ENABLE_WASM_STRIP_ACCESSIBILITY @ENABLE_WASM_STRIP_ACCESSIBILITY@
+#define ENABLE_WASM_STRIP_CHART @ENABLE_WASM_STRIP_CHART@
+#define ENABLE_WASM_STRIP_EXTRA @ENABLE_WASM_STRIP_EXTRA@
+#define ENABLE_WASM_STRIP_HUNSPELL @ENABLE_WASM_STRIP_HUNSPELL@
+#define ENABLE_WASM_STRIP_PINGUSER @ENABLE_WASM_STRIP_PINGUSER@
+#define ENABLE_WASM_STRIP_PREMULTIPLY @ENABLE_WASM_STRIP_PREMULTIPLY@
+#define ENABLE_WASM_STRIP_RECENT @ENABLE_WASM_STRIP_RECENT@
+#define ENABLE_WASM_STRIP_RECOVERYUI @ENABLE_WASM_STRIP_RECOVERYUI@
+#define ENABLE_WASM_STRIP_SPLASH @ENABLE_WASM_STRIP_SPLASH@
+
+#endif

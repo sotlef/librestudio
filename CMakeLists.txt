@@ -43,7 +43,6 @@ include(CTest)
 
 include(LibreStudioPlatform)
 include(LibreStudioTarballs)
-include(LibreStudioConfigHeaders)
 include(LibreStudioUnoApi)
 include(LibreStudioComponent)
 include(LibreStudioUnorc)
@@ -132,6 +131,92 @@ find_package(EXPAT REQUIRED)
 # svl's URI and WebDAV helpers speak HTTP through libcurl.
 find_package(CURL REQUIRED)
 
+# --- harfbuzz -----------------------------------------------------------------
+#
+# vcl is the first module that needs harfbuzz, and it needs a recent one:
+# hb_ot_fetch_bits() and the HB_OT_BITS_TAG_* constants that vcl/source/font/*
+# uses to read the OS/2 and head table bits do not exist before 14.3, and the
+# calls are not guarded.  configure.ac names the same floor
+# (harfbuzz_required_version=14.3.0) and falls back to bundling the tarball.
+#
+# The system here is 12.1.0, so this build bundles.  Harfbuzz is a meson
+# project, so meson builds it even though CMake is building everything else —
+# which is also what upstream does.  Two static libraries come out of it, and
+# they are handed to the rest of the build as imported targets, so that the
+# consumers say `harfbuzz` and do not have to know how it was made.
+
+find_program(MESON_EXECUTABLE meson REQUIRED)
+
+# Prefer a system harfbuzz that is new enough, the way configure.ac does; the
+# tarball is the fallback, not the rule.
+pkg_check_modules(HARFBUZZ_SYSTEM harfbuzz>=14.3.0 harfbuzz-subset>=14.3.0)
+if (HARFBUZZ_SYSTEM_FOUND)
+    set(LIBRESTUDIO_HARFBUZZ_TARGETS PkgConfig::HARFBUZZ_SYSTEM)
+else ()
+    librestudio_fetch_tarball(harfbuzz harfbuzz-14.5.0.tar.xz
+        b7132e148358a45185c9feafd049dbaf243649d3c44414b3534d9c95d18592b9)
+
+    set(HARFBUZZ_SRC "${harfbuzz_SOURCE_DIR}/src")
+    set(HARFBUZZ_BUILD "${CMAKE_BINARY_DIR}/harfbuzz-build")
+
+    include(ExternalProject)
+    # The options are upstream's: static, subset enabled, ICU built in, and
+    # graphite2 from the system; tests and utilities are left out, and
+    # auto_features=disabled keeps meson from switching on anything else it
+    # happens to find.  -fPIC because these objects end up inside a shared
+    # library; PYTHONWARNINGS= because a warning from the interpreter prints as
+    # a meson error.
+    ExternalProject_Add(harfbuzz_ext
+        SOURCE_DIR "${harfbuzz_SOURCE_DIR}"
+        BINARY_DIR "${HARFBUZZ_BUILD}"
+        CONFIGURE_COMMAND
+            "${CMAKE_COMMAND}" -E env "PYTHONWARNINGS="
+            "${MESON_EXECUTABLE}" setup --wrap-mode nofallback
+                --buildtype release
+                -Ddefault_library=static
+                -Dauto_features=disabled
+                -Dcpp_std=c++20
+                -Dtests=disabled
+                -Dutilities=disabled
+                -Dsubset=enabled
+                -Draster=disabled
+                -Dvector=disabled
+                -Dicu=enabled
+                -Dicu_builtin=true
+                -Dgraphite2=enabled
+                "-Dc_args=-fPIC"
+                "-Dcpp_args=-fPIC"
+                "${harfbuzz_SOURCE_DIR}"
+        BUILD_COMMAND "${MESON_EXECUTABLE}" compile -C "${HARFBUZZ_BUILD}" libs
+        INSTALL_COMMAND ""
+        BUILD_BYPRODUCTS
+            "${HARFBUZZ_BUILD}/src/libharfbuzz.a"
+            "${HARFBUZZ_BUILD}/src/libharfbuzz-subset.a"
+        COMMENT "Building harfbuzz")
+
+    set(LIBRESTUDIO_HARFBUZZ_TARGETS harfbuzz harfbuzz_subset)
+    foreach (_hb harfbuzz harfbuzz-subset)
+        string(REPLACE "-" "_" _target "${_hb}")
+        add_library(${_target} STATIC IMPORTED GLOBAL)
+        set_target_properties(${_target} PROPERTIES
+            IMPORTED_LOCATION "${HARFBUZZ_BUILD}/src/lib${_hb}.a"
+            # The headers are in the unpacked tarball, so they exist as soon as
+            # the fetch above has run; only the archives wait for meson.
+            INTERFACE_INCLUDE_DIRECTORIES "${HARFBUZZ_SRC}")
+        # add_dependencies on an imported target is allowed and does reach the
+        # consumers, which is what orders meson before the link.
+        add_dependencies(${_target} harfbuzz_ext)
+    endforeach ()
+endif ()
+
+# --- configuration headers ----------------------------------------------------
+#
+# Generated once everything above has been found, because several of their
+# values are decided by what was found: config_cups.h, config_dbus.h and
+# config_gio.h say whether libcups, libdbus and gio are there, and they are
+# what vcl/ switches its printing and session handling on.
+include(LibreStudioConfigHeaders)
+
 # --- modules -----------------------------------------------------------------
 #
 # The order is the bootstrap order, not the order the modules appear in the
@@ -171,6 +256,7 @@ add_subdirectory(configmgr)
 add_subdirectory(package)
 add_subdirectory(xmlscript)
 add_subdirectory(docmodel)
+add_subdirectory(vcl)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared

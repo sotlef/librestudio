@@ -1,0 +1,23 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Settings for the AFDKO font tools, which upstream uses when BUILD_TYPE includes
+AFDKO.  This build is DESKTOP and does not use the programs; the names are here
+because the header has to define them either way.
+*/
+
+#ifndef CONFIG_AFDKO_H
+#define CONFIG_AFDKO_H
+
+#define USE_AFDKO_PROGRAMS @USE_AFDKO_PROGRAMS@
+#define TX "tx"
+#define MAKEOTF "makeotf"
+#define MERGEFONTS "mergefonts"
+
+#endif

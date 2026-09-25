@@ -17,6 +17,7 @@
 
 include(CheckIncludeFile)
 include(CheckCXXSourceCompiles)
+include(CheckCXXSourceRuns)
 include(CheckTypeSize)
 
 set(LIBRESTUDIO_CONFIG_HOST_DIR "${CMAKE_BINARY_DIR}/config_host")
@@ -30,10 +31,70 @@ check_cxx_source_compiles("
     int main() { return __has_builtin(__builtin_atomic_exchange) ? 0 : 1; }
 " HAVE_GCC_BUILTIN_ATOMIC)
 
-check_cxx_source_compiles("
-    consteval int f() { return 0; }
-    int main() { return f(); }
-" HAVE_CPP_CONSTEVAL)
+# This probe is upstream's, taken from configure.ac whole rather than reduced to
+# "does the compiler know the keyword".  The S1 and S2 cases below are the point:
+# GCC 13 compiles consteval perfectly well but rejects a consteval *constructor*
+# called from an ordinary constructor's member-initialiser, and
+# include/tools/color.hxx uses exactly that pattern behind this macro.  A probe
+# that only tests the keyword answers yes, HAVE_CPP_CONSTEVAL is defined, and
+# svtools/colorcfg.hxx then fails to compile with "'this' is not a constant
+# expression".  Upstream uses AC_RUN_IFELSE, so this runs the program too: the
+# S at the top verifies that the consteval constructor really did assign at
+# compile time.
+check_cxx_source_runs([=[
+    struct S {
+        consteval S() { i = 1; }
+        int i = 0;
+    };
+    S const s;
+
+    struct S1 {
+         int a;
+         consteval S1(int n): a(n) {}
+    };
+    struct S2 {
+        S1 x;
+        S2(): x(0) {}
+    };
+
+    struct S3 {
+        consteval S3() {}
+        union {
+            int a;
+            unsigned b = 0;
+        };
+    };
+    void f() { S3(); }
+
+    struct S4 { consteval S4() = default; };
+    void f4(bool b) { b ? S4() : S4(); }
+
+    struct S5 {
+        consteval S5() { c = 0; }
+        char * f() { return &c; }
+        union {
+            char c;
+            int i;
+        };
+    };
+    auto s5 = S5().f();
+
+    struct S6 {
+        consteval S6(char const (&lit)[2]) {
+            buf[0] = lit[0];
+            buf[1] = lit[1];
+        }
+        union {
+            int x;
+            char buf[2];
+        };
+    };
+    void f6() { S6("a"); }
+
+    int main() {
+        return (s.i == 1) ? 0 : 1;
+    }
+]=] HAVE_CPP_CONSTEVAL)
 
 check_cxx_source_compiles("
     #include <vector>
@@ -115,6 +176,76 @@ endforeach ()
 # yet, and dconf is not installed on this machine either.
 set(ENABLE_DCONF 0)
 
+# --- vcl's feature switches ---------------------------------------------------
+#
+# A group of the config headers below answer "is this library installed" rather
+# than "which branch was chosen", and configure.ac decides them from the same
+# evidence: the options behind them default to on, so a system that has the
+# library gets the feature.  This build detects rather than hardcodes, so that a
+# machine without libcups builds a vcl without CUPS instead of one that fails to
+# link.  Each header names the upstream condition it mirrors.
+#
+# Two of them are worth spelling out.  ENABLE_GIO is tied to a GTK back end
+# upstream only because that is the configuration in which it links gio at all;
+# here libvcl links gio unconditionally and compiles
+# vcl/unx/generic/window/sessioninhibitor.cxx, which needs the flag to do
+# anything.  ENABLE_EOT is on by default upstream for anything that is not a
+# fuzzer build.
+
+pkg_check_modules(CUPS cups)
+pkg_check_modules(DBUS dbus-1>=0.60)
+pkg_check_modules(DBUS_GLIB dbus-glib-1)
+pkg_check_modules(GIO_FEATURE gio-2.0>=2.26)
+pkg_check_modules(LIBEOT_FEATURE libeot>=0.01)
+pkg_check_modules(ATSPI_SCROLL_TO atspi-2>=2.32)
+
+foreach (_switch
+        "ENABLE_CUPS;CUPS"
+        "ENABLE_DBUS;DBUS"
+        "DBUS_HAVE_GLIB;DBUS_GLIB"
+        "ENABLE_GIO;GIO_FEATURE"
+        "ENABLE_EOT;LIBEOT_FEATURE"
+        "HAVE_ATSPI2_SCROLL_TO;ATSPI_SCROLL_TO")
+    list(GET _switch 0 _variable)
+    list(GET _switch 1 _prefix)
+    if (${_prefix}_FOUND)
+        set(${_variable} 1)
+    else ()
+        set(${_variable} 0)
+    endif ()
+endforeach ()
+
+# The rest are decisions rather than detections: a build type, an option, or a
+# platform this build is not.  Each is what the branch of configure.ac that
+# applies to a Linux desktop build would produce.
+# USING_X11 and USE_HEADLESS_CODE are what config_vclplug.h exists for; both are
+# on for a Linux desktop build.  configure.ac defines USE_HEADLESS_CODE whenever
+# freetype and fontconfig are used, which is exactly this case.
+set(USING_X11 1)
+set(USE_HEADLESS_CODE 1)
+
+set(ENABLE_CAIRO_CANVAS 1)      # cairo is linked into libvcl through
+                                # USE_HEADLESS_CODE, and upstream's option is on
+                                # by default when it is available
+set(ENABLE_CAIRO_RGBA 0)        # Android's non-standard cairo pixel order
+set(ENABLE_CPDB 0)              # --enable-cpdb, off by default
+set(HAVE_FEATURE_DESKTOP 1)     # a desktop build: not iOS, not Android, not fuzzers
+set(HAVE_FEATURE_OPENCL 0)      # BUILD_TYPE is DESKTOP
+set(HAVE_MORE_FONTS 1)          # --with-fonts, yes by default
+set(HAVE_LIBCPP 0)              # this build uses libstdc++
+set(MPL_HAVE_SUBSET 0)          # --enable-mpl-subset, off by default
+set(USE_AFDKO_PROGRAMS 0)       # BUILD_TYPE is DESKTOP
+# Everything a wasm build may trim.  None of it is trimmed here.
+set(ENABLE_WASM_STRIP_ACCESSIBILITY 0)
+set(ENABLE_WASM_STRIP_CHART 0)
+set(ENABLE_WASM_STRIP_EXTRA 0)
+set(ENABLE_WASM_STRIP_HUNSPELL 0)
+set(ENABLE_WASM_STRIP_PINGUSER 0)
+set(ENABLE_WASM_STRIP_PREMULTIPLY 0)
+set(ENABLE_WASM_STRIP_RECENT 0)
+set(ENABLE_WASM_STRIP_RECOVERYUI 0)
+set(ENABLE_WASM_STRIP_SPLASH 0)
+
 # Runtime optimisations change sal's threading and reference-counting internals.
 # Upstream leaves them off unless --enable-runtime-optimizations is given.
 set(ENABLE_RUNTIME_OPTIMIZATIONS 0)
@@ -125,6 +256,24 @@ set(WITH_LOCALE_ALL 1)
 
 set(HAVE_FEATURE_MULTIUSER_ENVIRONMENT 1)
 set(HAVE_FEATURE_BACKTRACE 0)
+
+# Upstream defines HAVE_FEATURE_UI unless --disable-gui was given, and this
+# build has the GUI.  The two values are not cosmetic: with the flag off,
+# vcl/inc/vcl/opengl/OpenGLWrapper.hxx does not declare
+# OpenGLWrapper::getBufferSwapCounter(), while OpenGLContext.cxx goes on
+# defining it, and the file stops compiling.
+set(HAVE_FEATURE_UI 1)
+
+# HAVE_FEATURE_OPENGL needs libGL, which configure.ac checks for by looking for
+# glBegin.  There is nothing to link — vcl reaches the GL entry points through
+# epoxy, which is what epoxy is for — so the library is only looked for, and the
+# flag follows whether it is there.
+find_library(GL_LIBRARY NAMES GL)
+if (GL_LIBRARY)
+    set(HAVE_FEATURE_OPENGL 1)
+else ()
+    set(HAVE_FEATURE_OPENGL 0)
+endif ()
 
 # liblangtag needed an "inline" workaround before 0.5.5 (configure.ac probes for
 # it with PKG_CHECK_EXISTS).
@@ -219,7 +368,23 @@ set(_config_headers
     config_dconf
     config_liblangtag
     config_emscripten
-    config_vclplug)
+    config_vclplug
+    config_afdko
+    config_atspi
+    config_cairo_canvas
+    config_cairo_rgba
+    config_cpdb
+    config_cups
+    config_dbus
+    config_eot
+    config_feature_desktop
+    config_feature_opencl
+    config_fonts
+    config_gio
+    config_libcxx
+    config_mpl
+    config_skia
+    config_wasm_strip)
 
 foreach (_header IN LISTS _config_headers)
     configure_file(

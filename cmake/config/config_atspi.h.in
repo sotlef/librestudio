@@ -1,0 +1,17 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether AT-SPI2 has the scrollTo API.  Upstream probes atspi-2 >= 2.32 for it,
+and only when the atspi tests are enabled at all; atspi is not installed here,
+so the value is 0 and the accessibility bridge uses the older calls.
+*/
+
+#pragma once
+
+#define HAVE_ATSPI2_SCROLL_TO @HAVE_ATSPI2_SCROLL_TO@

@@ -1,0 +1,20 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether this is a desktop build.  Upstream defines it for anything that is not
+iOS, Android or a fuzzer build; this build is a desktop one, and a good deal of
+code asks.
+*/
+
+#ifndef CONFIG_FEATURE_DESKTOP_H
+#define CONFIG_FEATURE_DESKTOP_H
+
+#define HAVE_FEATURE_DESKTOP @HAVE_FEATURE_DESKTOP@
+
+#endif

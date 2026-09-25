@@ -1,0 +1,20 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether Embedded OpenType fonts are supported.  Upstream makes it --disable-eot
+and enables it by default for anything that is not a fuzzer build, then checks
+that libeot is present — which it is here.
+*/
+
+#ifndef CONFIG_EOT_H
+#define CONFIG_EOT_H
+
+#define ENABLE_EOT @ENABLE_EOT@
+
+#endif

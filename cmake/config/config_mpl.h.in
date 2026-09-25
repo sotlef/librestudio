@@ -1,0 +1,20 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether the build is restricted to MPL-2.0 licensed files, which excludes some
+optional pieces that carry other licences.  Upstream makes it --enable-mpl-subset
+and leaves it off by default; so does this build.
+*/
+
+#ifndef CONFIG_MPL_H
+#define CONFIG_MPL_H
+
+#define MPL_HAVE_SUBSET @MPL_HAVE_SUBSET@
+
+#endif

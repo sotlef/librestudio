@@ -1,0 +1,24 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether GIO is used.  Upstream ties this to a GTK back end being built, because
+that is the configuration in which it links gio at all.  This build links gio
+into libvcl unconditionally — Library_vcl.mk lists it among the externals with
+no condition around it — and vcl/unx/generic/window/sessioninhibitor.cxx, which
+is in the library, uses it to inhibit the session's idle handling through
+GDBus.  With the flag off that file becomes a stub and the screen blanks in the
+middle of a presentation, so it is on.
+*/
+
+#ifndef INCLUDED_CONFIG_GIO_H
+#define INCLUDED_CONFIG_GIO_H
+
+#define ENABLE_GIO @ENABLE_GIO@
+
+#endif

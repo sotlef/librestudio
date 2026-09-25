@@ -1,0 +1,18 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Whether the C++ standard library is libc++.  This build uses libstdc++.
+*/
+
+#ifndef INCLUDED_CONFIG_HOST_CONFIG_LIBCXX_H
+#define INCLUDED_CONFIG_HOST_CONFIG_LIBCXX_H
+
+#define HAVE_LIBCPP @HAVE_LIBCPP@
+
+#endif
