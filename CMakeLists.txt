@@ -257,6 +257,7 @@ add_subdirectory(package)
 add_subdirectory(xmlscript)
 add_subdirectory(docmodel)
 add_subdirectory(vcl)
+add_subdirectory(toolkit)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
