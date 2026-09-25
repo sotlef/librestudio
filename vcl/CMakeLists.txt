@@ -1031,6 +1031,24 @@ endif ()
 # at run time and the toolkit is only initialised when something asks for a
 # window.
 #
+# It builds and links, and it stops inside InitVCL() and exits 1 without a word.
+# The word is missing because there is none to be had: SAL_WARN and SAL_INFO
+# compile to nothing unless SAL_LOG_WARN and SAL_LOG_INFO are defined, gbuild
+# defines them for ENABLE_SAL_LOG, and configure.ac sets that only for a debug
+# build.  A release build has no SAL logging at all, and no runtime SAL_LOG
+# setting can switch on what the compiler removed — so the log is not where to
+# look, a debugger is.
+#
+# Read that way, it is not a VCL failure: configmgr cannot resolve
+# /org.openoffice.VCL/DefaultFonts — the set is in
+# officecfg/registry/schema/org/openoffice/VCL.xcs, the data next to it in
+# VCL.xcu — and the uno::RuntimeException it throws reaches InitVCL, which is
+# building the default style settings at the time.  Nothing in this build has
+# yet turned the officecfg .xcu files into .xcd and told configmgr to read them,
+# so the first thing a VCL program does is ask for a configuration that is not
+# installed.  That is the gap this module's CMakeLists.txt already names, seen
+# from below, and it is where the module's next step is.
+#
 # Module_vcl.mk declares it among a group of workbench programs, under a guard
 # for cross-compiling and iOS/Android; none of those apply here.
 add_executable(svptest "${CMAKE_SOURCE_DIR}/vcl/workben/svptest.cxx")
@@ -1039,9 +1057,121 @@ target_include_directories(svptest PRIVATE
     "${CMAKE_SOURCE_DIR}/vcl/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(svptest udkapi_normal_headers offapi_normal_headers)
+add_dependencies(svptest udkapi_normal_headers offapi_normal_headers gcc3_uno)
 
 target_link_libraries(svptest PRIVATE
     vcl tl sal comphelper cppu cppuhelper)
 
 install(TARGETS svptest RUNTIME DESTINATION program)
+
+# --- vclmain and the workbench programs ----------------------------------------
+
+# vcl/source/salmain/salmain is the SAL_IMPLEMENT_MAIN() that a program links
+# against when it has no main() of its own: it extends the application
+# environment, creates the application object and calls SVMain().  A static
+# library, because it becomes part of the program rather than something loaded
+# at run time — and because ld pulls an archive member in only when something
+# asks for a symbol it defines, which here is the main() the C runtime wants.
+add_library(vclmain STATIC "${CMAKE_SOURCE_DIR}/vcl/source/salmain/salmain.cxx")
+target_include_directories(vclmain PUBLIC
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(vclmain udkapi_normal_headers offapi_normal_headers)
+
+# The rest of the workbench programs Module_vcl.mk declares, each one source.
+# They are how the module is exercised by hand, and they are how VCL is debugged
+# without an office on top of it.  The library lists are each program's own; the
+# three that include a vcl/toolkit header need VCL_INTERNALS, the guard those
+# headers carry against being used from outside the module.
+#
+# Every one of them bootstraps UNO, which means it dlopen()s the bridge rather
+# than linking it — hence gcc3_uno in each dependency line.  See the note in
+# bridges/CMakeLists.txt.
+#
+# svptest above is here too, and takes no vclmain — it has a main() of its own.
+
+# comphelper, cppu, cppuhelper, sal, tl, ucbhelper, vcl; and vclmain.
+add_executable(icontest "${CMAKE_SOURCE_DIR}/vcl/workben/icontest.cxx")
+target_compile_definitions(icontest PRIVATE VCL_INTERNALS)
+target_include_directories(icontest PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(icontest udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(icontest PRIVATE
+    comphelper cppu cppuhelper sal tl ucbhelper vcl vclmain)
+
+# basegfx, comphelper, cppu, cppuhelper, tl, sal, salhelper, vcl; and vclmain.
+# Its source is not under vcl/workben.
+add_executable(visualbackendtest
+    "${CMAKE_SOURCE_DIR}/vcl/backendtest/VisualBackendTest.cxx")
+target_include_directories(visualbackendtest PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(visualbackendtest udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(visualbackendtest PRIVATE
+    basegfx comphelper cppu cppuhelper tl sal salhelper vcl vclmain)
+
+# tl, sal, utl, vcl, cppu, cppuhelper, comphelper, and harfbuzz — the last
+# because it reads vcl/inc/font/TrueTypeFont.hxx, which includes hb.h and
+# hb-ot.h.  LIBRESTUDIO_HARFBUZZ_TARGETS rather than the target names, so that
+# this keeps working whichever way the top level got harfbuzz.
+add_executable(fftester "${CMAKE_SOURCE_DIR}/vcl/workben/fftester.cxx")
+target_include_directories(fftester PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(fftester PRIVATE
+    tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGETS})
+
+# tl, sal, vcl, cppu, cppuhelper, comphelper, i18nlangtag.  The last is not
+# decoration: the program asks MsLangId for the language of the system, and
+# without i18nlangtag on the link line that symbol is simply missing.
+add_executable(listfonts "${CMAKE_SOURCE_DIR}/vcl/workben/listfonts.cxx")
+target_include_directories(listfonts PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(listfonts udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(listfonts PRIVATE
+    tl sal vcl cppu cppuhelper comphelper i18nlangtag)
+
+# The same list as listfonts, plus harfbuzz and graphite — this one is about
+# what the shapers make of a font.
+add_executable(listglyphs "${CMAKE_SOURCE_DIR}/vcl/workben/listglyphs.cxx")
+target_include_directories(listglyphs PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(listglyphs PRIVATE
+    tl sal vcl cppu cppuhelper comphelper i18nlangtag
+    ${LIBRESTUDIO_HARFBUZZ_TARGETS} PkgConfig::GRAPHITE)
+
+# tl, sal, vcl, cppu, cppuhelper, comphelper; VCL_INTERNALS; and its own main().
+add_executable(svpclient "${CMAKE_SOURCE_DIR}/vcl/workben/svpclient.cxx")
+target_compile_definitions(svpclient PRIVATE VCL_INTERNALS)
+target_include_directories(svpclient PRIVATE
+    "${CMAKE_SOURCE_DIR}/vcl/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(svpclient udkapi_normal_headers offapi_normal_headers gcc3_uno)
+target_link_libraries(svpclient PRIVATE
+    tl sal vcl cppu cppuhelper comphelper)
+
+install(TARGETS icontest visualbackendtest fftester listfonts listglyphs svpclient
+    RUNTIME DESTINATION program)
+
+# Five more are not built, and each for a reason that is not about vcl:
+#
+#   vcldemo, svdemo, minvcl, minweld   link fwk, the library of the framework
+#                                      module, which is not ported.
+#   mtfdemo                            links drawinglayer and emfio as well —
+#                                      the first is only here as
+#                                      drawinglayercore, the second not at all.
+#
+# They are one source each, so they are worth coming back to when those modules
+# are in.
