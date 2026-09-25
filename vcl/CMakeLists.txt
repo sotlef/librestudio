@@ -115,10 +115,6 @@ set(VCL_SOURCES
     vcl/source/window/event
     vcl/source/window/floatwin
     vcl/source/window/hexcolorcontrol
-    # $(if $(ENABLE_WASM_STRIP_SPLASH),,vcl/source/window/introwin) — the
-    # splash window is dropped only from the wasm build, where the embedder
-    # draws the screen and there is nothing to splash.
-    vcl/source/window/introwin
     vcl/source/window/keycod
     vcl/source/window/keyevent
     vcl/source/window/layout
@@ -590,6 +586,15 @@ option(LIBRESTUDIO_SYSTEM_LIBFIXMATH
     "Use a system libfixmath instead of the fix16 bundled in tools/" OFF)
 
 # --- the conditional sources --------------------------------------------------
+
+# Library_vcl.mk line 205.  This is the one condition that sits in the middle of
+# the object list rather than in a block of its own, which is how it came to be
+# written down as a comment next to an unconditional source; it is a condition
+# like any other.  The splash window is dropped only from the wasm build, where
+# the embedder draws the screen and there is nothing to splash.
+if (NOT ENABLE_WASM_STRIP_SPLASH)
+    list(APPEND VCL_SOURCES vcl/source/window/introwin)
+endif ()
 
 if (USING_X11)
     # Library_vcl.mk lines 691-697.  The desktop detector is X11 code that

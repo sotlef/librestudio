@@ -235,11 +235,18 @@ set(USE_HEADLESS_CODE TRUE CACHE BOOL
     "configure.ac's USE_HEADLESS_CODE: the build uses freetype and fontconfig, which is what selects the generic font handling, the printer back ends and the code the X11 plug-in shares")
 option(DISABLE_GUI "configure.ac's --disable-gui: build without a toolkit" OFF)
 
+# ENABLE_WASM_STRIP_SPLASH is a switch rather than a value: vcl/CMakeLists.txt
+# tests it to decide whether the splash window is part of the library, which is
+# the one condition Library_vcl.mk has in the middle of its object list.
+set(ENABLE_WASM_STRIP_SPLASH FALSE CACHE BOOL
+    "configure.ac's --enable-wasm-strip: leave the splash window out")
+
+
 # The header values are worked out separately, and have to be 0 or 1 rather than
 # TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
 # and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
 # same shape as HAVE_FEATURE_JAVA above.
-foreach (_switch USING_X11 USE_HEADLESS_CODE)
+foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH)
     if (${_switch})
         set(${_switch}_CONFIG 1)
     else ()
@@ -258,7 +265,8 @@ set(HAVE_MORE_FONTS 1)          # --with-fonts, yes by default
 set(HAVE_LIBCPP 0)              # this build uses libstdc++
 set(MPL_HAVE_SUBSET 0)          # --enable-mpl-subset, off by default
 set(USE_AFDKO_PROGRAMS 0)       # BUILD_TYPE is DESKTOP
-# Everything a wasm build may trim.  None of it is trimmed here.
+# The rest of what a wasm build may trim.  None of it is trimmed here, and none
+# of it is tested by the build system, so they are values rather than switches.
 set(ENABLE_WASM_STRIP_ACCESSIBILITY 0)
 set(ENABLE_WASM_STRIP_CHART 0)
 set(ENABLE_WASM_STRIP_EXTRA 0)
@@ -267,7 +275,6 @@ set(ENABLE_WASM_STRIP_PINGUSER 0)
 set(ENABLE_WASM_STRIP_PREMULTIPLY 0)
 set(ENABLE_WASM_STRIP_RECENT 0)
 set(ENABLE_WASM_STRIP_RECOVERYUI 0)
-set(ENABLE_WASM_STRIP_SPLASH 0)
 
 # Runtime optimisations change sal's threading and reference-counting internals.
 # Upstream leaves them off unless --enable-runtime-optimizations is given.
