@@ -1,0 +1,50 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+The crypto backend, read by svl/source/crypto/cryptosign.cxx and, through
+include/systools/curlinit.hxx, by everything that talks HTTP with curl.
+
+HAVE_FEATURE_NSS and USE_CRYPTO_NSS both follow LIBRESTUDIO_TLS_BACKEND: this
+build links one backend, not both.  USE_CRYPTO_MSCAPI is Windows's CAPI, and
+this build does not target Windows.
+*/
+
+#ifndef CONFIG_CRYPTO_H
+#define CONFIG_CRYPTO_H
+
+/*
+Whether NSS is available.
+*/
+#define HAVE_FEATURE_NSS @HAVE_FEATURE_NSS@
+
+/*
+Use MS CAPI for crypto operations.
+*/
+#define USE_CRYPTO_MSCAPI 0
+
+/*
+Use Mozilla NSS for crypto operations.
+*/
+#define USE_CRYPTO_NSS @USE_CRYPTO_NSS@
+
+#if USE_CRYPTO_MSCAPI || USE_CRYPTO_NSS
+#define USE_CRYPTO_ANY 1
+#else
+#define USE_CRYPTO_ANY 0
+#endif
+
+/*
+Whether the backend is the system OpenSSL, and this one has to stay undefined
+rather than 0: systools/opensslinit.hxx asks `#if !defined(SYSTEM_OPENSSL)`
+to decide whether curl has to be handed a CA bundle path, and a defined-but-zero
+macro would answer "yes, the system OpenSSL" to that question.
+*/
+#cmakedefine SYSTEM_OPENSSL
+
+#endif

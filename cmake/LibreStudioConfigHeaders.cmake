@@ -150,9 +150,17 @@ endif ()
 if (LIBRESTUDIO_TLS_BACKEND STREQUAL "NSS")
     set(USE_TLS_NSS 1)
     set(USE_TLS_OPENSSL 0)
+    set(USE_CRYPTO_NSS 1)
+    set(HAVE_FEATURE_NSS 1)
+    # Left unset on purpose: config_crypto.h.in turns this into `#undef`, and
+    # systools/opensslinit.hxx keys off whether the macro exists at all.
+    unset(SYSTEM_OPENSSL)
 else ()
     set(USE_TLS_NSS 0)
     set(USE_TLS_OPENSSL 1)
+    set(USE_CRYPTO_NSS 0)
+    set(HAVE_FEATURE_NSS 0)
+    set(SYSTEM_OPENSSL 1)
 endif ()
 
 # --- expansion ---------------------------------------------------------------
@@ -202,6 +210,7 @@ set(_config_headers
     config_fuzzers
     config_oox
     config_gpgme
+    config_crypto
     config_liblangtag
     config_emscripten
     config_vclplug)

@@ -52,10 +52,10 @@ include(LibreStudioUnorc)
 # xsltproc, both here and by the officecfg schemas.
 find_program(XSLTPROC_EXECUTABLE xsltproc REQUIRED)
 
-# Third-party header-only libraries that upstream keeps as tarballs rather than
-# vendoring.  Prefer a system copy — configure.ac does the same behind
-# --with-system-dragonbox / --with-system-fast_float — and only download when
-# there is none.
+# Third-party libraries that upstream keeps as tarballs rather than vendoring.
+# Most are header-only.  Prefer a system copy — configure.ac does the same
+# behind --with-system-dragonbox / --with-system-fast_float — and only download
+# when there is none.
 find_path(DRAGONBOX_INCLUDE_DIR dragonbox/dragonbox.h
     PATHS /usr/include /usr/local/include /usr/include/dragonbox-1.1.3)
 if (NOT DRAGONBOX_INCLUDE_DIR)
@@ -81,6 +81,23 @@ if (NOT FROZEN_INCLUDE_DIR)
     set(FROZEN_INCLUDE_DIR "${frozen_SOURCE_DIR}/include")
 endif ()
 
+# mdds is header-only as well; svl's grid printer uses it.  configure.ac prefers
+# the system module, which installs itself under a versioned directory, so both
+# layouts are probed before falling back to the tarball.
+find_path(MDDS_INCLUDE_DIR mdds/multi_type_vector/types.hpp
+    PATHS /usr/include /usr/local/include /usr/include/mdds-3.0)
+if (NOT MDDS_INCLUDE_DIR)
+    librestudio_fetch_tarball(mdds mdds-3.2.1.tar.xz
+        673f5bb94612dbba581fc92b99b5e5dd1a53e29496a5dbc936432f6b0687c112)
+    set(MDDS_INCLUDE_DIR "${mdds_SOURCE_DIR}/include")
+endif ()
+
+# zxcvbn-c is the one external here that is compiled rather than only included:
+# svl builds it into itself, and the rules for that are next to their only user.
+# There is no system module for it — configure.ac has none either.
+librestudio_fetch_tarball(zxcvbn_c zxcvbn-c-2.6.tar.gz
+    11e39f6776f9c82c68b2acb94336e32697d4ab6cdb4ac16f9583ccbdd735113a)
+
 find_package(ZLIB REQUIRED)
 find_package(Boost 1.69 REQUIRED COMPONENTS locale)
 find_package(Threads REQUIRED)
@@ -96,6 +113,9 @@ find_package(LibXml2 REQUIRED)
 
 # sax wraps expat as well as libxml2.
 find_package(EXPAT REQUIRED)
+
+# svl's URI and WebDAV helpers speak HTTP through libcurl.
+find_package(CURL REQUIRED)
 
 # --- modules -----------------------------------------------------------------
 #
@@ -130,6 +150,7 @@ add_subdirectory(basegfx)
 add_subdirectory(tools)
 add_subdirectory(unotools)
 add_subdirectory(sot)
+add_subdirectory(svl)
 
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
