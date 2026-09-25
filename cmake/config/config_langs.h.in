@@ -1,0 +1,20 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Upstream's --with-lang restricts the UI languages a build ships translations
+for; WITH_LANG holds that list and an empty string means "no restriction",
+which is what WITH_LOCALE_ALL in config_locales.h already says for this build.
+*/
+
+#ifndef CONFIG_LANGS_H
+#define CONFIG_LANGS_H
+
+#define WITH_LANG ""
+
+#endif

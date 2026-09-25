@@ -431,6 +431,8 @@ set(_config_headers
     config_version
     config_java
     config_fuzzers
+    config_langs
+    config_oauth2
     config_oox
     config_gpgme
     config_crypto
@@ -453,6 +455,7 @@ set(_config_headers
     config_libcxx
     config_mpl
     config_skia
+    config_vendor
     config_wasm_strip)
 
 foreach (_header IN LISTS _config_headers)
