@@ -314,6 +314,32 @@ add_subdirectory(editeng)
 # needs only libraries declared long before this point.
 add_subdirectory(formula)
 
+# avmedia is a minimal stub in this build (HAVE_FEATURE_AVMEDIA is hardcoded 0,
+# so only the always-built mediaitem.cxx applies) -- it only needs libraries
+# declared long before this point, but svxcore below links it unconditionally.
+add_subdirectory(avmedia)
+
+# connectivity (dbtools only -- see connectivity/CMakeLists.txt) needs utl, tl,
+# comphelper, i18nlangtag, svt and vcl, all declared well before this point.
+# svxcore/svx link it unconditionally in upstream, since
+# HAVE_FEATURE_DBCONNECTIVITY defaults to enabled on desktop Linux.
+add_subdirectory(connectivity)
+
+# svx (svxcore + svx) is the drawing/form/gallery engine and its UI-facing
+# wrapper; it needs avmedia and editeng (both declared just above) plus sb,
+# fwk, sfx and dbtools (all declared earlier).
+add_subdirectory(svx)
+
+# emfio, svgio, UnoControls (ctl), animations (animcore) and eventattacher
+# (evtatt) are independent of the svx tier above -- each needs only libraries
+# (drawinglayer, toolkit, comphelper, cppu, cppuhelper, sal, ...) declared
+# long before this point.
+add_subdirectory(emfio)
+add_subdirectory(svgio)
+add_subdirectory(UnoControls)
+add_subdirectory(animations)
+add_subdirectory(eventattacher)
+
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
 # before it.
