@@ -20,10 +20,10 @@ two things that are not desktops at all and are read all over vcl:
                      it, so leaving it undefined breaks the build rather than
                      merely changing behaviour.
 
-ENABLE_GEN and ENABLE_HEADLESS are off here although upstream enables both for
-this configuration: they tell libvcl's plug-in loader which back ends to look
-for, and no plug-in is built yet.  Turning them on would only name libraries
-that do not exist.
+ENABLE_GEN follows whether the X11 back end is built — it is, so libvcl's
+plug-in loader knows to look for it.  ENABLE_HEADLESS is off because there is no
+headless plug-in library in this tree: the headless back end lives inside libvcl
+itself, under USE_HEADLESS_CODE above.
 */
 
 #ifndef CONFIG_VCLPLUG_H
@@ -32,7 +32,7 @@ that do not exist.
 #define USING_X11 @USING_X11_CONFIG@
 #define USE_HEADLESS_CODE @USE_HEADLESS_CODE_CONFIG@
 
-#define ENABLE_GEN 0
+#define ENABLE_GEN @ENABLE_GEN_CONFIG@
 #define ENABLE_HEADLESS 0
 #define ENABLE_GTK3 0
 #define ENABLE_GTK4 0

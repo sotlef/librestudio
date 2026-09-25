@@ -241,12 +241,28 @@ option(DISABLE_GUI "configure.ac's --disable-gui: build without a toolkit" OFF)
 set(ENABLE_WASM_STRIP_SPLASH FALSE CACHE BOOL
     "configure.ac's --enable-wasm-strip: leave the splash window out")
 
+# ENABLE_GEN is what tells libvcl's plug-in loader that the X11 back end exists;
+# vcl/CMakeLists.txt builds it under the same switch.  Upstream enables it for a
+# Linux GUI build.
+set(ENABLE_GEN TRUE CACHE BOOL "configure.ac's ENABLE_GEN: build the X11 plug-in")
+
+# And RandR is derived, as configure.ac derives it, from the library being
+# there — a display that changes size should not need to be told about.
+pkg_check_modules(XRANDR_DETECT xrandr)
+if (XRANDR_DETECT_FOUND)
+    set(_enable_randr_default TRUE)
+else ()
+    set(_enable_randr_default FALSE)
+endif ()
+set(ENABLE_RANDR ${_enable_randr_default} CACHE BOOL
+    "configure.ac's ENABLE_RANDR: the back end notices display changes")
+
 
 # The header values are worked out separately, and have to be 0 or 1 rather than
 # TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
 # and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
 # same shape as HAVE_FEATURE_JAVA above.
-foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH)
+foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN)
     if (${_switch})
         set(${_switch}_CONFIG 1)
     else ()

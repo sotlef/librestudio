@@ -885,3 +885,139 @@ install(TARGETS vcl LIBRARY DESTINATION program)
 #
 # Everything else the .mk switches on is expressed above as a condition rather
 # than described, so it is not repeated here.
+
+# --- vclplug_gen ---------------------------------------------------------------
+
+# The back end that puts libvcl on an X11 screen.  It is a plug-in: libvcl
+# dlopens it by name at run time, and gb_Library_set_plugin_for(vclplug_gen,vcl)
+# — unlike the _nodep variant — also links vcl into it.  That is why vcl is
+# among the libraries below although Library_vclplug_gen.mk never names it; only
+# the non-trivial half is in that file.
+#
+# The whole library is under ENABLE_GEN, as it is under $(if $(ENABLE_GEN), ...)
+# in Module_vcl.mk.
+
+if (ENABLE_GEN)
+    set(VCLPLUG_GEN_SOURCES
+        vcl/unx/generic/app/X11DisplayConnectionDispatch
+        vcl/unx/generic/app/i18n_cb
+        vcl/unx/generic/app/i18n_ic
+        vcl/unx/generic/app/i18n_im
+        vcl/unx/generic/app/i18n_keysym
+        vcl/unx/generic/app/i18n_xkb
+        vcl/unx/generic/app/keysymnames
+        vcl/unx/generic/app/randrwrapper
+        vcl/unx/generic/app/saldata
+        vcl/unx/generic/app/saldisp
+        vcl/unx/generic/app/salinst
+        vcl/unx/generic/app/saltimer
+        vcl/unx/generic/app/sm
+        vcl/unx/generic/app/wmadaptor
+        vcl/unx/generic/dtrans/bmp
+        vcl/unx/generic/dtrans/X11_clipboard
+        vcl/unx/generic/dtrans/X11_dndcontext
+        vcl/unx/generic/dtrans/X11_droptarget
+        vcl/unx/generic/dtrans/X11_selection
+        vcl/unx/generic/dtrans/X11_service
+        vcl/unx/generic/dtrans/X11_transferable
+        vcl/unx/generic/gdi/cairo_xlib_cairo
+        vcl/unx/generic/gdi/X11CairoSalGraphicsImpl
+        vcl/unx/generic/gdi/font
+        vcl/unx/generic/gdi/salgdi
+        vcl/unx/generic/gdi/salvd
+        vcl/unx/generic/window/salframe
+        vcl/unx/generic/window/salobj
+        vcl/unx/x11/x11sys
+        vcl/unx/x11/xlimits
+        vcl/source/opengl/x11/context)
+
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        list(APPEND VCLPLUG_GEN_SOURCES
+            vcl/skia/x11/gdiimpl
+            vcl/skia/x11/salvd
+            vcl/skia/x11/textrender)
+    endif ()
+
+    librestudio_expand_cxx(VCLPLUG_GEN_SOURCES)
+    add_library(vclplug_gen SHARED ${VCLPLUG_GEN_SOURCES})
+
+    target_include_directories(vclplug_gen PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${VALGRIND_INCLUDE_DIR}"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(vclplug_gen
+        officecfg_headers udkapi_normal_headers offapi_normal_headers)
+
+    # Library_vclplug_gen.mk lines 119-122.
+    target_compile_definitions(vclplug_gen PRIVATE
+        VCLPLUG_GEN_IMPLEMENTATION
+        VCL_INTERNALS)
+
+    # Lines 124-132: RandR lets the back end notice a display change instead of
+    # being told about it.
+    if (ENABLE_RANDR)
+        pkg_check_modules(XRANDR REQUIRED IMPORTED_TARGET xrandr)
+        target_compile_definitions(vclplug_gen PRIVATE USE_RANDR)
+    endif ()
+
+    # Lines 53-68.  skia and fontconfig are alternatives there, not additions:
+    # the Skia back end does its own font handling.
+    pkg_check_modules(CAIRO_GEN REQUIRED IMPORTED_TARGET cairo)
+    pkg_check_modules(GRAPHITE_GEN REQUIRED IMPORTED_TARGET graphite2)
+    pkg_check_modules(EPOXY_GEN REQUIRED IMPORTED_TARGET epoxy)
+    pkg_check_modules(XRENDER REQUIRED IMPORTED_TARGET xrender)
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        pkg_check_modules(SKIA_GEN REQUIRED IMPORTED_TARGET skia)
+    else ()
+        pkg_check_modules(FONTCONFIG_GEN REQUIRED IMPORTED_TARGET fontconfig)
+    endif ()
+
+    # Lines 70-75 and 147-152.  libSM and libICE ship no pkg-config file on
+    # this distribution, so they are found by name; -lm and -ldl are the unix
+    # branch.
+    find_library(SM_LIBRARY NAMES SM REQUIRED)
+    find_library(ICE_LIBRARY NAMES ICE REQUIRED)
+
+    target_link_libraries(vclplug_gen PRIVATE
+        vcl
+        tl utl sot ucbhelper basegfx comphelper cppuhelper i18nlangtag i18nutil
+        cppu sal
+        Boost::boost
+        EXPAT::EXPAT
+        ICU::uc
+        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        PkgConfig::CAIRO_GEN PkgConfig::GRAPHITE_GEN PkgConfig::EPOXY_GEN
+        PkgConfig::XRENDER PkgConfig::X11 PkgConfig::XEXT
+        "${SM_LIBRARY}" "${ICE_LIBRARY}"
+        m dl)
+
+    if (ENABLE_RANDR)
+        target_link_libraries(vclplug_gen PRIVATE PkgConfig::XRANDR)
+    endif ()
+
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        target_link_libraries(vclplug_gen PRIVATE PkgConfig::SKIA_GEN)
+    else ()
+        target_link_libraries(vclplug_gen PRIVATE PkgConfig::FONTCONFIG_GEN)
+    endif ()
+
+    # Lines 135-145: Xinerama lets a window span several monitors.  configure.ac
+    # picks a static link when the library is only there as an archive; that is
+    # the rare case, and the shared one is what is written here.
+    if (USING_X11)
+        pkg_check_modules(XINERAMA REQUIRED IMPORTED_TARGET xinerama)
+        target_link_libraries(vclplug_gen PRIVATE PkgConfig::XINERAMA)
+    endif ()
+
+    # $(if $(ENABLE_JAVA), jvmaccess) from the library list.
+    if (LIBRESTUDIO_ENABLE_JAVA)
+        target_link_libraries(vclplug_gen PRIVATE jvmaccess)
+    endif ()
+
+    # No component file: a plug-in is named by SAL_USE_VCLPLUGIN, not registered
+    # as a UNO service.
+    librestudio_set_library_output_name(vclplug_gen vclplug_gen OOO)
+    install(TARGETS vclplug_gen LIBRARY DESTINATION program)
+endif ()
