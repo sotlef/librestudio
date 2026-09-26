@@ -43,3 +43,24 @@ librestudio_add_component(io
 librestudio_set_library_output_name(io io OOO)
 
 install(TARGETS io LIBRARY DESTINATION program)
+
+# --- CppunitTest targets ------------------------------------------------------
+#
+# CppunitTest_io_textinputstream.mk: 1 source, use_libraries cppu cppuhelper
+# sal unotest, use_udk_api -> plain udkapi, use_ure -> PROTECTORS. Re-checked
+# directly against the live .mk (not just the prior-research summary). Note:
+# upstream wires this in via gb_Module_add_subsequentcheck_targets rather than
+# the normal gb_Module_add_check_targets (Module_io.mk) -- a "subsequentcheck"
+# runs against an already-installed instance rather than a fresh build product,
+# but functionally it is still just "a test that runs"; there is no
+# subsequentcheck-vs-check distinction in this port's CMake/CTest model, so it
+# is registered exactly like every other librestudio_add_cppunit_test() call.
+librestudio_add_cppunit_test(io_textinputstream
+    SOURCES
+        io/qa/textinputstream
+    LIBRARIES cppu cppuhelper sal unotest
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector)

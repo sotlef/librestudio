@@ -158,6 +158,12 @@ set(SVL_SOURCES
 librestudio_expand_cxx(SVL_SOURCES)
 add_library(svl SHARED ${SVL_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(svl PRIVATE
+        "${CMAKE_SOURCE_DIR}/svl/inc/pch/precompiled_svl.hxx")
+    target_compile_definitions(svl PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(svl PRIVATE
     "${CMAKE_SOURCE_DIR}/svl/source/inc"
     "${OFFICECFG_INCLUDE_DIR}"
@@ -188,6 +194,18 @@ if (SVL_HAS_NSS)
 else ()
     pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
     target_link_libraries(svl PRIVATE PkgConfig::OPENSSL)
+endif ()
+
+# Library_svl.mk: gb_Library_use_system_win32_libs(svl, advapi32 crypt32
+# gdi32 gdiplus imm32 mpr ole32 shell32 usp10 uuid version winspool setupapi
+# shlwapi). Kept structurally present, behind if (WIN32), per this port's
+# policy of not silently dropping Windows-only gbuild targets -- see
+# sal/CMakeLists.txt's sal_comtools for the same pattern. Inert on this
+# Linux build.
+if (WIN32)
+    target_link_libraries(svl PRIVATE
+        advapi32 crypt32 gdi32 gdiplus imm32 mpr ole32 shell32 usp10 uuid
+        version winspool setupapi shlwapi)
 endif ()
 
 librestudio_add_component(svl
@@ -245,3 +263,132 @@ librestudio_add_component(passwordcontainer
 
 librestudio_set_library_output_name(passwordcontainer passwordcontainer OOO)
 install(TARGETS passwordcontainer LIBRARY DESTINATION program)
+
+# --- CppunitTest ---------------------------------------------------------------
+#
+# 8 CppunitTest_*.mk files exist for svl. 5 are wired directly below (no
+# protectors/components/configuration, so nothing here needs to wait on a
+# module add_subdirectory()'d after svl); svl_urihelper and svl_qa_cppunit
+# are deferred to svl/CppunitTest_deferred.cmake (see the pointer comment
+# below for why); svl_lockfiles is deferred outright (see the comment at the
+# very end of this file).
+
+# CppunitTest_svl_adrparse.mk: 1 source, use_libraries sal svl. No
+# protectors/components/configuration/set_include.
+librestudio_add_cppunit_test(svl_adrparse
+    SOURCES
+        svl/qa/unit/test_SvAddressParser
+    LIBRARIES sal svl)
+
+# CppunitTest_svl_lngmisc.mk: 1 source, use_libraries cppu cppuhelper sal
+# salhelper svl, set_include -I$(SRCDIR)/svl/source/inc. No protectors/
+# components/configuration.
+librestudio_add_cppunit_test(svl_lngmisc
+    SOURCES
+        svl/qa/unit/test_lngmisc
+    LIBRARIES cppu cppuhelper sal salhelper svl
+    INCLUDE "${CMAKE_SOURCE_DIR}/svl/source/inc")
+
+# CppunitTest_svl_lngmisc.mk's own `ifeq ($(OS),WNT)` block:
+# gb_CppunitTest_use_system_win32_libs adds oleaut32 only under WNT. Gated
+# the same way sal_comtools gates its own WNT-only system libs
+# (sal/CMakeLists.txt) -- inert on this Linux build.
+if (WIN32)
+    target_link_libraries(svl_lngmisc PRIVATE oleaut32)
+endif ()
+
+# CppunitTest_svl_notify.mk: 1 source (notify/test_SfxBroadcaster),
+# use_external(boost_headers), use_sdk_api (udkapi+offapi "normal" headers),
+# use_libraries svl comphelper sal cppu cppuhelper, set_include
+# -I$(SRCDIR)/svl/source/inc. No protectors/components/configuration.
+librestudio_add_cppunit_test(svl_notify
+    SOURCES
+        svl/qa/unit/notify/test_SfxBroadcaster
+    LIBRARIES svl comphelper sal cppu cppuhelper Boost::boost
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/svl/source/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_svl_inetcontenttype.mk: 1 source, use_api(udkapi) -- verified
+# it really is the plain gb_CppunitTest_use_api, not use_sdk_api, and it
+# names only udkapi, no offapi -- mapped to the same "normal" udkapi headers
+# use_sdk_api uses (cppu_typelib, cppu/CMakeLists.txt, is the identical
+# use_api(udkapi)-alone precedent), just without offapi.
+# use_externals(boost_headers), use_libraries sal svl tl. No protectors/
+# components/configuration/set_include.
+librestudio_add_cppunit_test(svl_inetcontenttype
+    SOURCES
+        svl/qa/unit/test_INetContentType
+    LIBRARIES sal svl tl Boost::boost
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)
+
+# CppunitTest_svl_items.mk: 1 source (items/test_IndexedStyleSheets),
+# use_external(boost_headers), use_sdk_api, use_libraries svl comphelper sal
+# salhelper cppu cppuhelper. No protectors/components/configuration/
+# set_include.
+librestudio_add_cppunit_test(svl_items
+    SOURCES
+        svl/qa/unit/items/test_IndexedStyleSheets
+    LIBRARIES svl comphelper sal salhelper cppu cppuhelper Boost::boost
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_svl_urihelper.mk and CppunitTest_svl_qa_cppunit.mk: registered
+# in svl/CppunitTest_deferred.cmake, NOT here, include()'d from the root
+# CMakeLists.txt only after ucb/unotest/test (svl_urihelper's own
+# dependencies) and configmgr/framework/lingucomponent (svl_qa_cppunit's, the
+# later-binding constraint of the two, so both are include()'d together at
+# that later point rather than splitting into two include() sites for a
+# one-test-earlier difference) are all add_subdirectory()'d. Both call
+# gb_CppunitTest_use_ure (2 protector pairs, from unotest/CMakeLists.txt,
+# add_subdirectory()'d well after svl here) and gb_CppunitTest_use_components
+# naming modules add_subdirectory()'d after svl too (ucb's ucb1/ucpfile1 for
+# svl_urihelper; configmgr, framework's fwk, and lingucomponent's numbertext
+# for svl_qa_cppunit, on top of i18npool, which IS already available at
+# svl's own position, add_subdirectory()'d before svl). Defining either here
+# would hit librestudio_add_cppunit_test()'s COMPONENTS lookup (a GLOBAL
+# property read eagerly via get_property(GLOBAL ...)) or its
+# cppunittester/protector TARGET checks before those modules have run, and
+# abort configure with its own FATAL_ERROR -- exactly the shape of problem
+# comphelper_test/sax_parser/sax_xmlimport/configmgr_unit already hit (see
+# comphelper/CppunitTest_deferred.cmake's header comment, the closest
+# precedent). See svl/CppunitTest_deferred.cmake for the full per-test detail
+# and its include() call site in the root CMakeLists.txt for why it sits
+# where it does.
+
+# CppunitTest_svl_lockfiles.mk: DEFERRED, not ported -- per this task's own
+# explicit instruction, regardless of what double-checking below found.
+#
+# The task brief driving this wave justified deferring this one test with
+# "it needs svt, sw, and vcl, none of which are part of this port's
+# currently-completed dependency chain". Re-checked directly against the
+# live tree, that premise is now STALE, the same way tools_test's own
+# deferral comment (tools/CMakeLists.txt) already had to correct a stale
+# "vcl doesn't exist yet" premise for itself: svt (svtools/CMakeLists.txt's
+# svt target), vcl (vcl/CMakeLists.txt's vcl target) and sw (sw/
+# CMakeLists.txt's sw target -- 1354 lines, sw/swui/swd all real
+# add_library() targets) all exist and are fully wired in this tree today.
+# So "svt/sw/vcl aren't part of the completed dependency chain" is no longer
+# the accurate reason.
+#
+# The real remaining reason is ordering, not existence: sw is
+# add_subdirectory()'d at root CMakeLists.txt line ~756, hundreds of lines
+# (many modules) after svl's own add_subdirectory() here, and this test also
+# calls gb_CppunitTest_use_rdb(svl_lockfiles,services) -- this port's
+# established handling of use_rdb(services) (see scaddins/CppunitTest_
+# deferred.cmake and its include() call site, right after
+# program_services_rdb is first defined near the very end of the root
+# CMakeLists.txt) requires deferring all the way to that point, later still
+# than sw itself. Reaching that point is mechanically possible -- the
+# deferred-file + later-include() pattern svl_urihelper/svl_qa_cppunit above
+# already use would extend the same way here -- but this task's brief
+# explicitly says "Do NOT port svl_lockfiles", so it is intentionally left
+# out of scope for this wave rather than wired through on this session's own
+# initiative. A later wave revisiting it should start from this note, not
+# from the original "svt/sw/vcl unreachable" reasoning, which no longer
+# holds.

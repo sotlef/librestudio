@@ -151,6 +151,12 @@ set(EDITENG_SOURCES
 
 librestudio_expand_cxx(EDITENG_SOURCES)
 add_library(editeng SHARED ${EDITENG_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(editeng PRIVATE
+        "${CMAKE_SOURCE_DIR}/editeng/inc/pch/precompiled_editeng.hxx")
+    target_compile_definitions(editeng PRIVATE PCH_LEVEL=2)
+endif ()
 add_dependencies(editeng editeng_generated)
 
 target_include_directories(editeng PRIVATE

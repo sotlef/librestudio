@@ -30,6 +30,25 @@ add_dependencies(i18nlangtag udkapi_normal_headers offapi_normal_headers)
 target_compile_definitions(i18nlangtag PRIVATE I18NLANGTAG_DLLIMPLEMENTATION)
 target_link_libraries(i18nlangtag PRIVATE sal ICU::uc PkgConfig::LIBLANGTAG)
 
-librestudio_set_library_output_name(i18nlangtag i18nlangtag OOO)
+# Library_i18nlangtag.mk: $(eval $(call gb_Library_use_system_win32_libs,
+# i18nlangtag,$(if $(filter $(COM),MSC), kernel32))) -- kernel32 only under
+# MSVC. Kept structurally present, behind if (MSVC), per this port's policy
+# of not silently dropping Windows-only gbuild targets -- see sal/
+# CMakeLists.txt's sal_comtools/sal_retry_if_failed and cpputools/
+# CMakeLists.txt's sp2bv for the same pattern. Inert on this Linux build.
+if (MSVC)
+    target_link_libraries(i18nlangtag PRIVATE kernel32)
+endif ()
+
+# Repository.mk registers i18nlangtag under PLAINLIBS_URE, the same category
+# as jpipe (jurt/CMakeLists.txt) and juh/juhx (javaunohelper/CMakeLists.txt),
+# both already ported with layer PLAIN. solenv/gbuild/platform/unxgcc.mk's
+# gb_Library_FILENAMES shows PLAINLIBS_URE and PLAINLIBS_OOO both resolve to
+# the bare libNAME.so pattern (gb_Library_PLAINEXT) -- the "lo" suffix
+# (gb_Library_OOOEXT) belongs only to the distinct OOOLIBS category, which
+# i18nlangtag is not a member of. Was wrongly OOO (-> i18nlangtaglo.so) from
+# an earlier wave of this port; corrected to PLAIN (-> libi18nlangtag.so) to
+# match its real gbuild category and its PLAINLIBS_URE siblings.
+librestudio_set_library_output_name(i18nlangtag i18nlangtag PLAIN)
 
 install(TARGETS i18nlangtag LIBRARY DESTINATION program)

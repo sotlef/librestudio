@@ -1,0 +1,302 @@
+# This file is part of the LibreStudio project.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# xmlsecurity — document digital signatures: the UI (certificate chooser,
+# viewer, macro security, digital signatures dialog), the signature framework
+# that drives SAX-level signing/verification, and the xmlsec1-based crypto
+# glue that talks to the actual crypto backend.
+#
+# Two libraries, from Library_xmlsecurity.mk and Library_xsec_xmlsec.mk.
+# xsec_xmlsec is defined first because xmlsecurity links it.
+#
+# Crypto backend: this port already has a single project-wide switch for
+# this, LIBRESTUDIO_TLS_BACKEND (see cmake/config/config_crypto.h.in and
+# comphelper/CMakeLists.txt, svl/CMakeLists.txt, oox/CMakeLists.txt for the
+# established branching style) — "this build links one backend, not both".
+# A separate ENABLE_NSS option is deliberately NOT introduced here: that
+# would let LIBRESTUDIO_TLS_BACKEND=OPENSSL coexist with a stray
+# ENABLE_NSS=ON, which is exactly the "two backends at once" state the
+# existing switch exists to rule out.
+#
+# xmlsecurity needs one more condition beyond "which backend", though: its
+# NSS-specific sources (source/xmlsec/nss/*, plus three files in
+# Library_xmlsecurity.mk) call into xmlsec1's own NSS crypto-engine wrapper
+# (xmlSecNssInit, xmlSecNssAppDefaultKeysMngrInit, ...), whose headers
+# (xmlsec/nss/*.h) and implementation (libxmlsec1-nss.so) ship in a pkg-config
+# module of their own, "xmlsec1-nss", separate from the base "xmlsec1".
+# XMLSECURITY_HAS_NSS_BACKEND below is TRUE only when both the project has
+# chosen the NSS backend *and* that module is actually present, and gates
+# every NSS-specific source/define/external in both targets.
+#
+# LIBRESTUDIO_TLS_BACKEND defaults to "NSS" and xmlsec1-nss.pc is installed
+# on this machine, so XMLSECURITY_HAS_NSS_BACKEND currently evaluates TRUE.
+#
+# Library_xmlsecurity.mk's own NSS gate is further nested inside
+# `ifneq (,$(filter DESKTOP,$(BUILD_TYPE))...)`. This port's baseline build
+# type is DESKTOP -- vcl/CMakeLists.txt establishes LIBRESTUDIO_BUILD_TYPE
+# "DESKTOP" as the default, and shell/CMakeLists.txt, svl/CMakeLists.txt and
+# jvmfwk/CMakeLists.txt already treat a bare `filter DESKTOP,$(BUILD_TYPE)`
+# guard as unconditionally true for that reason; the same precedent applies
+# here, so that half of the gate is dropped and only the NSS/xmlsec1-nss
+# condition is tracked in XMLSECURITY_HAS_NSS_BACKEND.
+#
+# The precompiled headers each .mk sets (xmlsecurity/inc/pch/precompiled_xmlsecurity,
+# precompiled_xsec_xmlsec) are not ported, same as elsewhere in this port.
+#
+# OpenSSL: Library_xsec_xmlsec.mk's ENABLE_OPENSSL branch (the non-NSS,
+# non-WNT `else` arm) links the openssl external and nothing else — no
+# exception objects, no -DXMLSEC_CRYPTO_* define. xmlsecurity's own
+# SecurityEnvironment/XMLSignatureContext glue has no OpenSSL implementation
+# anywhere in this tree (only source/xmlsec/nss and the WNT-only
+# source/xmlsec/mscrypt directories exist); selecting OpenSSL would build a
+# library that initializes no crypto engine at all. So
+# XMLSECURITY_HAS_NSS_BACKEND simply stays FALSE under
+# LIBRESTUDIO_TLS_BACKEND=OPENSSL — there is nothing OpenSSL-specific to gate
+# in, unlike svl/comphelper/oox which have real OpenSSL implementations.
+#
+# What is not ported:
+# - The GPGME-backed crypto backend (source/gpg/*, xsec_xmlsec.component.gpg):
+#   GPGME is not wired up anywhere in this port — comphelper/CMakeLists.txt's
+#   LIBRESTUDIO_ENABLE_GPGME option defaults OFF and nothing consumes it, so
+#   staying consistent means omitting the gpg sources outright rather than
+#   introducing a second unconsumed option here.
+# - WNT/MSCrypto sources (source/xmlsec/mscrypt/*): this is a Linux-only port.
+# - AllLangMoTarget_xsc (l10n .po -> .mo) and UIConfig_xmlsec (.ui packaging):
+#   out of scope, same precedent as uui/CMakeLists.txt and
+#   fpicker/CMakeLists.txt excluding their own equivalents.
+# - Executable_pdfverify: a workben/ workbench-only CLI tool, not shipped;
+#   this port has not been porting workben/-style tools elsewhere. Deferred,
+#   not a hard blocker (add_executable() has plenty of precedent here, e.g.
+#   idl/CMakeLists.txt, sal/CMakeLists.txt).
+
+set(XMLSECURITY_HAS_NSS_BACKEND FALSE)
+if (LIBRESTUDIO_TLS_BACKEND STREQUAL "NSS")
+    pkg_check_modules(NSS REQUIRED IMPORTED_TARGET nss)
+    pkg_check_modules(XMLSEC1_NSS QUIET IMPORTED_TARGET xmlsec1-nss)
+    if (XMLSEC1_NSS_FOUND)
+        set(XMLSECURITY_HAS_NSS_BACKEND TRUE)
+    endif ()
+elseif (LIBRESTUDIO_TLS_BACKEND STREQUAL "OPENSSL")
+    # No OpenSSL implementation exists under xmlsecurity/source/xmlsec — see
+    # the comment above. Nothing to detect or gate in on this branch.
+else ()
+    message(FATAL_ERROR "Unknown LIBRESTUDIO_TLS_BACKEND: ${LIBRESTUDIO_TLS_BACKEND}")
+endif ()
+
+# --- xsec_xmlsec ---------------------------------------------------------
+# The xmlsec1-based crypto glue (Library_xsec_xmlsec.mk). Source list is the
+# 8 common files unconditionally, plus the 10 source/xmlsec/nss/* files under
+# XMLSECURITY_HAS_NSS_BACKEND. GPGME (source/gpg/*, 8 files) and WNT/MSCrypto
+# (source/xmlsec/mscrypt/*, 7 files) are not ported — see above.
+
+set(XSEC_XMLSEC_SOURCES
+    xmlsecurity/source/xmlsec/biginteger
+    xmlsecurity/source/xmlsec/certificateextension_certextn
+    xmlsecurity/source/xmlsec/errorcallback
+    xmlsecurity/source/xmlsec/saxhelper
+    xmlsecurity/source/xmlsec/xmldocumentwrapper_xmlsecimpl
+    xmlsecurity/source/xmlsec/xmlelementwrapper_xmlsecimpl
+    xmlsecurity/source/xmlsec/xmlsec_init
+    xmlsecurity/source/xmlsec/xmlstreamio
+)
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    list(APPEND XSEC_XMLSEC_SOURCES
+        xmlsecurity/source/xmlsec/nss/ciphercontext
+        xmlsecurity/source/xmlsec/nss/digestcontext
+        xmlsecurity/source/xmlsec/nss/nssinitializer
+        xmlsecurity/source/xmlsec/nss/sanextension_nssimpl
+        xmlsecurity/source/xmlsec/nss/secerror
+        xmlsecurity/source/xmlsec/nss/securityenvironment_nssimpl
+        xmlsecurity/source/xmlsec/nss/seinitializer_nssimpl
+        xmlsecurity/source/xmlsec/nss/x509certificate_nssimpl
+        xmlsecurity/source/xmlsec/nss/xmlsecuritycontext_nssimpl
+        xmlsecurity/source/xmlsec/nss/xmlsignature_nssimpl
+    )
+endif ()
+
+librestudio_expand_cxx(XSEC_XMLSEC_SOURCES)
+
+add_library(xsec_xmlsec SHARED ${XSEC_XMLSEC_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(xsec_xmlsec PRIVATE
+        "${CMAKE_SOURCE_DIR}/xmlsecurity/inc/pch/precompiled_xsec_xmlsec.hxx")
+    target_compile_definitions(xsec_xmlsec PRIVATE PCH_LEVEL=2)
+endif ()
+
+# gb_Library_set_include,xsec_xmlsec's own -I.../xmlsecurity/source/xmlsec is
+# not carried over: every xsec_xmlsec source (xmlsec/*.cxx and
+# xmlsec/nss/*.cxx alike) only quote-includes headers that live next to it in
+# the same directory, which the compiler already finds without an explicit
+# -I (verified against every #include "..." in both directories). The
+# -I.../xmlsec/include for the bundled xmlsec external is likewise dropped:
+# PkgConfig::XMLSEC1's IMPORTED_TARGET carries its own
+# INTERFACE_INCLUDE_DIRECTORIES (-I/usr/include/xmlsec1) for the system
+# package used here.
+target_include_directories(xsec_xmlsec PRIVATE
+    "${CMAKE_SOURCE_DIR}/xmlsecurity/inc"
+    "${OFFICECFG_INCLUDE_DIR}"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${FROZEN_INCLUDE_DIR}")
+add_dependencies(xsec_xmlsec officecfg_headers udkapi_normal_headers offapi_normal_headers)
+
+target_compile_definitions(xsec_xmlsec PRIVATE
+    XMLSEC_NO_XSLT
+    XSECXMLSEC_DLLIMPLEMENTATION)
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    target_compile_definitions(xsec_xmlsec PRIVATE XMLSEC_CRYPTO_NSS)
+endif ()
+
+target_link_libraries(xsec_xmlsec PRIVATE
+    comphelper cppu cppuhelper sal svl tl xo utl
+    Boost::boost
+    LibXml2::LibXml2)
+
+# Library_xsec_xmlsec.mk's own `ifeq ($(SYSTEM_XMLSEC),)` branches (bundling
+# xmlsec1 from source, gb_Library_use_packages/add_libs against a
+# WORKDIR-built static lib) do not apply: like every other external in this
+# port, xmlsec1 is only ever consumed as the system package via pkg-config,
+# never bundled/built from a tarball.
+pkg_check_modules(XMLSEC1 REQUIRED IMPORTED_TARGET xmlsec1)
+target_link_libraries(xsec_xmlsec PRIVATE PkgConfig::XMLSEC1)
+
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    # Not PkgConfig::NSS here: the symbols xsec_xmlsec's own NSS sources call
+    # (xmlSecNssInit, xmlSecNssAppDefaultKeysMngrInit,
+    # xmlSecNssKeyDataX509GetKlass, xmlSecNssPKIAdoptKey, ...) are xmlsec1's
+    # NSS crypto-engine wrapper functions, implemented in libxmlsec1-nss.so,
+    # not in Mozilla's own libnss3.so. Linking plain PkgConfig::NSS would
+    # leave those undefined at link time; PkgConfig::XMLSEC1_NSS is the
+    # module that actually ships libxmlsec1-nss, and its .pc "Requires:"
+    # (libxml-2.0, libxslt, nspr, nss) already pulls in raw NSS transitively,
+    # same as upstream's own system-xmlsec detection
+    # (configure.ac: libo_CHECK_SYSTEM_MODULE([xmlsec], [XMLSEC],
+    # [xmlsec1-nss >= 1.2.35]) — the "xmlsec" external's cflags/libs come
+    # from the xmlsec1-nss module even though the library is named xmlsec1).
+    target_link_libraries(xsec_xmlsec PRIVATE PkgConfig::XMLSEC1_NSS)
+endif ()
+
+# gb_Library_add_componentimpls,xsec_xmlsec: nss_mscrypt (WNT-or-NSS) and nss
+# (NSS only); gpg omitted (GPGME not ported).
+set(XSEC_XMLSEC_COMPONENT_IMPLS "")
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    list(APPEND XSEC_XMLSEC_COMPONENT_IMPLS
+        "${CMAKE_SOURCE_DIR}/xmlsecurity/util/xsec_xmlsec.component.nss_mscrypt"
+        "${CMAKE_SOURCE_DIR}/xmlsecurity/util/xsec_xmlsec.component.nss")
+endif ()
+
+librestudio_add_component(xsec_xmlsec
+    COMPONENT      "${CMAKE_SOURCE_DIR}/xmlsecurity/util/xsec_xmlsec.component"
+    IMPLEMENTATION ${XSEC_XMLSEC_COMPONENT_IMPLS}
+    LIBRARY        xsec_xmlsec
+    LAYER          OOO)
+
+librestudio_set_library_output_name(xsec_xmlsec xsec_xmlsec OOO)
+
+install(TARGETS xsec_xmlsec LIBRARY DESTINATION program)
+
+# --- xmlsecurity -----------------------------------------------------------
+# The signing/verification UI and framework (Library_xmlsecurity.mk). 23
+# sources unconditionally, plus 3 more (the DocumentDigitalSignatures service
+# and its helpers) under XMLSECURITY_HAS_NSS_BACKEND, mirroring the .mk's own
+# `$(or $(ENABLE_NSS),$(filter WNT,$(OS)))` gate (WNT dropped, Linux-only
+# port).
+
+set(XMLSECURITY_SOURCES
+    xmlsecurity/source/component/certificatecontainer
+    xmlsecurity/source/dialogs/certificatechooser
+    xmlsecurity/source/dialogs/certificateviewer
+    xmlsecurity/source/dialogs/digitalsignaturesdialog
+    xmlsecurity/source/dialogs/macrosecurity
+    xmlsecurity/source/framework/buffernode
+    xmlsecurity/source/framework/elementcollector
+    xmlsecurity/source/framework/elementmark
+    xmlsecurity/source/framework/saxeventkeeperimpl
+    xmlsecurity/source/framework/securityengine
+    xmlsecurity/source/framework/signaturecreatorimpl
+    xmlsecurity/source/framework/signatureengine
+    xmlsecurity/source/framework/signatureverifierimpl
+    xmlsecurity/source/framework/xmlsignaturetemplateimpl
+    xmlsecurity/source/helper/documentsignaturehelper
+    xmlsecurity/source/helper/documentsignaturemanager
+    xmlsecurity/source/helper/ooxmlsecparser
+    xmlsecurity/source/helper/ooxmlsecexporter
+    xmlsecurity/source/helper/pdfsignaturehelper
+    xmlsecurity/source/helper/UriBindingHelper
+    xmlsecurity/source/helper/xsecctl
+    xmlsecurity/source/helper/xsecparser
+    xmlsecurity/source/helper/xsecsign
+)
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    list(APPEND XMLSECURITY_SOURCES
+        xmlsecurity/source/component/documentdigitalsignatures
+        xmlsecurity/source/helper/xmlsignaturehelper
+        xmlsecurity/source/helper/xsecverify
+    )
+endif ()
+
+librestudio_expand_cxx(XMLSECURITY_SOURCES)
+
+add_library(xmlsecurity SHARED ${XMLSECURITY_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(xmlsecurity PRIVATE
+        "${CMAKE_SOURCE_DIR}/xmlsecurity/inc/pch/precompiled_xmlsecurity.hxx")
+    target_compile_definitions(xmlsecurity PRIVATE PCH_LEVEL=2)
+endif ()
+
+target_include_directories(xmlsecurity PRIVATE
+    "${CMAKE_SOURCE_DIR}/xmlsecurity/inc"
+    "${OFFICECFG_INCLUDE_DIR}"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${FROZEN_INCLUDE_DIR}")
+# officecfg_headers: digitalsignaturesdialog.cxx (unconditional) reads
+# officecfg::Office::Common::Security::Scripting::CertMgrPath.
+add_dependencies(xmlsecurity officecfg_headers udkapi_normal_headers offapi_normal_headers)
+
+target_compile_definitions(xmlsecurity PRIVATE XMLSECURITY_DLLIMPLEMENTATION)
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    target_compile_definitions(xmlsecurity PRIVATE XMLSEC_CRYPTO_NSS)
+endif ()
+
+target_link_libraries(xmlsecurity PRIVATE
+    comphelper cppu cppuhelper sal sax svl sfx svt svxcore tl ucbhelper utl
+    vcl xo i18nlangtag
+    xsec_xmlsec
+    Boost::boost
+    LibXml2::LibXml2)
+
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    # gb_Library_use_externals,xmlsecurity,nss3 plc4 -- the raw Mozilla NSS
+    # pair collapses to the single "nss" pkg-config module, the same
+    # simplification svl/comphelper/oox already use for their own NSS need.
+    # (No source file here calls NSS APIs directly -- documentdigitalsignatures.cxx
+    # and friends only reach NSS indirectly through xsec_xmlsec -- but the .mk
+    # links it unconditionally on this gate, so it is mirrored here too.)
+    target_link_libraries(xmlsecurity PRIVATE PkgConfig::NSS)
+endif ()
+
+# gb_Library_add_componentimpl,xmlsecurity,dds: only the "dds"
+# (DocumentDigitalSignatures) implementation exists for this library; it is
+# marked <optional/> in xmlsecurity.component and only actually provided
+# under the same NSS-or-WNT gate as the sources above.
+set(XMLSECURITY_COMPONENT_IMPLS "")
+if (XMLSECURITY_HAS_NSS_BACKEND)
+    list(APPEND XMLSECURITY_COMPONENT_IMPLS
+        "${CMAKE_SOURCE_DIR}/xmlsecurity/util/xmlsecurity.component.dds")
+endif ()
+
+librestudio_add_component(xmlsecurity
+    COMPONENT      "${CMAKE_SOURCE_DIR}/xmlsecurity/util/xmlsecurity.component"
+    IMPLEMENTATION ${XMLSECURITY_COMPONENT_IMPLS}
+    LIBRARY        xmlsecurity
+    LAYER          OOO)
+
+librestudio_set_library_output_name(xmlsecurity xmlsecurity OOO)
+
+install(TARGETS xmlsecurity LIBRARY DESTINATION program)

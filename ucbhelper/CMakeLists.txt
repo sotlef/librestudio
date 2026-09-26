@@ -46,6 +46,17 @@ add_dependencies(ucbhelper udkapi_normal_headers offapi_normal_headers)
 target_compile_definitions(ucbhelper PRIVATE UCBHELPER_DLLIMPLEMENTATION)
 target_link_libraries(ucbhelper PRIVATE cppu cppuhelper sal salhelper)
 
+# Library_ucbhelper.mk: gb_Library_use_system_win32_libs,ucbhelper,Winhttp --
+# there is no explicit ifeq ($(OS),WNT) around this call in the .mk itself,
+# but gb_Library_use_system_win32_libs is only defined in the MSVC-class
+# platform file (solenv/gbuild/platform/com_MSC_class.mk); on every other
+# platform file it does not exist at all, i.e. it is a no-op by omission
+# rather than by an explicit guard. The effect is Windows-only, so it is
+# ported here behind an explicit if (WIN32).
+if (WIN32)
+    target_link_libraries(ucbhelper PRIVATE Winhttp)
+endif ()
+
 librestudio_set_library_output_name(ucbhelper ucbhelper OOO)
 
 install(TARGETS ucbhelper LIBRARY DESTINATION program)

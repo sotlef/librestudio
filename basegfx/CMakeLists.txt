@@ -66,6 +66,12 @@ set(BASEGFX_SOURCES
 librestudio_expand_cxx(BASEGFX_SOURCES)
 add_library(basegfx SHARED ${BASEGFX_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(basegfx PRIVATE
+        "${CMAKE_SOURCE_DIR}/basegfx/inc/pch/precompiled_basegfx.hxx")
+    target_compile_definitions(basegfx PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(basegfx PRIVATE
     "${CMAKE_SOURCE_DIR}/basegfx/source/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -77,3 +83,56 @@ target_link_libraries(basegfx PRIVATE comphelper cppu cppuhelper sal Boost::boos
 
 librestudio_set_library_output_name(basegfx basegfx OOO)
 install(TARGETS basegfx LIBRARY DESTINATION program)
+
+# --- CppunitTest targets -----------------------------------------------------
+
+# basegfx's only CppunitTest, CppunitTest_basegfx.mk, ported via
+# librestudio_add_cppunit_test() (cmake/LibreStudioTest.cmake -- read its
+# header comment first). Re-checked directly against the live .mk file: it
+# lists 24 source files, not the 23 the prior-research summary said (all 24
+# were confirmed to exist under basegfx/test/), use_libraries basegfx
+# comphelper cppu cppuhelper sal, and gb_CppunitTest_use_sdk_api only -- no
+# use_ure/use_vcl*, so no PROTECTORS.
+#
+# gb_CppunitTest_use_sdk_api == gb_CppunitTest_use_api($1, udkapi offapi),
+# the "normal" variant (same mapping o3tl/CMakeLists.txt's own
+# CppunitTest_o3tl_tests section documents), matching the udkapi_normal_/
+# offapi_normal_ headers add_library(basegfx ...) above already consumes --
+# not use_udk_api (which would only pull in udkapi).
+#
+# Note the CppunitTest shares the plain name "basegfx" with the library
+# target above -- gbuild's CppunitTest and Library namespaces are separate,
+# but CMake's is not, so this would collide if the CppunitTest target were
+# also literally named "basegfx" (same issue, same fix, as store/CMakeLists.
+# txt's "store (CppunitTest)" section documents for CppunitTest_store.mk).
+librestudio_add_cppunit_test(basegfx_test
+    SOURCES
+        basegfx/test/B2DRangeTest
+        basegfx/test/B2IRangeTest
+        basegfx/test/B2DPolyRangeTest
+        basegfx/test/B2DHomMatrixTest
+        basegfx/test/B2DPointTest
+        basegfx/test/B2DPolygonTest
+        basegfx/test/B2DPolygonToolsTest
+        basegfx/test/B2DPolyPolygonTest
+        basegfx/test/B2DPolyPolygonCutterTest
+        basegfx/test/B2DSizeTest
+        basegfx/test/B1DRangeTest
+        basegfx/test/B2XRangeTest
+        basegfx/test/B2IBoxTest
+        basegfx/test/B2DTupleTest
+        basegfx/test/B3DTupleTest
+        basegfx/test/BColorModifierTest
+        basegfx/test/BColorTest
+        basegfx/test/SvgPathImportExport
+        basegfx/test/basegfx3d
+        basegfx/test/boxclipper
+        basegfx/test/basegfxtools
+        basegfx/test/clipstate
+        basegfx/test/genericclipper
+        basegfx/test/VectorTest
+    LIBRARIES basegfx comphelper cppu cppuhelper sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)

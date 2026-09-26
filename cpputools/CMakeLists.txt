@@ -23,10 +23,31 @@ target_include_directories(uno PRIVATE "${udkapi_comprehensive_HEADERS_INCLUDE_D
 add_dependencies(uno udkapi_comprehensive_headers gcc3_uno)
 target_link_libraries(uno PRIVATE cppu cppuhelper sal salhelper)
 
-# gb_Executable_use_api(sp2bv, udkapi): the normal variant is enough here.
-add_executable(sp2bv "${CMAKE_SOURCE_DIR}/cpputools/source/sp2bv/sp2bv.cxx")
-target_include_directories(sp2bv PRIVATE "${udkapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(sp2bv udkapi_normal_headers)
-target_link_libraries(sp2bv PRIVATE cppu cppuhelper sal)
+# Executable_sp2bv.mk: gb_CondExeSp2bv (solenv/gbuild/Conditions.mk) requires
+# $(filter WNT,$(OS)) -- sp2bv is a Windows-only tool (used by the Basic IDE)
+# and resolves to nothing on this Linux port. Kept structurally present,
+# behind if (WIN32), per this port's policy of not silently dropping
+# Windows-only gbuild targets -- see this project's own Windows/MSVC research
+# on why it cannot actually be built or exercised on this machine (no
+# cl.exe/ml64.exe/SDK), and sal/CMakeLists.txt's sal_comtools/
+# sal_retry_if_failed for the same pattern. Inert on this Linux build: the
+# if (WIN32) block below never executes here.
+if (WIN32)
+    # gb_Executable_use_api(sp2bv, udkapi): the normal variant is enough here.
+    add_executable(sp2bv "${CMAKE_SOURCE_DIR}/cpputools/source/sp2bv/sp2bv.cxx")
+    target_include_directories(sp2bv PRIVATE "${udkapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(sp2bv udkapi_normal_headers)
+    target_link_libraries(sp2bv PRIVATE cppu cppuhelper sal)
+endif ()
 
-install(TARGETS uno sp2bv RUNTIME DESTINATION program)
+# Package_uno_sh.mk: gb_CondExeUno (solenv/gbuild/Conditions.mk) requires
+# BUILD_TYPE to contain DESKTOP (true here, HAVE_FEATURE_DESKTOP) and
+# DISABLE_DYNLOADING to be unset (true here) -- both hold unconditionally on
+# this port, so uno.sh is installed unconditionally too, matching upstream's
+# own $(filter-out MACOSX WNT,$(OS)) gate (Linux included).
+install(PROGRAMS "${CMAKE_SOURCE_DIR}/cpputools/scripts/uno.sh" DESTINATION program RENAME uno)
+
+install(TARGETS uno RUNTIME DESTINATION program)
+if (WIN32)
+    install(TARGETS sp2bv RUNTIME DESTINATION program)
+endif ()

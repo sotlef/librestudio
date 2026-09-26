@@ -695,6 +695,127 @@ else ()
     list(APPEND VCL_SOURCES vcl/source/pdf/DummyPDFiumLibrary)
 endif ()
 
+# --- the platform tails of Library_vcl.mk (sources) ---------------------------
+#
+# Library_vcl.mk lines 787-876 keep five OS-specific blocks of their own,
+# after everything above. Structural now rather than only described: each is
+# a real if() on the same CMAKE_SYSTEM_NAME/WIN32/APPLE tests
+# cmake/LibreStudioPlatform.cmake and sal/CMakeLists.txt already use
+# elsewhere in this port, so none of the five ever actually fires on this
+# Linux build -- correctly inert, not merely unwritten. HAIKU (787-791) adds
+# no source at all (just -lbe, with the rest of this platform's link
+# libraries and frameworks further below, past add_library(vcl ...)).
+
+# Library_vcl.mk lines 794-803: OS=ANDROID. One exception object; confirmed
+# vcl/android/androidinst.cxx exists on disk. Its three link libraries
+# (-llog -landroid -llo-bootstrap) are added below, past add_library(vcl
+# ...); lo-bootstrap in particular is linked as the real CMake target
+# sal/CMakeLists.txt defines under the same Android/Emscripten gate, not as a
+# raw -l flag.
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    list(APPEND VCL_SOURCES vcl/android/androidinst)
+endif ()
+
+# Library_vcl.mk lines 806-836: OS=iOS.
+#
+# cgutils (gb_Library_add_objcxxobjects) is shared with the MACOSX branch
+# below -- confirmed vcl/quartz/cgutils.mm exists on disk with no .cxx
+# sibling at all (unlike sal's uunxapi/system pair, where the .mm is a thin
+# #include-only wrapper around a real .cxx of the same name -- there is
+# nothing here for cgutils.mm to wrap). It is still the same technique
+# sal/CMakeLists.txt's own uunxapi.mm/system.mm precedent established: CMake
+# auto-detects a bare .mm as Objective-C++ on an Apple platform, no
+# set_source_files_properties(... LANGUAGE OBJCXX) needed. Appended as an
+# absolute path so librestudio_expand_cxx() below -- which appends ".cxx" to
+# every relative entry -- leaves it untouched.
+#
+# The 14 exception objects that follow are plain .cxx, every one confirmed to
+# exist on disk.
+#
+# The last eight entries are NOT a reuse of the USE_HEADLESS_CODE block
+# above: Library_vcl.mk's iOS branch adds them unconditionally inside
+# `ifeq ($(OS),iOS)`, independent of USE_HEADLESS_CODE -- iOS has no
+# freetype/fontconfig (it draws fonts through Core Text instead), so
+# USE_HEADLESS_CODE is never true there upstream either, and this is iOS's
+# own separate inclusion, not something shared with the Linux path. Of
+# vcl_headless_code's ten members (Library_vcl.mk lines 650-664), the .mk
+# itself drops five specifically for iOS via
+# `$(if $(filter-out iOS,$(OS)), svpbmp svpgdi SvpGraphicsBackend
+# CairoCommon BitmapHelper)`, so only the other seven appear below; the
+# eighth line is vcl/unx/generic/app/gendata, the one
+# vcl_headless_generic_code member the .mk names by hand for iOS.
+#
+# gb_OBJCXXFLAGS (`-x objective-c++` on iOS, Library_vcl.mk line 808) is not
+# reproduced: CMake already treats a bare .mm as Objective-C++ on Apple
+# platforms without it, and Library_sal.mk carries this identical iOS-only
+# cxxflags line for its own two .mm files (Library_sal.mk:132-136) which
+# sal/CMakeLists.txt likewise never ported -- this follows that same,
+# already-established gap rather than inventing new per-file compile-option
+# plumbing for it here.
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    list(APPEND VCL_SOURCES
+        "${CMAKE_SOURCE_DIR}/vcl/quartz/cgutils.mm"
+        vcl/ios/iosinst
+        vcl/ios/dummies
+        vcl/ios/salios
+        vcl/ios/iOSTransferable
+        vcl/ios/DataFlavorMapping
+        vcl/ios/HtmlFmtFlt
+        vcl/quartz/CoreTextFont
+        vcl/quartz/CoreTextFontFace
+        vcl/quartz/SystemFontList
+        vcl/quartz/salbmp
+        vcl/quartz/salgdi
+        vcl/quartz/salgdicommon
+        vcl/quartz/salvd
+        vcl/quartz/utils
+        vcl/quartz/AquaGraphicsBackend
+        vcl/headless/svpframe
+        vcl/headless/svpdummies
+        vcl/headless/svpinst
+        vcl/headless/svpvd
+        vcl/unx/generic/app/X11Helper
+        vcl/unx/generic/app/gendisp
+        vcl/unx/generic/app/geninst
+        vcl/unx/generic/app/gendata)
+endif ()
+
+# Library_vcl.mk lines 839-851: OS=MACOSX, checked as `APPLE AND NOT
+# CMAKE_SYSTEM_NAME STREQUAL "iOS"` -- the same ordering
+# sal/CMakeLists.txt's own APPLE block uses, since APPLE is true for iOS too
+# and gbuild's `ifeq ($(OS),MACOSX)` is native-macOS-only. cgutils.mm is the
+# very same file as iOS's above (confirmed by reading both branches of the
+# .mk: the path is identical). The Skia variant is gated behind the same
+# "SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE test this file already uses
+# elsewhere (the USE_HEADLESS_CODE-independent vcl/skia/salbmp source in the
+# !DISABLE_GUI block above, and vclplug_gen's own vcl/skia/x11/* sources
+# further down) -- vcl/skia/quartz/salbmp.mm is confirmed to exist on disk,
+# likewise with no .cxx sibling.
+if (APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    list(APPEND VCL_SOURCES "${CMAKE_SOURCE_DIR}/vcl/quartz/cgutils.mm")
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        list(APPEND VCL_SOURCES "${CMAKE_SOURCE_DIR}/vcl/skia/quartz/salbmp.mm")
+    endif ()
+endif ()
+
+# Library_vcl.mk lines 854-876: OS=WNT, checked as WIN32 -- the same test
+# sal/CMakeLists.txt's own Windows block uses. Both exception objects
+# confirmed to exist on disk (vcl/source/opengl/win/WinDeviceInfo.cxx,
+# vcl/win/app/fileregistration.cxx). The system libraries and
+# -DDO_USE_TTF_ON_WIN32 define are added below, past add_library(vcl ...).
+#
+# Deliberately not ported here: vcl/salsrc (really vcl/win/src/salsrc.rc, a
+# native Win32 resource -- gb_Library_add_nativeres has no CMake equivalent
+# anywhere in this tree yet) and the two use_packages, vcl_opengl_denylist
+# and postprocess_images (lines 872-875) -- packaging/resource-compiler
+# concerns, out of scope for this pass; left as a smaller, separate
+# follow-up rather than attempted here.
+if (WIN32)
+    list(APPEND VCL_SOURCES
+        vcl/source/opengl/win/WinDeviceInfo
+        vcl/win/app/fileregistration)
+endif ()
+
 librestudio_expand_cxx(VCL_SOURCES)
 # vcl/source/filter/jpeg/transupp is the single C object, which is why
 # gb_Library_add_cobjects lists it apart from the rest; it is libjpeg's
@@ -702,6 +823,12 @@ librestudio_expand_cxx(VCL_SOURCES)
 add_library(vcl SHARED
     ${VCL_SOURCES}
     "${CMAKE_SOURCE_DIR}/vcl/source/filter/jpeg/transupp.c")
+
+if (ENABLE_PCH)
+    target_precompile_headers(vcl PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc/pch/precompiled_vcl.hxx")
+    target_compile_definitions(vcl PRIVATE PCH_LEVEL=2)
+endif ()
 
 # --- externals ----------------------------------------------------------------
 #
@@ -781,9 +908,10 @@ if (USING_X11)
 endif ()
 
 # Library_vcl.mk lines 45-52.  -DDO_USE_TTF_ON_WIN32 belongs to the Windows
-# headless build and is not written out; -DSYSTEM_LIBFIXMATH to a system
-# libfixmath rather than the fix16 bundled in the tree, which is what is used
-# unless the option above asks otherwise.
+# headless build and is written out in the WIN32 block further below,
+# alongside the rest of that platform's tail; -DSYSTEM_LIBFIXMATH goes to a
+# system libfixmath rather than the fix16 bundled in the tree, which is what
+# is used unless the option above asks otherwise.
 #
 # CUI_DLL_NAME and TK_DLL_NAME are library names vcl passes to dlopen by hand.
 # gb_Library_get_runtime_filename() produced them upstream; both follow the
@@ -871,20 +999,83 @@ librestudio_add_component(vcl
 librestudio_set_library_output_name(vcl vcl OOO)
 install(TARGETS vcl LIBRARY DESTINATION program)
 
+# --- the platform tails of Library_vcl.mk (libraries, frameworks, defines) ----
+#
+# The other half of the same five blocks (Library_vcl.mk lines 787-876) whose
+# sources were appended to VCL_SOURCES above, before add_library(vcl ...).
+# Each if() here tests the same CMAKE_SYSTEM_NAME/WIN32/APPLE condition its
+# source-list counterpart above used, and, like those, is structural rather
+# than reachable: cmake/LibreStudioPlatform.cmake's own platform tests decide
+# which of these ever fires, and on this Linux build none of them do -- the
+# same "written, never taken" standing sal/CMakeLists.txt's own Haiku/
+# Android/APPLE/WIN32 blocks already have. The Linux-active code above this
+# point (everything through librestudio_add_component() and the install()
+# call) is unchanged by any of what follows.
+
+# Library_vcl.mk lines 787-791: OS=HAIKU. "be" is the BeOS/Haiku application
+# kit; nothing else in this tree links it yet, so there is no prior
+# precedent to match beyond the plain-name style sal/CMakeLists.txt already
+# uses for its own single-word platform libraries (network, log, android).
+if (CMAKE_SYSTEM_NAME STREQUAL "Haiku")
+    target_link_libraries(vcl PRIVATE be)
+endif ()
+
+# Library_vcl.mk lines 794-803: OS=ANDROID. lo-bootstrap is linked as the
+# real CMake target sal/CMakeLists.txt defines
+# (`if (CMAKE_SYSTEM_NAME STREQUAL "Android" OR ... "Emscripten")
+# add_library(lo-bootstrap ...)`), not as a raw -llo-bootstrap flag; log and
+# android are plain NDK system libraries, the same two names
+# sal/CMakeLists.txt's own Android block links.
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    target_link_libraries(vcl PRIVATE log android lo-bootstrap)
+endif ()
+
+# Library_vcl.mk lines 832-835 (part of the iOS branch) and 846-850 (the
+# MACOSX branch): gb_Library_use_system_darwin_frameworks. No macOS/iOS SDK
+# on this machine to confirm either actually links -- both use the same
+# "-framework <Name>" idiom sal/CMakeLists.txt's own APPLE block already
+# established as this port's precedent for a Darwin framework link (that
+# comment notes no other precedent was found anywhere in the tree; this
+# reuses the same one rather than inventing a second).
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_link_libraries(vcl PRIVATE
+        "-framework UIKit"
+        "-framework CoreFoundation")
+endif ()
+
+if (APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_link_libraries(vcl PRIVATE
+        "-framework Cocoa"
+        "-framework CoreFoundation"
+        "-framework Metal")
+endif ()
+
+# Library_vcl.mk lines 854-876: OS=WNT. dwrite/ole32/setupapi/shell32/version
+# are use_system_win32_libs, linked by plain name the same way
+# sal/CMakeLists.txt's own WIN32 block links advapi32/comdlg32/dbghelp/etc --
+# no "-l" prefix, no .lib suffix, both left for the linker to resolve.
+if (WIN32)
+    target_link_libraries(vcl PRIVATE
+        dwrite ole32 setupapi shell32 version)
+
+    # Library_vcl.mk line 51: $(if $(filter WNT-TRUE,$(OS)-$(USE_HEADLESS_CODE)),
+    # -DDO_USE_TTF_ON_WIN32) tests both halves of that filter, not OS=WNT
+    # alone.
+    if (USE_HEADLESS_CODE)
+        target_compile_definitions(vcl PRIVATE DO_USE_TTF_ON_WIN32)
+    endif ()
+endif ()
+
 # --- what is not here ---------------------------------------------------------
 #
-# The platform branches: OS=WNT (Library_vcl.mk lines 854-876, the Win32
-# sources, system libraries, resource file and icon-theme package), OS=MACOSX
-# (839-851, the Quartz sources and the Cocoa, CoreFoundation and Metal
-# frameworks), OS=iOS (806-836), OS=ANDROID (794-803) and OS=HAIKU (787-791).
+# vcl/salsrc (vcl/win/src/salsrc.rc, a native Win32 resource) and the two
+# use_packages the WNT block also carries, vcl_opengl_denylist and
+# postprocess_images (Library_vcl.mk lines 868, 872-875) -- packaging and
+# resource-compiler concerns, deliberately left out of the WIN32 block above
+# as a smaller, separate follow-up rather than attempted here.
 #
-# cmake/LibreStudioPlatform.cmake pins this build to Linux/x86_64 and stops with
-# an error on anything else, so these could be written but never compiled.
-# Writing them would claim support the rest of the build refuses to give; the
-# list above is where to start when that changes.
-#
-# Everything else the .mk switches on is expressed above as a condition rather
-# than described, so it is not repeated here.
+# Everything else the .mk switches on is expressed above as a condition
+# rather than described, so it is not repeated here.
 
 # --- vclplug_gen ---------------------------------------------------------------
 
@@ -1136,6 +1327,360 @@ if (ENABLE_GTK3)
     install(TARGETS vclplug_gtk3 LIBRARY DESTINATION program)
 endif ()
 
+# --- vclplug_qt6: moc code generation -------------------------------------------
+
+# Foundational piece for the (future) vclplug_qt6 back end: Qt6 detection and the
+# moc (meta-object compiler) code-generation step it needs. This is genuinely new
+# ground for this port -- every external dependency built so far (EPOXY,
+# GRAPHITE, GTK3, ...) is a plain pkg-config library with nothing generated from
+# it, and the one place this port already generates code, the UNO IDL toolchain
+# (cmake/LibreStudioUnoApi.cmake), runs tools this build produces itself
+# (cppumaker, unoidl-write), not one found on the host. moc is the first case of
+# both at once: a tool found on the host, invoked once per header, to produce a
+# compiled source moc needs. vclplug_qt6's 90 sources are a separate, later task;
+# this block only builds the ground under it far enough to verify moc runs
+# correctly in isolation, which is why there is no vclplug_qt6 library target
+# here yet -- vclplug_qt6_moc below is the entire deliverable.
+#
+# Header shim: vcl/inc/qt6/*.hxx (e.g. vcl/inc/qt6/QtFrame.hxx) are one-line
+# `#include "../qt5/QtFrame.hxx"` forwarders, nothing more -- verified by reading
+# a handful of them. moc is run against vcl/inc/qt5/*.hxx instead, per
+# vcl/CustomTarget_qt6_moc.mk's pattern rule and its own comment on why:
+#
+#   $(gb_CustomTarget_workdir)/vcl/qt6/%.moc : $(SRCDIR)/vcl/inc/qt5/%.hxx | ...
+#       $(MOC6) $< -o $@
+#
+#   "For now, the headers in vcl/inc/qt6 just '#include' the ones in vcl/inc/qt5.
+#   Since moc does not process classes from the included headers, it needs to be
+#   run on the headers in the qt5 dir. That will have to be adapted in case the
+#   qt6 VCL plugin uses "own" headers."
+#
+# ENABLE_QT6 defaults off: configure.ac's AC_ARG_ENABLE(qt6, ...) (line 1972) has
+# no default-on path of its own -- only `enable_kf6=yes` forces it on (line
+# 6698-6701), and this port has no KF6 support -- unlike gtk3/gen, which this
+# build enables by default on Linux/X11. It is declared with option() here
+# rather than the `set(... CACHE BOOL ...)` some other ENABLE_* switches use in
+# cmake/LibreStudioConfigHeaders.cmake: those are centralised there because more
+# than one module reads them (ENABLE_GTK3 alone is read by vcl/CMakeLists.txt,
+# libreofficekit/CMakeLists.txt and config_vclplug.h.in's runtime
+# back-end-autodetection macro); ENABLE_QT6 has no other reader yet -- there is
+# nothing to centralise until vclplug_qt6 itself exists, so it stays local to the
+# one place that uses it, matching this task's isolated, purely-additive scope.
+# (config_vclplug.h.in already carries a hardcoded `#define ENABLE_QT6 0` of its
+# own, for salplug.cxx's runtime back-end list -- deliberately left untouched
+# here: it governs loading a plugin that this task does not build.)
+option(ENABLE_QT6 "Build the Qt6 VCL plugin backend (vclplug_qt6)" OFF)
+
+if (ENABLE_QT6)
+    # configure.ac does not use pkg-config for the Qt6 core modules itself -- it
+    # is qmake-driven (AC_PATH_PROGS(QMAKE6, [qmake-qt6 qmake6 qmake]), then
+    # `$QMAKE6 -query QT_INSTALL_HEADERS/LIBS`, configure.ac lines 14210-14226) --
+    # but every other external dependency in this port is found via pkg-config,
+    # and Qt6Core/Qt6Gui/Qt6Widgets are real pkg-config modules on this system
+    # (`pkg-config --list-all | grep -i qt6`), matching configure.ac's own link
+    # check (`qt6_test_library="Qt6Widgets"`, line 14262) and its
+    # `QT6_LIBS="... -lQt6Core -lQt6Gui -lQt6Widgets"` Linux branch (line 14319).
+    # This port's own convention is followed here rather than configure.ac's
+    # qmake mechanism.
+    pkg_check_modules(QT6 REQUIRED IMPORTED_TARGET Qt6Core Qt6Gui Qt6Widgets)
+
+    # Meta Object Compiler lookup. configure.ac (lines 14357-14369) builds
+    # moc6_search_path by hand from every Qt6 libdir's libexec/ sibling, then the
+    # plain libdirs, then $PATH, and calls
+    #   AC_PATH_PROGS(MOC6, [moc-qt6 moc], no, [$moc6_search_path])
+    # pkg-config already exposes that same libexec directory directly as
+    # Qt6Core's own "libexecdir" variable (`pkg-config --variable=libexecdir
+    # Qt6Core` -> /usr/lib64/qt6/libexec on this machine, which is exactly where
+    # moc lives here), so that is used instead of reconstructing
+    # dirname($libdir)/libexec by hand; Qt6Core's libdir and bindir are added the
+    # same way configure.ac falls back to the plain libdirs, and find_program()
+    # already searches $PATH itself, so nothing else needs to be added for that
+    # half of moc6_search_path.
+    pkg_get_variable(QT6_CORE_LIBEXECDIR Qt6Core libexecdir)
+    pkg_get_variable(QT6_CORE_LIBDIR Qt6Core libdir)
+    pkg_get_variable(QT6_CORE_BINDIR Qt6Core bindir)
+
+    # This port's established style for a required external tool lookup --
+    # find_program(<VAR> <name> REQUIRED), which fails configure outright with
+    # CMake's own clear error message -- is XSLTPROC_EXECUTABLE (root
+    # CMakeLists.txt, officecfg/CMakeLists.txt) and ZIP_EXECUTABLE
+    # (cmake/LibreStudioZip.cmake); mirrored here rather than a hand-written
+    # message(FATAL_ERROR ...). configure.ac looks for moc-qt6 before the bare
+    # moc name (AC_PATH_PROGS(MOC6, [moc-qt6${suffix} moc${suffix}], ...)); the
+    # same order is used below.
+    find_program(QT6_MOC NAMES moc-qt6 moc
+        PATHS "${QT6_CORE_LIBEXECDIR}" "${QT6_CORE_LIBDIR}" "${QT6_CORE_BINDIR}"
+        REQUIRED)
+
+    # The 64 vcl/inc/qt5/*.hxx headers that declare Q_OBJECT -- this is
+    # vcl/CustomTarget_qt6_moc.mk's own output list (its QtSvpSalFrame /
+    # QtSvpSalInstance pair is gated there on USE_HEADLESS_CODE, which this
+    # build has on, so both are unconditional here). vcl/Library_vclplug_qt6.mk,
+    # the 90-source library target, is out of scope for this task and is not
+    # read for this list.
+    set(VCLPLUG_QT6_MOC_HEADERS
+        QtAccessibleWidget QtClipboard QtDoubleSpinBox QtDragAndDrop QtExpander
+        QtFilePicker QtFrame QtHyperlinkLabel QtInstance QtInstanceAssistant
+        QtInstanceBox QtInstanceCalendar QtInstanceCheckButton
+        QtInstanceColorChooserDialog QtInstanceComboBox QtInstanceContainer
+        QtInstanceDialog QtInstanceDrawingArea QtInstanceEntry
+        QtInstanceEntryTreeView QtInstanceExpander
+        QtInstanceFormattedSpinButton QtInstanceFrame QtInstanceGrid
+        QtInstanceIconView QtInstanceImage QtInstanceItemView QtInstanceLabel
+        QtInstanceLevelBar QtInstanceLinkButton QtInstanceMenu
+        QtInstanceMenuButton QtInstanceMessageDialog QtInstanceNotebook
+        QtInstancePaned QtInstancePopover QtInstanceProgressBar
+        QtInstanceRadioButton QtInstanceScale QtInstanceScrollbar
+        QtInstanceScrolledWindow QtInstanceSizeGroup QtInstanceSpinButton
+        QtInstanceSpinner QtInstanceTextView QtInstanceTextWidget
+        QtInstanceToggleButton QtInstanceToolbar QtInstanceTreeView
+        QtInstanceWidget QtInstanceWindow QtMainWindow QtMenu QtObject
+        QtSalFrame QtSalInstance QtSvpSalFrame QtSvpSalInstance QtTimer
+        QtTransferable QtTreeViewItemDelegate QtTreeViewModel QtWidget
+        QtXAccessible)
+
+    set(VCLPLUG_QT6_MOC_DIR "${CMAKE_CURRENT_BINARY_DIR}/qt6-moc")
+    file(MAKE_DIRECTORY "${VCLPLUG_QT6_MOC_DIR}")
+
+    set(VCLPLUG_QT6_MOC_OUTPUTS)
+    foreach (_qt6_moc_name IN LISTS VCLPLUG_QT6_MOC_HEADERS)
+        set(_qt6_moc_header "${CMAKE_SOURCE_DIR}/vcl/inc/qt5/${_qt6_moc_name}.hxx")
+        set(_qt6_moc_output "${VCLPLUG_QT6_MOC_DIR}/${_qt6_moc_name}.moc")
+        add_custom_command(
+            OUTPUT "${_qt6_moc_output}"
+            COMMAND "${QT6_MOC}" "${_qt6_moc_header}" -o "${_qt6_moc_output}"
+            DEPENDS "${_qt6_moc_header}"
+            COMMENT "MOC ${_qt6_moc_name}"
+            VERBATIM)
+        list(APPEND VCLPLUG_QT6_MOC_OUTPUTS "${_qt6_moc_output}")
+    endforeach ()
+
+    # The one deliverable of the first task on this: a working, isolated
+    # custom target that produces all 64 .moc files. (It no longer stands
+    # alone: the vclplug_qt6 library below now depends on it.)
+    add_custom_target(vclplug_qt6_moc DEPENDS ${VCLPLUG_QT6_MOC_OUTPUTS})
+endif ()
+
+# --- vclplug_qt6: library --------------------------------------------------------
+
+# The vclplug_qt6 library itself, on top of the Qt6 detection and moc code
+# generation in the ENABLE_QT6 block above. Same shape as vclplug_gen and
+# vclplug_gtk3: a plug-in, dlopen()ed by name at run time, with vcl on its own
+# link line because gb_Library_set_plugin_for(vclplug_qt6,vcl)
+# (Library_vclplug_qt6.mk line 22) is the non-_nodep variant, exactly like the
+# other two back ends above.
+#
+# Kept as its own if (ENABLE_QT6) block rather than folded into the moc block
+# above, so that block's "moc runs correctly in isolation" deliverable stays
+# intact and separately reviewable; ENABLE_QT6 still defaults OFF, so the two
+# blocks together remain a single no-op switch.
+
+if (ENABLE_QT6)
+    # Library_vclplug_qt6.mk lines 79-174: the 90 .cxx sources. The two
+    # conditional tails mirror vcl/CustomTarget_qt6_moc.mk's own .moc list
+    # (USE_HEADLESS_CODE for the Svp* quartet) and the plain .mk's own
+    # $(if $(USING_X11), vcl/qt6/QtX11Support). Both switches are TRUE in this
+    # build (cmake/LibreStudioConfigHeaders.cmake), so all 90 sources end up
+    # wired, but both conditions are written out for correctness on a build
+    # where either one is off.
+    set(VCLPLUG_QT6_SOURCES
+        vcl/qt6/QtAccessibleEventListener
+        vcl/qt6/QtAccessibleInterimChildWidget
+        vcl/qt6/QtAccessibleInterimParentWidget
+        vcl/qt6/QtAccessibleRegistry
+        vcl/qt6/QtAccessibleWidget
+        vcl/qt6/QtBitmap
+        vcl/qt6/QtBuilder
+        vcl/qt6/QtClipboard
+        vcl/qt6/QtCustomStyle
+        vcl/qt6/QtDoubleSpinBox
+        vcl/qt6/QtDragAndDrop
+        vcl/qt6/QtExpander
+        vcl/qt6/QtFilePicker
+        vcl/qt6/QtFont
+        vcl/qt6/QtFontFace
+        vcl/qt6/QtFrame
+        vcl/qt6/QtGraphics
+        vcl/qt6/QtGraphicsBase
+        vcl/qt6/QtGraphics_Controls
+        vcl/qt6/QtGraphics_GDI
+        vcl/qt6/QtHyperlinkLabel
+        vcl/qt6/QtInstance
+        vcl/qt6/QtInstanceAssistant
+        vcl/qt6/QtInstanceBox
+        vcl/qt6/QtInstanceBuilder
+        vcl/qt6/QtInstanceButton
+        vcl/qt6/QtInstanceCalendar
+        vcl/qt6/QtInstanceCheckButton
+        vcl/qt6/QtInstanceColorChooserDialog
+        vcl/qt6/QtInstanceComboBox
+        vcl/qt6/QtInstanceContainer
+        vcl/qt6/QtInstanceDialog
+        vcl/qt6/QtInstanceDrawingArea
+        vcl/qt6/QtInstanceEntry
+        vcl/qt6/QtInstanceEntryTreeView
+        vcl/qt6/QtInstanceExpander
+        vcl/qt6/QtInstanceFormattedSpinButton
+        vcl/qt6/QtInstanceFrame
+        vcl/qt6/QtInstanceGrid
+        vcl/qt6/QtInstanceIconView
+        vcl/qt6/QtInstanceImage
+        vcl/qt6/QtInstanceItemView
+        vcl/qt6/QtInstanceLabel
+        vcl/qt6/QtInstanceLevelBar
+        vcl/qt6/QtInstanceLinkButton
+        vcl/qt6/QtInstanceMenu
+        vcl/qt6/QtInstanceMenuButton
+        vcl/qt6/QtInstanceMessageDialog
+        vcl/qt6/QtInstanceNotebook
+        vcl/qt6/QtInstancePaned
+        vcl/qt6/QtInstancePopover
+        vcl/qt6/QtInstanceProgressBar
+        vcl/qt6/QtInstanceRadioButton
+        vcl/qt6/QtInstanceScale
+        vcl/qt6/QtInstanceScrollbar
+        vcl/qt6/QtInstanceScrolledWindow
+        vcl/qt6/QtInstanceSizeGroup
+        vcl/qt6/QtInstanceSpinButton
+        vcl/qt6/QtInstanceSpinner
+        vcl/qt6/QtInstanceTextView
+        vcl/qt6/QtInstanceTextWidget
+        vcl/qt6/QtInstanceToggleButton
+        vcl/qt6/QtInstanceToolbar
+        vcl/qt6/QtInstanceTreeIter
+        vcl/qt6/QtInstanceTreeView
+        vcl/qt6/QtInstanceWidget
+        vcl/qt6/QtInstanceWindow
+        vcl/qt6/QtMainWindow
+        vcl/qt6/QtMenu
+        vcl/qt6/QtObject
+        vcl/qt6/QtOpenGLContext
+        vcl/qt6/QtPainter
+        vcl/qt6/QtSalFrame
+        vcl/qt6/QtSalInstance
+        vcl/qt6/QtSalInstanceBuilderWrapper
+        vcl/qt6/QtSystem
+        vcl/qt6/QtTimer
+        vcl/qt6/QtTools
+        vcl/qt6/QtTransferable
+        vcl/qt6/QtTreeViewItemDelegate
+        vcl/qt6/QtTreeViewModel
+        vcl/qt6/QtVirtualDevice
+        vcl/qt6/QtWidget
+        vcl/qt6/QtXAccessible
+        vcl/qt6/QtXWindow)
+
+    if (USE_HEADLESS_CODE)
+        list(APPEND VCLPLUG_QT6_SOURCES
+            vcl/qt6/QtSvpGraphics
+            vcl/qt6/QtSvpSalFrame
+            vcl/qt6/QtSvpSalInstance
+            vcl/qt6/QtSvpSurface)
+    endif ()
+
+    if (USING_X11)
+        list(APPEND VCLPLUG_QT6_SOURCES
+            vcl/qt6/QtX11Support)
+    endif ()
+
+    librestudio_expand_cxx(VCLPLUG_QT6_SOURCES)
+    add_library(vclplug_qt6 SHARED ${VCLPLUG_QT6_SOURCES})
+
+    # gb_Library_use_custom_headers(vclplug_qt6,vcl/qt6) forwards the moc
+    # CustomTarget's own output dir onto the library so a .cxx that says
+    # #include "X.moc" (Qt's own convention for a translation unit defining a
+    # Q_OBJECT class) finds it; VCLPLUG_QT6_MOC_DIR/vclplug_qt6_moc are wave
+    # 1's variable/target for exactly that directory/step.
+    add_dependencies(vclplug_qt6
+        vclplug_qt6_moc officecfg_headers udkapi_normal_headers
+        offapi_normal_headers)
+    target_include_directories(vclplug_qt6 PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${CMAKE_SOURCE_DIR}/vcl/inc/qt6"
+        "${VCLPLUG_QT6_MOC_DIR}"
+        "${FROZEN_INCLUDE_DIR}"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+
+    # Library_vclplug_qt6.mk lines 32-35.
+    target_compile_definitions(vclplug_qt6 PRIVATE
+        VCLPLUG_QT_IMPLEMENTATION
+        VCL_INTERNALS)
+
+    target_link_libraries(vclplug_qt6 PRIVATE
+        vcl
+        tl utl sot ucbhelper basegfx comphelper cppuhelper i18nlangtag i18nutil
+        cppu sal salhelper xmlreader
+        Boost::boost
+        ICU::uc
+        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        PkgConfig::EPOXY PkgConfig::GRAPHITE
+        PkgConfig::QT6
+        m dl)
+
+    # $(if $(filter TRUE,$(ENABLE_CAIRO_CANVAS) $(USE_HEADLESS_CODE)),cairo)
+    # from the externals list (lines 58-68). Both switches are TRUE in this
+    # build, same as vcl's own USE_HEADLESS_CODE cairo block above (line 884),
+    # but this runs its own pkg_check_modules call under its own condition --
+    # mirroring vclplug_gen's own separate CAIRO_GEN precedent above -- rather
+    # than assuming vcl's PkgConfig::CAIRO (created only under USE_HEADLESS_CODE
+    # there, not ENABLE_CAIRO_CANVAS) is already available by the time this
+    # block runs.
+    if (ENABLE_CAIRO_CANVAS OR USE_HEADLESS_CODE)
+        pkg_check_modules(CAIRO_QT6 REQUIRED IMPORTED_TARGET cairo)
+        target_link_libraries(vclplug_qt6 PRIVATE PkgConfig::CAIRO_QT6)
+    endif ()
+
+    # $(if $(ENABLE_JAVA), jvmaccess) from the library list.
+    if (LIBRESTUDIO_ENABLE_JAVA)
+        target_link_libraries(vclplug_qt6 PRIVATE jvmaccess)
+    endif ()
+
+    # QT6_HAVE_GOBJECT (lines 70-77) is a configure.ac-detected sub-feature --
+    # whether the Qt6 platform plugin on the host was itself built with
+    # GObject introspection support, which unlocks an extra cxxflags/libs pair
+    # here. This port has no equivalent detection (no configure.ac run, and
+    # pkg-config's Qt6Core/Gui/Widgets modules carry no such variable): left as
+    # an honest, explicit gap rather than invented, so that extra
+    # cxxflags/libs pair is simply never added.
+
+    # vclplug_win (Windows) is this library's other platform-conditional
+    # dependency in the plain use_libraries list ($(if $(filter
+    # WNT,$(OS)),vclplug_win)); irrelevant on this Linux build and not added.
+    # -lm -ldl (lines 197-202, ifeq ($(OS),LINUX)) are written as the plain
+    # "m dl" already on the link line above, matching vclplug_gen's and
+    # vclplug_gtk3's own literal "m dl" in this same file rather than
+    # ${CMAKE_DL_LIBS} (that portable spelling is this port's convention in
+    # sal/CMakeLists.txt, bridges/CMakeLists.txt, pyuno/CMakeLists.txt and
+    # external/clew/CMakeLists.txt, but not here).
+
+    # macOS block (Library_vclplug_qt6.mk lines 176-195), added structurally
+    # per this port's policy of not silently dropping a platform-only branch --
+    # best-effort and unverified, like every other Apple-framework precedent
+    # already in this file and in sal/CMakeLists.txt, since there is no Mac on
+    # this machine to build or check it against.
+    if (APPLE)
+        target_link_libraries(vclplug_qt6 PRIVATE
+            "-framework ApplicationServices"
+            "-framework Cocoa"
+            "-framework Carbon"
+            "-framework CoreFoundation"
+            vclplug_osx)
+        # gb_Library_darwin_add_rpath(vclplug_qt6,"$(QT6_LIBDIR)") and
+        # gb_OBJCXXFLAGS (the Objective-C++ flags added at lines 184-186) have
+        # no established CMake analog anywhere in this port (QT6_LIBDIR is a
+        # gbuild/configure.ac variable, and a grep for gb_OBJCXXFLAGS's
+        # equivalent here turns up nothing) -- left out rather than guessed
+        # at, an explicit gap rather than a silent omission.
+    endif ()
+
+    # No component file: a plug-in is named by SAL_USE_VCLPLUGIN, not
+    # registered as a UNO service -- same as vclplug_gen/vclplug_gtk3 above.
+    librestudio_set_library_output_name(vclplug_qt6 vclplug_qt6 OOO)
+    install(TARGETS vclplug_qt6 LIBRARY DESTINATION program)
+endif ()
+
 # --- svptest -------------------------------------------------------------------
 
 # The smallest program that starts VCL: it bootstraps UNO, calls InitVCL(), puts
@@ -1314,3 +1859,132 @@ endforeach ()
 #
 # They are one source each, so they are worth coming back to when those modules
 # are in.
+
+# --- UIConfig_vcl ---------------------------------------------------------------
+#
+# UIConfig_vcl.mk: 19 .ui files under vcl/uiconfig/ui packaged into
+# share/config/soffice.cfg/vcl/ui -- same gb_UIConfig_UIConfig destination
+# convention as UIConfig_svt's own block in svtools/CMakeLists.txt (that
+# block's own comment has the gb_UIConfig_DIR_FOR derivation and the
+# LIBO_SHARE_FOLDER="share" precedent; not repeated here), followed directly:
+# install(FILES ...) naming every .ui file, DESTINATION swapped from
+# .../svtools/ui to .../vcl/ui.
+#
+# VCL_UICONFIG_UI_FILES holds the list once so both the packaging install()
+# below and the real build-time mirror right after it stay in sync by
+# construction -- no prior variable existed here to reuse (this block used to
+# inline the list straight into install(FILES ...)); introduced now as the
+# minimal refactor needed to give both mechanisms one shared source of truth,
+# the same relationship program_services_rdb's DEPENDS list has to
+# librestudio_finalize_components()'s own _components property.
+set(VCL_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/aboutbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/combobox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/cupspassworddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dockingwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/editmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/errornocontentdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/errornoprinterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/interimdockparent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/interimtearableparent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/printdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/printerdevicepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/printerpaperpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/printerpropertiesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/printprogressdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/screenshotmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/screenshotparent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/wizard.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/openlockedquerybox.ui"
+)
+
+install(FILES ${VCL_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/vcl/ui)
+
+# Real build-time mirror of the install() rule above, alongside it (not
+# instead of it -- install() still does the real distribution packaging at
+# `cmake --install` time). Needed because a plain `cmake --build` never runs
+# install(), so nothing previously put these .ui files where a CppunitTest
+# running straight out of the build tree (LIBRESTUDIO_SHARE_DIR, the same
+# instdir/share build-tree root program_services_rdb/officecfg_registry
+# already populate for services.rdb/main.xcd) could find them at run time --
+# see cmake/LibreStudioTest.cmake's UICONFIG parameter, which depends on the
+# vcl_uiconfig target defined below.
+#
+# One add_custom_command(OUTPUT ...) per file, each with its own
+# make_directory before the copy -- the same idiom librestudio_add_component()
+# (cmake/LibreStudioComponent.cmake) and officecfg/CMakeLists.txt's own
+# per-header custom commands already use, rather than a separate directory-only
+# step. All outputs are then collected into one add_custom_target(... ALL
+# DEPENDS ...), the same two-step shape program_services_rdb (root
+# CMakeLists.txt) and librestudio_finalize_components() (cmake/
+# LibreStudioComponent.cmake) both already use for their own single-output
+# case.
+set(_vcl_uiconfig_outputs "")
+foreach (_vcl_uiconfig_src IN LISTS VCL_UICONFIG_UI_FILES)
+    get_filename_component(_vcl_uiconfig_name "${_vcl_uiconfig_src}" NAME)
+    set(_vcl_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/vcl/ui/${_vcl_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_vcl_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/vcl/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_vcl_uiconfig_src}" "${_vcl_uiconfig_dest}"
+        DEPENDS "${_vcl_uiconfig_src}"
+        COMMENT "Copying ${_vcl_uiconfig_name} into build-tree soffice.cfg/vcl/ui"
+        VERBATIM)
+    list(APPEND _vcl_uiconfig_outputs "${_vcl_uiconfig_dest}")
+endforeach ()
+unset(_vcl_uiconfig_src)
+unset(_vcl_uiconfig_name)
+unset(_vcl_uiconfig_dest)
+
+add_custom_target(vcl_uiconfig ALL DEPENDS ${_vcl_uiconfig_outputs})
+unset(_vcl_uiconfig_outputs)
+
+# --- CppunitTest targets -------------------------------------------------------
+#
+# First sub-wave of vcl's ~50 CppunitTest_*.mk files: the 11 originally
+# planned as needing no use_components -- true of all 11 -- and no
+# use_configuration, which turned out to be wrong for 9 of them (this port's
+# own discovery, not in the original plan for this wave -- re-verified
+# directly against each live .mk file, not assumed; see vcl/
+# CppunitTest_deferred.cmake's own header comment for the detail). Two need
+# no use_ure at all (vcl_localize_digits, vcl_unit_conversion -- wired
+# directly below, right here, since they need nothing this file does not
+# already provide). The other nine all call use_ure (+use_vcl) *and*
+# use_configuration *and* use_rdb(services), so, like scaddins_analysis/
+# xmlscript_cppunit before them, they need program_services_rdb to exist
+# first and are deferred to vcl/CppunitTest_deferred.cmake, include()'d from
+# the root CMakeLists.txt right after xmlscript's own deferred include (see
+# that include() call site). vcl_pdfium_library_test, the twelfth candidate
+# this wave considered, is deliberately NOT wired anywhere -- see vcl/
+# CppunitTest_deferred.cmake's own comment on it for why.
+
+# CppunitTest_vcl_localize_digits.mk, re-checked directly against the live
+# file: 1 source (vcl/qa/cppunit/LocalizeDigits), set_include vcl/inc,
+# use_libraries sal vcl. No use_ure anywhere in the file, so no PROTECTORS, no
+# CONFIGURATION -- this is as simple as a CppunitTest gets in this port.
+librestudio_add_cppunit_test(vcl_localize_digits
+    SOURCES
+        vcl/qa/cppunit/LocalizeDigits
+    LIBRARIES sal vcl
+    INCLUDE "${CMAKE_SOURCE_DIR}/vcl/inc")
+
+# CppunitTest_vcl_unit_conversion.mk, re-checked directly against the live
+# file: 1 source (vcl/qa/cppunit/UnitConversionTest), set_include vcl/inc,
+# use_libraries vcl only (no sal). No use_ure, same as vcl_localize_digits
+# above.
+librestudio_add_cppunit_test(vcl_unit_conversion
+    SOURCES
+        vcl/qa/cppunit/UnitConversionTest
+    LIBRARIES vcl
+    INCLUDE "${CMAKE_SOURCE_DIR}/vcl/inc")
+
+# The other eight use_ure tests of this wave (vcl_app_test,
+# vcl_bitmapfilter_test, vcl_bitmap_test, vcl_filter_igif, vcl_graphic_test,
+# vcl_idle_task, vcl_map, vcl_type_serializer_test) are registered from vcl/
+# CppunitTest_deferred.cmake instead of here -- see that file's own header
+# comment for why they cannot be registered at this point in the file.
+# vcl_pdfium_library_test, the eleventh test this wave's plan named, is not
+# registered anywhere at all -- see that same file's header comment for why.

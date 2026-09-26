@@ -34,6 +34,12 @@ librestudio_expand_cxx(SOT_SOURCES)
 
 add_library(sot SHARED ${SOT_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(sot PRIVATE
+        "${CMAKE_SOURCE_DIR}/sot/inc/pch/precompiled_sot.hxx")
+    target_compile_definitions(sot PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(sot PRIVATE
     "${CMAKE_SOURCE_DIR}/sot/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"

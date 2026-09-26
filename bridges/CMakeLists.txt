@@ -18,6 +18,17 @@
 #
 # Only the C++ bridge is built.  The .NET bridge (net_uno) is behind
 # ENABLE_DOTNET upstream and is not enabled here.
+#
+# Latent gap: the Java UNO bridge is not ported either. Upstream's
+# Module_bridges.mk builds Jar_java_uno, Library_java_uno, and (macOS-only)
+# Package_jnilib_java_uno under `ifneq ($(ENABLE_JAVA),)`; none of the three
+# exist anywhere in this tree. This is currently masked because
+# LIBRESTUDIO_ENABLE_JAVA defaults OFF, but jurt, javaunohelper, and bean
+# (see their CMakeLists.txt) already build under that flag and are Java-UNO-
+# bridge *consumers* -- if LIBRESTUDIO_ENABLE_JAVA is ever turned ON, they
+# would build without the actual bridge library (Library_java_uno) they need
+# at runtime. This must be addressed before Java support can be considered
+# complete.
 
 # Upstream names this by the CPPU environment: $(CPPU_ENV)_uno, i.e. gcc3_uno.
 set(BRIDGE_DIR "${CMAKE_SOURCE_DIR}/bridges/source/cpp_uno/gcc3_linux_x86-64")

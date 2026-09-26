@@ -11,11 +11,14 @@
 # UNO services. Source lists from Library_svxcore.mk and Library_svx.mk.
 #
 # Flag resolutions applying to both libraries in this build:
-#  - HAVE_FEATURE_AVMEDIA is hardcoded 0 (cmake/config/config_features.h.in):
-#    svxcore's sdrmediawindow (guarded by gb_Helper_optional,AVMEDIA) is
-#    excluded, as is svx's MediaPlaybackPanel sidebar source and its direct
-#    link to avmedia (svxcore still links avmedia unconditionally for the
-#    media item itself, same reasoning as editeng -> avmedia).
+#  - ENABLE_AVMEDIA (cmake/LibreStudioConfigHeaders.cmake, default ON --
+#    configure.ac:1648-1651/3513-3515) gates the two gb_Helper_optional(AVMEDIA,
+#    ...) entries each .mk has: svxcore's sdrmediawindow
+#    (Library_svxcore.mk:263) and svx's MediaPlaybackPanel sidebar source
+#    (Library_svx.mk:249) plus svx's own direct link to avmedia
+#    (Library_svx.mk:49). svxcore links avmedia unconditionally regardless
+#    (Library_svxcore.mk:57, not gated) for the media item itself, same
+#    reasoning as editeng -> avmedia.
 #  - HAVE_FEATURE_DBCONNECTIVITY defaults to enabled on desktop Linux (it is
 #    only forced off under --enable-wasm-strip -- config_features.h.in's
 #    literal 0 is just autoheader's unconfigured template, not a real
@@ -237,7 +240,6 @@ set(SVXCORE_SOURCES
     svx/source/sdr/contact/viewobjectcontactofsdrole2obj
     svx/source/sdr/contact/viewobjectcontactofunocontrol
     svx/source/sdr/contact/viewobjectcontactofgraphic
-    # gb_Helper_optional(AVMEDIA, sdrmediawindow) -- excluded, HAVE_FEATURE_AVMEDIA is 0.
     svx/source/sdr/contact/viewobjectcontactofsdrmediaobj
     svx/source/sdr/contact/viewcontactofsdrcaptionobj
     svx/source/sdr/contact/viewcontactofvirtobj
@@ -467,8 +469,20 @@ set(SVXCORE_SOURCES
     svx/source/customshapes/EnhancedCustomShapeHandle
 )
 
+# gb_Helper_optional(AVMEDIA, svx/source/sdr/contact/sdrmediawindow) from
+# Library_svxcore.mk:263.
+if (ENABLE_AVMEDIA)
+    list(APPEND SVXCORE_SOURCES svx/source/sdr/contact/sdrmediawindow)
+endif (ENABLE_AVMEDIA)
+
 librestudio_expand_cxx(SVXCORE_SOURCES)
 add_library(svxcore SHARED ${SVXCORE_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(svxcore PRIVATE
+        "${CMAKE_SOURCE_DIR}/svx/inc/pch/precompiled_svxcore.hxx")
+    target_compile_definitions(svxcore PRIVATE PCH_LEVEL=2)
+endif ()
 add_dependencies(svxcore svx_sdi svx_oox_tokens)
 
 target_include_directories(svxcore PRIVATE
@@ -485,12 +499,40 @@ add_dependencies(svxcore officecfg_headers udkapi_normal_headers offapi_normal_h
 target_compile_definitions(svxcore PRIVATE SVXCORE_DLLIMPLEMENTATION)
 
 target_link_libraries(svxcore PRIVATE
-    avmedia basegfx sb comphelper cppuhelper cppu dbtools docmodel
+    avmedia basegfx sb comphelper cppuhelper cppu docmodel
     drawinglayercore drawinglayer editeng fwk i18nlangtag i18nutil lng sal
     salhelper sax sfx sot svl svt tk tl ucbhelper utl vcl xo
     Boost::boost
     ICU::uc
     LibXml2::LibXml2)
+
+# $(call gb_Helper_optional,DBCONNECTIVITY,dbtools) from Library_svxcore.mk's
+# use_libraries.
+if (ENABLE_DBCONNECTIVITY)
+    target_link_libraries(svxcore PRIVATE dbtools)
+endif (ENABLE_DBCONNECTIVITY)
+
+# Library_svxcore.mk's ifeq ($(OS),MACOSX) branch (lines 96-106, re-checked
+# directly against the live file): gb_Library_add_cxxflags(svxcore,
+# $(gb_OBJCXXFLAGS)) + gb_Library_use_system_darwin_frameworks(svxcore,
+# Foundation) -- no -lobjc here, unlike toolkit's own tk branch (Library_tk.mk
+# additionally does gb_Library_add_libs(tk,-lobjc); svxcore's branch does
+# not). gb_OBJCXXFLAGS is macosx.mk's own definition specifically (solenv/
+# gbuild/platform/macosx.mk:59: "-x objective-c++ -fobjc-exceptions",
+# confirmed directly), not iOS.mk's plain "-x objective-c++" (iOS.mk:60) --
+# this .mk's guard is ifeq($(OS),MACOSX), never iOS. Same distinction this
+# session already established for toolkit/CMakeLists.txt's tk (real macOS
+# branch, CMAKE_SYSTEM_NAME STREQUAL "Darwin") vs cppuhelper's separate iOS
+# branch (CMAKE_SYSTEM_NAME STREQUAL "iOS") -- CMAKE_SYSTEM_NAME STREQUAL
+# "Darwin" is used here for the same reason: bare if(APPLE) is also true for
+# iOS, which is the wrong branch for this exact ifeq($(OS),MACOSX) guard.
+# Structurally present but inert on this Linux build, same status as every
+# other iOS/Android/Windows branch in this port (see sal/CMakeLists.txt's own
+# header comment).
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    target_compile_options(svxcore PRIVATE -x objective-c++ -fobjc-exceptions)
+    target_link_libraries(svxcore PRIVATE "-framework Foundation")
+endif ()
 
 # gb_Library_add_componentimpls(svxcore, draw) -- applies unconditionally,
 # ENABLE_WASM_STRIP_BASIC_DRAW_MATH_IMPRESS is not defined in this port (same
@@ -602,7 +644,6 @@ set(SVX_SOURCES
     svx/source/fmcomp/dbaobjectex
     svx/source/form/databaselocationinput
     svx/source/form/dbcharsethelper
-    svx/source/form/filtnav
     svx/source/form/fmobjfac
     svx/source/form/fmPropBrw
     svx/source/form/fmsrccfg
@@ -658,8 +699,6 @@ set(SVX_SOURCES
     svx/source/sidebar/line/LinePropertyPanelBase
     svx/source/sidebar/line/LineWidthValueSet
     svx/source/sidebar/line/LineWidthPopup
-    # gb_Helper_optional(AVMEDIA, MediaPlaybackPanel) -- excluded,
-    # HAVE_FEATURE_AVMEDIA is 0.
     svx/source/sidebar/possize/PosSizePropertyPanel
     svx/source/sidebar/shapes/DefaultShapesPanel
     svx/source/sidebar/shapes/ShapesUtil
@@ -713,8 +752,26 @@ set(SVX_SOURCES
     # Linux port.
 )
 
+# $(call gb_Helper_optional,DBCONNECTIVITY,svx/source/form/filtnav) from
+# Library_svx.mk's add_exception_objects.
+if (ENABLE_DBCONNECTIVITY)
+    list(APPEND SVX_SOURCES svx/source/form/filtnav)
+endif (ENABLE_DBCONNECTIVITY)
+
+# $(call gb_Helper_optional,AVMEDIA,svx/source/sidebar/media/MediaPlaybackPanel)
+# from Library_svx.mk:249's add_exception_objects.
+if (ENABLE_AVMEDIA)
+    list(APPEND SVX_SOURCES svx/source/sidebar/media/MediaPlaybackPanel)
+endif (ENABLE_AVMEDIA)
+
 librestudio_expand_cxx(SVX_SOURCES)
 add_library(svx SHARED ${SVX_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(svx PRIVATE
+        "${CMAKE_SOURCE_DIR}/svx/inc/pch/precompiled_svx.hxx")
+    target_compile_definitions(svx PRIVATE PCH_LEVEL=2)
+endif ()
 add_dependencies(svx svx_sdi)
 
 target_include_directories(svx PRIVATE
@@ -730,17 +787,25 @@ add_dependencies(svx officecfg_headers udkapi_normal_headers offapi_normal_heade
 target_compile_definitions(svx PRIVATE SVX_DLLIMPLEMENTATION)
 
 target_link_libraries(svx PRIVATE
-    basegfx sb comphelper cppuhelper cppu dbtools docmodel drawinglayercore
+    basegfx sb comphelper cppuhelper cppu docmodel drawinglayercore
     drawinglayer editeng fwk i18nlangtag i18nutil sal salhelper sfx sot svl
     svt svxcore tk tl ucbhelper utl vcl xo xmlscript sax
     Boost::boost
     ICU::uc)
 
-# gb_Helper_optional(AVMEDIA, avmedia) -- svx (unlike svxcore) only links
-# avmedia directly when AVMEDIA is enabled; HAVE_FEATURE_AVMEDIA is 0 here,
-# so this link is omitted (svxcore still pulls it in transitively for the
-# media item).
-#
+# $(call gb_Helper_optional,DBCONNECTIVITY,dbtools) from Library_svx.mk's
+# use_libraries.
+if (ENABLE_DBCONNECTIVITY)
+    target_link_libraries(svx PRIVATE dbtools)
+endif (ENABLE_DBCONNECTIVITY)
+
+# gb_Helper_optional(AVMEDIA, avmedia) from Library_svx.mk:49's
+# use_libraries -- svx (unlike svxcore, which links avmedia unconditionally)
+# only links avmedia directly when AVMEDIA is enabled.
+if (ENABLE_AVMEDIA)
+    target_link_libraries(svx PRIVATE avmedia)
+endif (ENABLE_AVMEDIA)
+
 # gb_Library_add_componentimpls(svx, crashreport recoveryui) -- crashreport
 # is gb_Helper_optional(BREAKPAD, ...) and excluded (LIBRESTUDIO_ENABLE_BREAKPAD
 # is not defined); recoveryui applies unconditionally since
@@ -754,3 +819,422 @@ librestudio_add_component(svx
 librestudio_set_library_output_name(svx svx OOO)
 
 install(TARGETS svx LIBRARY DESTINATION program)
+
+# textconversiondlgs (Library_textconversiondlgs.mk) -- the Chinese simplified/
+# traditional dictionary and translation dialogs. Instantiated directly by
+# sc/sd/sw (rtl::Reference<textconversiondlgs::ChineseTranslation_UnoDialog>
+# constructed straight from the header, no XMultiComponentFactory lookup), so
+# unlike svxcore/svx it registers no UNO service and needs no .component file
+# -- confirmed by grepping for a component_getFactory/component export in its
+# three sources (none) and for any *.component referencing it anywhere in the
+# tree (none).
+set(TEXTCONVERSIONDLGS_SOURCES
+    svx/source/unodialogs/textconversiondlgs/chinese_dictionarydialog
+    svx/source/unodialogs/textconversiondlgs/chinese_translationdialog
+    svx/source/unodialogs/textconversiondlgs/chinese_translation_unodialog
+)
+
+librestudio_expand_cxx(TEXTCONVERSIONDLGS_SOURCES)
+add_library(textconversiondlgs SHARED ${TEXTCONVERSIONDLGS_SOURCES})
+
+target_include_directories(textconversiondlgs PRIVATE
+    "${CMAKE_SOURCE_DIR}/svx/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(textconversiondlgs udkapi_normal_headers offapi_normal_headers)
+
+target_compile_definitions(textconversiondlgs PRIVATE TEXTCONVERSIONDLGS_DLLIMPLEMENTATION)
+
+target_link_libraries(textconversiondlgs PRIVATE
+    comphelper cppuhelper cppu sal i18nlangtag svl svt tk tl utl vcl
+    Boost::boost)
+
+librestudio_set_library_output_name(textconversiondlgs textconversiondlgs OOO)
+
+install(TARGETS textconversiondlgs LIBRARY DESTINATION program)
+
+# --- Package_document_themes ----------------------------------------------------
+#
+# Package_document_themes.mk: 7 .theme files under svx/uiconfig/themes/
+# packaged into $(LIBO_SHARE_FOLDER)/themes -- LIBO_SHARE_FOLDER is plain
+# "share" on this port (see UIConfig_svt's own comment in svtools/
+# CMakeLists.txt, and framework/CMakeLists.txt's/sfx2/CMakeLists.txt's own
+# "share/..." installs, for the same established value). Plain install(FILES
+# ...), same mechanism as every other Package_*.mk ported so far.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Beach.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Breeze.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Forest.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Libreoffice.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Ocean.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Rainbow.theme"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/themes/Sunset.theme"
+    DESTINATION share/themes)
+
+# --- Package_xml -----------------------------------------------------------------
+#
+# Package_xml.mk: 1 file (svx/source/table/tablestyles.xml) packaged into
+# $(LIBO_SHARE_FOLDER)/svx -- same "share" root as above.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/table/tablestyles.xml"
+    DESTINATION share/svx)
+
+# --- UIConfig_svx ------------------------------------------------------------
+#
+# UIConfig_svx.mk: 143 .ui files under svx/uiconfig/ui/ packaged into
+# share/config/soffice.cfg/svx/ui -- the same gb_UIConfig_DIR_FOR-derived
+# destination convention already established for UIConfig_svt (svtools/
+# CMakeLists.txt) and UIConfig_vcl (vcl/CMakeLists.txt): a plain install(FILES
+# ...) naming every .ui file directly, DESTINATION swapped to .../svx/ui.
+# Verified against the live UIConfig_svx.mk: exactly 143 add_uifiles entries,
+# and `find svx/uiconfig/ui -name "*.ui" | wc -l` also returns 143 -- every
+# named file exists on disk, nothing invented.
+#
+# SVX_UICONFIG_UI_FILES holds the list once so both the packaging install()
+# below and the real build-time mirror right after it stay in sync by
+# construction -- no prior variable existed here to reuse (this block used to
+# inline the list straight into install(FILES ...)); introduced now the same
+# way vcl/CMakeLists.txt's own UIConfig_vcl block introduces
+# VCL_UICONFIG_UI_FILES for the identical reason (see that file's comment).
+set(SVX_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/absrecbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/acceptrejectchangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/accessibilitycheckentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/accessibilitychecklevel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addconditiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/adddataitemdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addinstancedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addmodeldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addnamespacedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addsubmissiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/asianphoneticguidedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/applystylebox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/cellmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/charsetmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/checkbuttonbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/chineseconversiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/chinesedictionary.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/classificationdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/clipboardmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/colorwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/currencywindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/colsmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/columnswindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/compressgraphicdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/crashreportdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/datanavigator.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/defaultshapespanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/deleteheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/deletefooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/depthwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/directionwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/docking3deffects.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dockingcolorreplace.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dockingcolorwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dockingfontwork.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/docrecoverybrokendialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/docrecoveryprogressdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/docrecoveryrecoverdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/docrecoverysavedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/extrustiondepthdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fillctrlbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/filtermenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/filternavigator.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/findbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/findreplacedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatingareastyle.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatingcontour.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatingframeborder.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatinglineend.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatinglineproperty.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatinglinestyle.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/floatingundoredo.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontworkalignmentcontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontworkcharacterspacingcontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontworkgallerydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontworkspacingdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontsizebox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fontnamebox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formdatamenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formfielddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formlinkwarndialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formnavigator.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formnavimenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formpropertydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/functionmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/gallerymenu1.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/gallerymenu2.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/genericcheckdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/genericcheckentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/gotopagedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/grafctrlbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/grafmodebox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/headfootformatpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/imapdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/imapmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/inspectortextpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/labelbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/lightingwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/linkwarndialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/measurewidthbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/medialine.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/mediaplayback.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/mediawindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/metricfieldbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/namespacedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/navigationbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/numberingwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/optgridpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/paralinespacingcontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/paralrspacing.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/paraulspacing.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/passwd.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/presetmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fileexporteddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querydeletecontourdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querydeleteobjectdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querydeletethemedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querymodifyimagemapchangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querynewcontourdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querysavecontchangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querysaveimagemapchangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/queryunlinkgraphicsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/redlinecontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/redlinefilterpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/redlineviewpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/rowsmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/rulermenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/safemodedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/savemodifieddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/selectionmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebararea.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarempty.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebareffect.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebartexteffect.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarfontwork.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarshadow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebargallery.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebargraphic.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarline.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarparagraph.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarlists.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarpossize.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebarstylespanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebartextcolumnspanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sidebartextpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/stylemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/surfacewindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablewindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/stylespreview.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textcharacterspacingcontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textcontrolchardialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textcontrolparadialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textunderlinecontrol.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/themedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/themecoloreditdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/themeselectorpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/toolbarpopover.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/xmlsecstatmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/xformspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/zoommenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tableautofmtdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablestylesdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/stringinput.ui"
+)
+
+install(FILES ${SVX_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/svx/ui)
+
+# Real build-time mirror of the install() rule above, alongside it (not
+# instead of it) -- same rationale, and the same per-file add_custom_command
+# + one add_custom_target(... ALL DEPENDS ...) shape, as vcl/CMakeLists.txt's
+# own UIConfig_vcl block; see that file's comment for the full reasoning this
+# is not repeated here.
+set(_svx_uiconfig_outputs "")
+foreach (_svx_uiconfig_src IN LISTS SVX_UICONFIG_UI_FILES)
+    get_filename_component(_svx_uiconfig_name "${_svx_uiconfig_src}" NAME)
+    set(_svx_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svx/ui/${_svx_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_svx_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svx/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_svx_uiconfig_src}" "${_svx_uiconfig_dest}"
+        DEPENDS "${_svx_uiconfig_src}"
+        COMMENT "Copying ${_svx_uiconfig_name} into build-tree soffice.cfg/svx/ui"
+        VERBATIM)
+    list(APPEND _svx_uiconfig_outputs "${_svx_uiconfig_dest}")
+endforeach ()
+unset(_svx_uiconfig_src)
+unset(_svx_uiconfig_name)
+unset(_svx_uiconfig_dest)
+
+add_custom_target(svx_uiconfig ALL DEPENDS ${_svx_uiconfig_outputs})
+unset(_svx_uiconfig_outputs)
+
+# --- Executable_gengal + Package_gengal -----------------------------------------
+#
+# Module_svx.mk's exact gating (re-checked directly against the live file):
+#   ifneq (,$(filter DESKTOP,$(BUILD_TYPE)))
+#   ifeq (,$(DISABLE_DYNLOADING))
+#     Executable_gengal + $(if $(filter-out MACOSX WNT,$(OS)), Package_gengal)
+#   else ($(WITH_GALLERY_BUILD),TRUE): Executable_gengal, build-side only
+#   endif
+# BUILD_TYPE contains DESKTOP unconditionally on this port (HAVE_FEATURE_
+# DESKTOP, same reasoning cpputools/CMakeLists.txt's own uno.sh install
+# already applies -- "gb_CondExeUno ... both hold unconditionally on this
+# port"), and DISABLE_DYNLOADING is never defined anywhere in this port's
+# config surface (grepped; same "never set" conclusion unoidl/CMakeLists.txt
+# already reached for its own DISABLE_DYNLOADING reasoning). So the first
+# branch applies unconditionally: Executable_gengal AND (OS is Linux, matched
+# by $(filter-out MACOSX WNT,$(OS))) Package_gengal both apply, always, on
+# this port -- the $(WITH_GALLERY_BUILD) build-side-only branch never
+# applies here.
+#
+# Executable_gengal.mk, re-checked directly: 1 source (svx/source/gengal/
+# gengal), use_external(boost_headers), use_sdk_api (normal udkapi+offapi),
+# use_libraries(basegfx sal tl sfx svl svt comphelper cppu cppuhelper utl
+# svxcore vcl), use_vclmain, ifeq($(OS),WNT) use_system_win32_libs(kernel32
+# msvcrt oldnames user32) -- kept structurally present but inert, same
+# if(WIN32) pattern already used for cpputools' sp2bv and i18nlangtag's own
+# kernel32 branch -- and add_default_nativeres (a Windows icon/version
+# resource, omitted outright, same as opencl/CMakeLists.txt's opencltest:
+# "not applicable on this Linux-only port, so omitted").
+#
+# gengal.cxx calls ::cppu::defaultBootstrap_InitialComponentContext()
+# directly, so it dlopens the UNO bridge at run time the same way cpputools'
+# uno / vcl's icontest and visualbackendtest do -- gcc3_uno is a real
+# add_dependencies() build-order prerequisite here for the same reason (see
+# bridges/CMakeLists.txt's own note on this dlopen-not-link pattern).
+# vclmain is vcl/CMakeLists.txt's real STATIC library target (vcl is
+# add_subdirectory()'d before svx), providing the SAL_IMPLEMENT_MAIN() entry
+# point gengal's own gengal.cxx relies on instead of defining its own main().
+set(GENGAL_SOURCES
+    svx/source/gengal/gengal
+)
+librestudio_expand_cxx(GENGAL_SOURCES)
+add_executable(gengal ${GENGAL_SOURCES})
+
+target_include_directories(gengal PRIVATE
+    "${CMAKE_SOURCE_DIR}/svx/inc"
+    "${CMAKE_SOURCE_DIR}/svx/inc/pch"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(gengal udkapi_normal_headers offapi_normal_headers gcc3_uno)
+
+target_link_libraries(gengal PRIVATE
+    basegfx sal tl sfx svl svt comphelper cppu cppuhelper utl svxcore vcl
+    vclmain
+    Boost::boost)
+
+# ifeq ($(OS),WNT) gb_Executable_use_system_win32_libs(gengal,kernel32
+# msvcrt oldnames user32) -- kept structurally present but inert, per this
+# port's policy of not silently dropping Windows-only gbuild targets (see
+# cpputools/CMakeLists.txt's sp2bv and i18nlangtag's kernel32 branch for the
+# same pattern). Never exercised on this Linux build.
+if (WIN32)
+    target_link_libraries(gengal PRIVATE kernel32 msvcrt oldnames user32)
+endif ()
+
+install(TARGETS gengal RUNTIME DESTINATION program)
+
+# Package_gengal.mk: installs svx/source/gengal/gengal.sh, renamed to
+# "gengal", into $(LIBO_BIN_FOLDER) (program/) -- gated the same way as the
+# Executable above ($(filter-out MACOSX WNT,$(OS)), true on this Linux port).
+# Same shape as cpputools/CMakeLists.txt's own uno.sh -> "uno" install
+# (install(PROGRAMS ... RENAME <name>)), the one existing precedent in this
+# port for a gbuild Executable+wrapper-script pair; gengal.sh's own exec line
+# ("exec \"$0.bin\" \"$@\" ...") expects the real compiled binary to be found
+# as "<self>.bin" once invoked as the renamed wrapper -- exactly the same
+# assumption cpputools' uno.sh makes for its own "$0.bin" exec, and which
+# that existing CMakeLists.txt does not (yet) reconcile with the plain
+# install(TARGETS uno RUNTIME DESTINATION program) sitting right next to it
+# (both install to program/uno, unrenamed): whichever install() rule runs
+# last wins that path, so the wrapper's own "$0.bin" indirection is not
+# actually load-bearing as either module is wired today. Reproduced here
+# unchanged, for consistency with that one precedent, rather than inventing
+# a different, untested convention just for gengal; not silently presented
+# as verified end-to-end (this port has never run either wrapper script).
+install(PROGRAMS "${CMAKE_SOURCE_DIR}/svx/source/gengal/gengal.sh"
+    DESTINATION program RENAME gengal)
+
+# --- CppunitTest_svx_removewhichrange --------------------------------------------
+#
+# CppunitTest_svx_removewhichrange.mk, re-checked directly: 1 source (svx/qa/
+# unit/removewhichrange), use_externals(boost_headers icuuc libxml2),
+# use_sdk_api (normal udkapi+offapi), gb_CppunitTest_use_library_objects(
+# svx_removewhichrange, svxcore) -- NOT use_libraries(svxcore) -- plus a full
+# use_libraries list matching svxcore's own transitive deps, plus its own
+# ifeq($(OS),MACOSX) use_system_darwin_frameworks(Foundation) block mirroring
+# svxcore's own. No use_ure/use_vcl/use_rdb/use_configuration anywhere in
+# this .mk, so no PROTECTORS/CONFIGURATION and no ordering constraint against
+# any module add_subdirectory()'d after svx -- wired directly here.
+#
+# use_library_objects(svx_removewhichrange, svxcore) links svxcore's already-
+# compiled object files directly into the test binary rather than dynamically
+# against libsvxcore.so. Upstream needs this because the one symbol the test
+# calls, RemoveWhichRange (declared in include/svx/svdetc.hxx with no
+# SVXCORE_DLLPUBLIC export marker -- confirmed by reading the header
+# directly), is not part of svxcore's exported ABI there. sal/CMakeLists.txt's
+# own sal_osl_file_details hit the identical gb_CppunitTest_use_library_objects
+# shape and modelled it by recompiling the WHOLE target library's source list
+# a second time directly into the test binary (see that comment) -- but that
+# was necessary there because sal really does restrict its exported symbols
+# with a linker version script on this port too
+# (-Wl,--version-script=sal/util/sal.map, see sal/CMakeLists.txt), so
+# isForbidden() genuinely is unreachable through libsal.so as this port
+# builds it.
+#
+# svxcore has no equivalent restriction: no svx/util/*.map (or any *.map)
+# file exists anywhere under svx/, target_link_libraries(svxcore ...) applies
+# no -Wl,--version-script (grepped svx/CMakeLists.txt directly, confirmed
+# above in svxcore's own block), and this port sets no -fvisibility=hidden
+# anywhere at all (grepped cmake/*.cmake and the root CMakeLists.txt, no
+# matches) -- GCC's plain default visibility applies, which exports every
+# global symbol, RemoveWhichRange included, regardless of the missing
+# SVXCORE_DLLPUBLIC marker upstream's own stricter Windows-style export
+# list relies on. So unlike sal_osl_file_details, this test's one missing
+# symbol IS already reachable by linking against the real svxcore *library*
+# as this port actually builds it -- recompiling svxcore's ~400-file source
+# list a second time into this one small test would be real, unnecessary
+# extra build cost with no functional benefit here. Modelled as a plain
+# LIBRARIES svxcore instead; flagged here rather than silently presented as
+# identical to sal_osl_file_details's heavier precedent.
+librestudio_add_cppunit_test(svx_removewhichrange
+    SOURCES
+        svx/qa/unit/removewhichrange
+    LIBRARIES svxcore Boost::boost ICU::uc LibXml2::LibXml2
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/svx/source/inc"
+        "${CMAKE_SOURCE_DIR}/svx/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# ifeq ($(OS),MACOSX) gb_CppunitTest_use_system_darwin_frameworks(
+# svx_removewhichrange, Foundation) -- mirrors svxcore's own macOS branch
+# above; structurally present but inert on this Linux build.
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    target_link_libraries(svx_removewhichrange PRIVATE "-framework Foundation")
+endif ()
+
+# CppunitTest_svx_unit, CppunitTest_svx_gallery_test and CppunitTest_svx_core
+# all need unotest and/or test_fixtures and/or subsequenttest (test/
+# CMakeLists.txt, unotest/CMakeLists.txt), both add_subdirectory()'d AFTER
+# svx in the root CMakeLists.txt, plus use_rdb(services) needs
+# program_services_rdb (defined much later still, right after
+# librestudio_finalize_components(services)) -- so all three are deferred
+# into svx/CppunitTest_deferred.cmake, include()'d from the root
+# CMakeLists.txt once program_services_rdb exists, the same point scaddins_
+# analysis/xmlscript_cppunit/vcl's/svtools_graphic's own use_rdb(services)
+# tests are already deferred to. See that file for the full per-test detail.
+#
+# CppunitTest_svx_dialogs_test (a gb_CppunitTest_CppunitScreenShot screenshot
+# target calling use_vcl_non_headless_with_windows) is RESOLVED: previously
+# NOT wired here, or anywhere, because UIConfig_svx existing as an
+# install(FILES ...) rule alone did not unblock it -- the real gap was
+# librestudio_add_cppunit_test() having no HEADLESS-toggle/use_uiconfigs
+# equivalent at all (see svx/CppunitTest_deferred.cmake's own now-updated
+# header comment for the full detail). cmake/LibreStudioTest.cmake's
+# NONHEADLESS and UICONFIG options close that gap, and UIConfig_svx above now
+# also defines a real build-time mirror (svx_uiconfig) for UICONFIG to depend
+# on, so this test is wired in svx/CppunitTest_deferred.cmake for real.

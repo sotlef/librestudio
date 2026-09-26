@@ -7,7 +7,10 @@
 # toolkit — the UNO AWT peer implementation: VCLXWindow and its subclasses wrap
 # vcl widgets as UNO services, plus the peer factory (vclxtoolkit) that svtools
 # and every other UI-building module asks for widgets through.  Source list
-# from Library_tk.mk; the CppunitTest_toolkit* check targets are not ported.
+# from Library_tk.mk. Both CppunitTest_toolkit (toolkit_toolkit) and
+# CppunitTest_toolkit_a11y (toolkit_a11y) are ported, deferred to toolkit/
+# CppunitTest_deferred.cmake (see that file for why neither is registered
+# here directly).
 
 set(TOOLKIT_SOURCES
     toolkit/source/awt/asynccallback
@@ -113,6 +116,29 @@ target_compile_definitions(tk PRIVATE TOOLKIT_DLLIMPLEMENTATION)
 target_link_libraries(tk PRIVATE
     comphelper cppu cppuhelper i18nlangtag sal salhelper svl tl utl vcl
     Boost::boost)
+
+# Library_tk.mk's platform tail (verified against the live file):
+#   ifeq ($(OS),MACOSX)
+#   $(eval $(call gb_Library_add_cxxflags,tk,$(gb_OBJCXXFLAGS)))
+#   $(eval $(call gb_Library_add_libs,tk,-lobjc))
+#   endif
+#   ifeq ($(OS),iOS)
+#   $(eval $(call gb_Library_add_cxxflags,tk,$(gb_OBJCXXFLAGS)))
+#   endif
+# gb_OBJCXXFLAGS differs per platform.mk: solenv/gbuild/platform/macosx.mk
+# defines it as "-x objective-c++ -fobjc-exceptions" (line 59), solenv/gbuild/
+# platform/iOS.mk as plain "-x objective-c++" (line 60, no -fobjc-exceptions)
+# -- the same file this port's cppuhelper iOS branch already sourced its own
+# gb_OBJCXXFLAGS value from earlier this session. Neither branch is
+# exercised on this Linux port; wired for completeness only.
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    target_compile_options(tk PRIVATE -x objective-c++ -fobjc-exceptions)
+    target_link_libraries(tk PRIVATE objc)
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_compile_options(tk PRIVATE -x objective-c++)
+endif ()
 
 librestudio_add_component(tk
     COMPONENT "${CMAKE_SOURCE_DIR}/toolkit/util/tk.component"

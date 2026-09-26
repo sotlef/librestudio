@@ -133,6 +133,12 @@ librestudio_expand_cxx(COMPHELPER_SOURCES)
 
 add_library(comphelper SHARED ${COMPHELPER_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(comphelper PRIVATE
+        "${CMAKE_SOURCE_DIR}/comphelper/inc/pch/precompiled_comphelper.hxx")
+    target_compile_definitions(comphelper PRIVATE PCH_LEVEL=2)
+endif ()
+
 # gb_Library_use_custom_headers(comphelper, officecfg/registry) — comphelper
 # reads configuration through the generated officecfg:: types.
 target_include_directories(comphelper PRIVATE
@@ -168,3 +174,128 @@ librestudio_add_component(comphelper
 librestudio_set_library_output_name(comphelper comphelper OOO)
 
 install(TARGETS comphelper LIBRARY DESTINATION program)
+
+# --- StaticLibrary_windows_process ------------------------------------------
+
+# StaticLibrary_windows_process.mk: gated at the module level in
+# Module_comphelper.mk -- $(if $(filter WNT,$(OS)), StaticLibrary_windows_process)
+# -- so the whole library is Windows-only, unlike the tl/ooopathutils and
+# tl/UseUnixWrappers static libraries (tools/CMakeLists.txt), which are
+# unconditional. Kept structurally present, behind if (WIN32), per this
+# port's policy of not silently dropping Windows-only gbuild targets -- see
+# sal/CMakeLists.txt's sal_comtools/sal_retry_if_failed and cpputools/
+# CMakeLists.txt's sp2bv for the same pattern, and this project's own
+# Windows/MSVC research on why it cannot actually be built or exercised on
+# this machine (no cl.exe/ml64.exe/SDK). Inert on this Linux build: the
+# if (WIN32) block below never executes here.
+#
+# 1 source (comphelper/source/windows/windows_process.cxx, gb_StaticLibrary_
+# add_exception_objects), gb_StaticLibrary_set_include is just $$(INCLUDE)
+# (no extra include dirs), and no use_libraries/use_api/use_sdk_api at all
+# in the .mk.
+if (WIN32)
+    add_library(windows_process STATIC
+        "${CMAKE_SOURCE_DIR}/comphelper/source/windows/windows_process.cxx")
+endif ()
+
+# comphelper's 7 CppunitTest_*.mk targets (Module_comphelper.mk's
+# gb_Module_add_check_targets list), ported via librestudio_add_cppunit_test()
+# (cmake/LibreStudioTest.cmake -- read its header comment first for the
+# shared rationale). Each was re-checked directly against its live .mk file,
+# not assumed from a summary -- one of them (CppunitTest_comphelper_weakbag_
+# test.mk) turns out to name a DIFFERENT internal CppunitTest name
+# ("comphelper_weakbag", via gb_CppunitTest_CppunitTest,comphelper_weakbag)
+# than its own filename suggests; the CMake target below uses that real
+# internal name, matching what gb_CppunitTest_get_filename would actually
+# produce ("libtest_comphelper_weakbag.so"), not the filename-derived one.
+#
+# JunitTest_comphelper_complex and PythonTest_comphelper_python
+# (Module_comphelper.mk's gb_Module_add_subsequentcheck_targets) are a
+# completely different test-runner technology -- JUnit/Java and Python --
+# that this port has no infrastructure for anywhere (no JUnit runner, no
+# Python test harness). Deliberately deferred as their own category, not
+# silently dropped and not attempted here.
+
+# CppunitTest_comphelper_parallelsort_test.mk: 1 source, use_sdk_api (udkapi +
+# offapi), use_libraries comphelper cppuhelper cppu sal tl -- no use_ure, no
+# protectors needed.
+librestudio_add_cppunit_test(comphelper_parallelsort_test
+    SOURCES
+        comphelper/qa/unit/parallelsorttest
+    LIBRARIES comphelper cppuhelper cppu sal tl
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_comphelper_threadpool_test.mk: 1 source, use_sdk_api, same
+# use_libraries shape as comphelper_parallelsort_test above.
+librestudio_add_cppunit_test(comphelper_threadpool_test
+    SOURCES
+        comphelper/qa/unit/threadpooltest
+    LIBRARIES comphelper cppuhelper cppu sal tl
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_comphelper_syntaxhighlight_test.mk: 1 source, use_sdk_api,
+# use_libraries comphelper cppuhelper cppu sal (no tl here, unlike the two
+# above).
+librestudio_add_cppunit_test(comphelper_syntaxhighlight_test
+    SOURCES
+        comphelper/qa/unit/syntaxhighlighttest
+    LIBRARIES comphelper cppuhelper cppu sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_comphelper_variadictemplates_test.mk: 1 source, use_sdk_api,
+# same use_libraries shape as comphelper_syntaxhighlight_test above.
+librestudio_add_cppunit_test(comphelper_variadictemplates_test
+    SOURCES
+        comphelper/qa/unit/variadictemplates
+    LIBRARIES comphelper cppuhelper cppu sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_comphelper_ifcontainer.mk: 1 source, use_api udkapi ONLY (not
+# use_sdk_api -- no offapi include here), use_libraries comphelper cppu
+# cppuhelper sal.
+librestudio_add_cppunit_test(comphelper_ifcontainer
+    SOURCES
+        comphelper/qa/container/comphelper_ifcontainer
+    LIBRARIES comphelper cppu cppuhelper sal
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)
+
+# CppunitTest_comphelper_weakbag_test.mk: 1 source, use_api udkapi ONLY (same
+# shape as comphelper_ifcontainer above). Internal CppunitTest name is
+# "comphelper_weakbag" (see the file-mismatch note above), not
+# "comphelper_weakbag_test" -- used verbatim here.
+librestudio_add_cppunit_test(comphelper_weakbag
+    SOURCES
+        comphelper/qa/weakbag/test_weakbag
+    LIBRARIES comphelper cppu cppuhelper sal
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)
+
+# CppunitTest_comphelper_test.mk: registered in comphelper/CppunitTest_
+# deferred.cmake, NOT here, and include()'d from the root CMakeLists.txt well
+# after i18npool's own add_subdirectory(). Reason: this test needs use_
+# components i18npool/util/i18npool (gb_CppunitTest_use_components), now
+# wired via librestudio_add_cppunit_test()'s COMPONENTS parameter (cmake/
+# LibreStudioTest.cmake) -- but COMPONENTS resolves a component's built file
+# through a GLOBAL property that i18npool/CMakeLists.txt's own
+# librestudio_add_component() call sets, and i18npool is add_subdirectory()'d
+# AFTER comphelper in the root CMakeLists.txt's module order (i18npool links
+# comphelper, so the natural producer-before-consumer order runs comphelper
+# first). Defining comphelper_test here, at comphelper's own natural
+# position, would hit that property before i18npool has set it and abort
+# configure with librestudio_add_cppunit_test()'s own FATAL_ERROR. Moving
+# just this one test's registration to a deferred, later-included file is
+# the smaller, safer fix -- see comphelper/CppunitTest_deferred.cmake and its
+# include() call site in the root CMakeLists.txt for the rest.

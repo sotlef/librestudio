@@ -27,3 +27,35 @@ target_link_libraries(reg PRIVATE sal store)
 librestudio_set_library_output_name(reg reg OOO)
 
 install(TARGETS reg LIBRARY DESTINATION program)
+
+# registry_helper — StaticLibrary_registry_helper.mk.  Just the file: URL
+# parsing regview's command line needs; kept as its own tiny static library
+# upstream, so this port follows the same shape.
+add_library(registry_helper STATIC
+    "${CMAKE_SOURCE_DIR}/registry/tools/fileurl.cxx")
+
+target_include_directories(registry_helper PRIVATE
+    "${CMAKE_SOURCE_DIR}/registry/inc")
+
+# regview — Executable_regview.mk, the command-line .rdb dump tool.
+#
+# Executable_regview.mk's use_libraries is:
+#   reg $(if $(filter TRUE,$(DISABLE_DYNLOADING)),store)
+#       $(if $(filter TRUE,$(DISABLE_DYNLOADING)),salhelper) sal
+# DISABLE_DYNLOADING is not defined anywhere in this CMake port (confirmed by
+# grep), so, as codemaker/CMakeLists.txt's javamaker does for the same
+# construct, the DISABLE_DYNLOADING-only extras (store, salhelper) are
+# omitted: they come in transitively through reg's own link interface in the
+# builds where they matter, and reg already links them here (see above).
+add_executable(regview
+    "${CMAKE_SOURCE_DIR}/registry/tools/regview.cxx")
+
+target_include_directories(regview PRIVATE
+    "${CMAKE_SOURCE_DIR}/registry/inc")
+
+target_link_libraries(regview PRIVATE
+    registry_helper
+    reg
+    sal)
+
+install(TARGETS regview RUNTIME DESTINATION program)

@@ -134,6 +134,21 @@ set(SAL_TYPES_ALIGNMENT8 8)
 
 # bridges/source/cpp_uno/gcc3_* links against libstdc++'s ABI directly, so each
 # entry point it uses is probed separately.
+#
+# This whole probe is Itanium-C++-ABI-specific (cxxabi.h, __cxxabiv1::...),
+# which is what GCC/Clang/libstdc++ (and libc++) implement on Linux and macOS.
+# MSVC does not implement the Itanium ABI at all -- it has its own, unrelated
+# exception/RTTI ABI and no <cxxabi.h> -- so every check below would just fail
+# under cl.exe rather than answer anything useful; skipping the block under
+# MSVC turns that into "not attempted" instead of "attempted and failed". This
+# only matters once the mscx_uno bridge (which would need its own, entirely
+# different ABI probes, not these) exists to build against on Windows.
+#
+# The two lists of names are declared unconditionally (they are just symbol
+# names, nothing platform-specific), so that the "leave it a defined 0" loop
+# below still runs on MSVC and every HAVE_CXXABI_H_* macro config_cxxabi.h.in
+# expects still gets a value, just 0 for all of them, instead of an
+# `@HAVE_CXXABI_H_...@` left unsubstituted by configure_file().
 set(_cxxabi_functions
     CXA_GET_GLOBALS
     CXA_THROW
@@ -147,21 +162,23 @@ set(_cxxabi_types
     VMI_CLASS_TYPE_INFO
     BASE_CLASS_TYPE_INFO)
 
-foreach (_sym IN LISTS _cxxabi_functions)
-    string(TOLOWER "${_sym}" _lower)
-    check_cxx_source_compiles("
-        #include <cxxabi.h>
-        int main() { (void)&__cxxabiv1::__${_lower}; return 0; }
-    " HAVE_CXXABI_H_${_sym})
-endforeach ()
+if (NOT MSVC)
+    foreach (_sym IN LISTS _cxxabi_functions)
+        string(TOLOWER "${_sym}" _lower)
+        check_cxx_source_compiles("
+            #include <cxxabi.h>
+            int main() { (void)&__cxxabiv1::__${_lower}; return 0; }
+        " HAVE_CXXABI_H_${_sym})
+    endforeach ()
 
-foreach (_sym IN LISTS _cxxabi_types)
-    string(TOLOWER "${_sym}" _lower)
-    check_cxx_source_compiles("
-        #include <cxxabi.h>
-        int main() { (void)sizeof(__cxxabiv1::__${_lower}); return 0; }
-    " HAVE_CXXABI_H_${_sym})
-endforeach ()
+    foreach (_sym IN LISTS _cxxabi_types)
+        string(TOLOWER "${_sym}" _lower)
+        check_cxx_source_compiles("
+            #include <cxxabi.h>
+            int main() { (void)sizeof(__cxxabiv1::__${_lower}); return 0; }
+        " HAVE_CXXABI_H_${_sym})
+    endforeach ()
+endif ()
 
 foreach (_var IN LISTS _cxxabi_functions _cxxabi_types)
     if (NOT HAVE_CXXABI_H_${_var})
@@ -172,9 +189,21 @@ endforeach ()
 # --- remaining values --------------------------------------------------------
 
 # configmgr can read the configuration through dconf instead of through files.
-# Upstream turns that on when libdconf is found; there is no option for it here
-# yet, and dconf is not installed on this machine either.
-set(ENABLE_DCONF 0)
+# configure.ac's AC_ARG_ENABLE(dconf, ...) leaves enable_dconf unset by
+# default (--disable-dconf is the only way to turn it off), and the
+# PKG_CHECK_MODULES([DCONF], [dconf >= 0.40.0]) check right after treats
+# "unset" the same as "try to autodetect": the backend ends up on whenever
+# dconf is found and off otherwise. This build detects rather than hardcodes
+# it, the same "is this library installed" rule the CUPS/DBUS/GIO switches
+# below follow. dconf is not installed on this machine, so this reduces to
+# off here, but a machine that has it gets the feature without a rebuild
+# switch to flip.
+pkg_check_modules(DCONF dconf>=0.40.0)
+if (DCONF_FOUND)
+    set(ENABLE_DCONF 1)
+else ()
+    set(ENABLE_DCONF 0)
+endif ()
 
 # --- vcl's feature switches ---------------------------------------------------
 #
@@ -279,13 +308,129 @@ endif ()
 set(ENABLE_RANDR ${_enable_randr_default} CACHE BOOL
     "configure.ac's ENABLE_RANDR: the back end notices display changes")
 
+# The two switches below are not about what this machine has installed, but
+# about which slice of the LibreOffice feature matrix this port builds.
+# Upstream ties them to --enable-scripting and a BUILD_TYPE filter
+# (SCRIPTING, DBCONNECTIVITY) that gbuild's Module_*.mk files use to decide
+# which Library_*.mk targets even get added; this port had been resolving
+# that filter silently -- build the gated target unconditionally, with a
+# comment explaining why -- instead of through a real, testable switch. Both
+# default on, matching configure.ac's own default and this port's actual
+# behaviour so far, so flipping either off now is a real choice instead of an
+# unwritten one. (Turning either off does not yet remove anything: the
+# CMakeLists.txt files that consume them gate the specific target/source
+# subset each flag actually controls in upstream, per module.)
+option(ENABLE_SCRIPTING
+    "configure.ac's --enable-scripting (BUILD_TYPE's SCRIPTING filter): build the Basic/VBA object-model libraries (basctl, scripting, vbahelper, and the sc/sw VBA object libraries)" ON)
+option(ENABLE_DBCONNECTIVITY
+    "configure.ac's --enable-database-connectivity (BUILD_TYPE's DBCONNECTIVITY filter): build the database-facing pieces of connectivity/dbaccess/forms/svx/sw" ON)
+option(ENABLE_XMLHELP
+    "configure.ac's --enable-xmlhelp (defaults on for desktop builds): compile in sfx2's interactive Help (F1) wiring, which xmlhelp's ucpchelp1 UNO service backs at runtime" ON)
+
+# ENABLE_AVMEDIA follows the same "on by default, off only for a build this
+# port does not do" shape as ENABLE_DBCONNECTIVITY/ENABLE_XMLHELP above.
+# configure.ac:1648-1651 (AC_ARG_ENABLE(avmedia, ...)) defaults enable_avmedia
+# to "yes" whenever --disable-avmedia is not given
+# (`test "${enable_avmedia+set}" = set || enable_avmedia=yes`); the only place
+# that flips it to "no" is configure.ac:3461-3462, gated on
+# `$enable_wasm_strip = yes` -- a WASM-specific switch this desktop Linux
+# port never sets. configure.ac:3513-3515 then appends AVMEDIA to BUILD_TYPE
+# and AC_DEFINEs HAVE_FEATURE_AVMEDIA precisely when enable_avmedia = yes, so
+# a bare ./configure on this platform genuinely builds the AVMEDIA-gated part
+# of avmedia/Library_avmedia.mk. Default ON here matches that evidence.
+option(ENABLE_AVMEDIA
+    "configure.ac's --enable-avmedia (BUILD_TYPE's AVMEDIA filter, defaults on outside --enable-wasm-strip): build avmedia's media-player framework/viewer sources (mediacontrol, mediaplayer, mediatoolbox, soundhandler, mediawindow) and register avmedia.component, on top of the always-built mediaitem.cxx stub" ON)
+
+# ENABLE_ODK is the odd one out among this group: unlike --enable-scripting
+# (configure.ac:1667-1670, whose action-if-not-given literally does
+# `test "${enable_scripting+set}" = set || enable_scripting=yes`) and
+# --enable-database-connectivity (configure.ac:3521 tests
+# `!= no`, so an unset value still takes the "yes" branch),
+# libo_FUZZ_ARG_ENABLE(odk, ...) (configure.ac:1761-1764) sets no default at
+# all when the flag is absent: its action-if-not-given
+# (m4/libo_fuzz_configury.m4's libo_FUZZ_ARG_ENABLE) only assigns a value
+# when $enable_fuzz_options = yes (random fuzz-config selection), which is
+# not this build. And the later check, configure.ac:9966, is a strict
+# `test "$enable_odk" = yes` -- not `!= no` -- so a bare, unset
+# $enable_odk takes the "no" branch and BUILD_TYPE never gets ODK appended.
+# So a plain ./configure with no explicit --enable-odk genuinely defaults
+# this off, unlike SCRIPTING/DBCONNECTIVITY/XMLHELP above (this matches
+# what this port already found and recorded when it scoped unodevtools out
+# for the same reason). distro-configs/LibreOfficeLinux.conf -- the profile
+# this port's desktop-Linux target otherwise matches -- does pass
+# --enable-odk explicitly, but that is a packaging choice layered on top of
+# the bare default, not the default itself, so it is not reproduced here;
+# OFF is the honest bare-configure default. unoidl/CMakeLists.txt gates
+# unoidl-read and the unoidl-check_test CTest test on this; the odk module
+# itself would gate on it too, once ported.
+option(ENABLE_ODK
+    "configure.ac's --enable-odk (BUILD_TYPE's ODK filter): build the Office Development Kit tools (unoidl-read here; more once the odk module itself is ported). Off by default -- see the comment above for why this differs from ENABLE_SCRIPTING/ENABLE_DBCONNECTIVITY/ENABLE_XMLHELP's on-by-default matches of configure.ac" OFF)
+
+# ENABLE_ONLINE_UPDATE is the same shape as ENABLE_ODK, not the ENABLE_
+# SCRIPTING/ENABLE_DBCONNECTIVITY/ENABLE_XMLHELP group above: configure.ac
+# (~line 14650-14666, "Test whether to enable online update service") sets
+# ENABLE_ONLINE_UPDATE="TRUE" only when --enable-online-update is passed
+# explicitly ("if test "$enable_online_update" = ""; then ... AC_MSG_RESULT([no])"
+# -- an unset $enable_online_update takes the "no" branch, there is no
+# `action-if-not-given` that defaults it to "yes" the way --enable-scripting's
+# does), so a bare ./configure genuinely leaves this off. extensions/
+# CMakeLists.txt gates Library_updchk/Library_updatecheckui (and documents why
+# Configuration_updchk stays unported either way) on this; extensions/
+# CppunitTest_deferred.cmake gates CppunitTest_extensions_test_update on it too
+# (it gb_CppunitTest_use_library_objects's updchk, so it cannot exist unless
+# updchk itself is built).
+option(ENABLE_ONLINE_UPDATE
+    "configure.ac's --enable-online-update (off unless passed explicitly -- no bare-configure default the way --enable-scripting/--enable-database-connectivity/--enable-xmlhelp have one): build extensions' update-check UNO service (updchk) and its \"new version available\" notification dialog (updatecheckui)" OFF)
+
+# Unlike every switch above, this one's own upstream default is OFF outside
+# Windows (configure.ac: enable_pch=no unless $_os=WINNT) -- so defaulting
+# it off here is not a simplification of this port's own, it is what a bare
+# ./configure already does on this platform. pch/CMakeLists.txt and the
+# per-target target_precompile_headers(...) calls scattered across the tree
+# (wherever a module's own Library_*.mk called gb_*_set_precompiled_header
+# or gb_LinkTarget_use_common_precompiled_header) are all gated on it, so
+# flipping it on is the only way any of that machinery does anything.
+option(ENABLE_PCH
+    "configure.ac's --enable-pch (off by default except on Windows): compile translation units against a precompiled header, per-module where one exists, the shared pch/precompiled_system.hxx otherwise" OFF)
+
+# These four are narrower: each gates one optional source block in exactly
+# one or two already-ported libraries (sc's solver, sd's remote control),
+# tied to one external each. ENABLE_AVAHI follows the same detect-a-library
+# shape as ENABLE_GTK3/ENABLE_RANDR above; ENABLE_SDREMOTE_BLUETOOTH reuses
+# DBUS_GLIB_FOUND from the pkg_check_modules call earlier in this file rather
+# than probing dbus-glib-1 twice. ENABLE_SDREMOTE has no library to detect --
+# it is upstream's own on-by-default UI feature, present regardless of what
+# is installed -- so it is a plain default like ENABLE_GEN. ENABLE_COINMP
+# detects a solver back end this machine has no package for at all;
+# pkg_check_modules simply finds nothing, the same practical effect as a
+# hardcoded OFF but through the same detection code path as the others.
+pkg_check_modules(AVAHI_DETECT avahi-client)
+set(ENABLE_AVAHI ${AVAHI_DETECT_FOUND} CACHE BOOL
+    "configure.ac's ENABLE_AVAHI: build sd's Avahi remote-control discovery backend")
+
+pkg_check_modules(COINMP_DETECT coinmp)
+set(ENABLE_COINMP ${COINMP_DETECT_FOUND} CACHE BOOL
+    "configure.ac's --enable-coinmp: build sc solver's CoinMP-based solvers")
+
+set(ENABLE_SDREMOTE TRUE CACHE BOOL
+    "configure.ac's ENABLE_SDREMOTE (on by default): build Impress's remote-control server")
+
+if (DBUS_GLIB_FOUND)
+    set(_enable_sdremote_bluetooth_default TRUE)
+else ()
+    set(_enable_sdremote_bluetooth_default FALSE)
+endif ()
+set(ENABLE_SDREMOTE_BLUETOOTH ${_enable_sdremote_bluetooth_default} CACHE BOOL
+    "configure.ac's ENABLE_SDREMOTE_BLUETOOTH: build the Bluetooth transport for sd's remote control")
+
 
 # The header values are worked out separately, and have to be 0 or 1 rather than
 # TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
 # and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
 # same shape as HAVE_FEATURE_JAVA above.
 foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN
-        ENABLE_GTK3)
+        ENABLE_GTK3 ENABLE_SCRIPTING ENABLE_DBCONNECTIVITY ENABLE_XMLHELP
+        ENABLE_AVAHI ENABLE_AVMEDIA)
     if (${_switch})
         set(${_switch}_CONFIG 1)
     else ()
@@ -299,7 +444,25 @@ set(ENABLE_CAIRO_CANVAS 1)      # cairo is linked into libvcl through
 set(ENABLE_CAIRO_RGBA 0)        # Android's non-standard cairo pixel order
 set(ENABLE_CPDB 0)              # --enable-cpdb, off by default
 set(HAVE_FEATURE_DESKTOP 1)     # a desktop build: not iOS, not Android, not fuzzers
-set(HAVE_FEATURE_OPENCL 0)      # BUILD_TYPE is DESKTOP
+
+# Upstream ties this to a BUILD_TYPE of OPENCL, which this DESKTOP build
+# never has -- but opencl/ itself (Library_opencl, Executable_opencltest)
+# and its one dependency, the self-contained, already-vendored external/clew
+# (a small dlopen-based OpenCL loader shim, no network fetch, no external
+# deps beyond dlfcn.h), are both real, buildable targets on this platform.
+# Rather than leave this permanently tied to a BUILD_TYPE value this port
+# does not otherwise track, ENABLE_OPENCL is a real switch -- default ON,
+# since opencl/clew are genuinely built here, unlike the other BUILD_TYPE
+# values (SCRIPTING/DBCONNECTIVITY/XMLHELP) that mirror configure.ac's own
+# upstream default. Flipping it off would need sc/CMakeLists.txt's own
+# opencl-sourced block gated the same way (see sc/CMakeLists.txt).
+option(ENABLE_OPENCL
+    "Build opencl/clew: not part of this port's DESKTOP BUILD_TYPE upstream, but a real, locally-buildable target here" ON)
+if (ENABLE_OPENCL)
+    set(HAVE_FEATURE_OPENCL 1)
+else ()
+    set(HAVE_FEATURE_OPENCL 0)
+endif ()
 set(HAVE_MORE_FONTS 1)          # --with-fonts, yes by default
 set(HAVE_LIBCPP 0)              # this build uses libstdc++
 set(MPL_HAVE_SUBSET 0)          # --enable-mpl-subset, off by default
@@ -386,6 +549,14 @@ else ()
     set(SYSTEM_OPENSSL 1)
 endif ()
 
+# box2d ships no pkg-config file, only a CMake package-config (found via
+# find_package(box2d REQUIRED) in the root CMakeLists.txt, before this file is
+# included) -- its own Config.cmake sets box2d_VERSION_MAJOR/_MINOR from the
+# installed version, which slideshow's box2dtools.hxx needs at the
+# preprocessor level to pick its 2.x vs. 3.x API branch.
+set(BOX2D_MAJOR ${box2d_VERSION_MAJOR})
+set(BOX2D_MINOR ${box2d_VERSION_MINOR})
+
 # --- expansion ---------------------------------------------------------------
 
 # check_include_file and check_cxx_source_compiles leave their result variable
@@ -444,6 +615,7 @@ set(_config_headers
     config_vclplug
     config_afdko
     config_atspi
+    config_box2d
     config_cairo_canvas
     config_cairo_rgba
     config_cpdb
@@ -452,13 +624,16 @@ set(_config_headers
     config_eot
     config_feature_desktop
     config_feature_opencl
+    config_firebird
     config_fonts
     config_gio
     config_libcxx
     config_mpl
     config_skia
+    config_validation
     config_vendor
-    config_wasm_strip)
+    config_wasm_strip
+    config_zxing)
 
 foreach (_header IN LISTS _config_headers)
     configure_file(

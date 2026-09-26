@@ -9,7 +9,23 @@
 # cppuhelper/source/paths.cxx looks for a file called unorc in the directory of
 # the library it is linked into — not next to the executable, and not in an etc
 # directory — so this has to land in the office's program/ directory alongside
-# libcppuhelpergcc3.so.
+# libcppuhelper${LIBRESTUDIO_CPPU_ENV}.so (libcppuhelpergcc3.so on Linux and
+# macOS today; on Windows this would be cppuhelper${LIBRESTUDIO_CPPU_ENV}.dll,
+# i.e. cppuhelpermscx.dll, once the mscx_uno bridge referenced in
+# LibreStudioPlatform.cmake exists to link against).
+#
+# The filename itself is NOT "unorc" on every platform: include/sal/config.h's
+# SAL_CONFIGFILE(name) macro (which cppu::getUnoIniUri() in paths.cxx calls as
+# SAL_CONFIGFILE("uno")) expands to "unorc" under SAL_UNX (Linux, macOS, ...)
+# but to "uno.ini" under _WIN32 — so the real Windows filename would be
+# uno.ini, not unorc. getUnoIniUri() otherwise resolves the directory the same
+# way on Windows as on Linux (next to the library, via get_this_libpath()); the
+# extra MACOSX-only redirect into Resources/ure/etc does not apply there either.
+# TODO(windows): only the Linux content/filename below is actually generated;
+# nobody has verified whether the [Bootstrap] key names, the ${ORIGIN} token,
+# or CONFIGURATION_LAYERS' value syntax need to change for uno.ini, only that
+# the filename does. That is an open question for whoever picks up the
+# Windows bridge work, not resolved here.
 #
 # Upstream writes this file from instsetoo_native/CustomTarget_setup.mk, together
 # with fundamentalrc, sofficerc and friends, which carry the full installation

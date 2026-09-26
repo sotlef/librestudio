@@ -41,6 +41,12 @@ set(CPPCANVAS_SOURCES
 librestudio_expand_cxx(CPPCANVAS_SOURCES)
 add_library(cppcanvas SHARED ${CPPCANVAS_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(cppcanvas PRIVATE
+        "${CMAKE_SOURCE_DIR}/cppcanvas/inc/pch/precompiled_cppcanvas.hxx")
+    target_compile_definitions(cppcanvas PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(cppcanvas PRIVATE
     "${CMAKE_SOURCE_DIR}/cppcanvas/source/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"

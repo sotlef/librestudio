@@ -41,16 +41,35 @@ set(CONFIGMGR_SOURCES
     configmgr/source/xcsparser
     configmgr/source/xcuparser
     configmgr/source/xmldata
-    # Library_configmgr.mk adds these two the same conditional way:
-    #   $(if $(ENABLE_DCONF), configmgr/source/dconf)
-    #   $(if $(filter $(OS),WNT), configmgr/source/winreg)
-    # dconf is not installed here, and the Windows registry backend is Windows
-    # only.  With neither, the configuration is file-based, which is what the
-    # rest of this build expects anyway.
 )
+
+# Library_configmgr.mk adds these two the same conditional way:
+#   $(if $(ENABLE_DCONF), configmgr/source/dconf)
+#   $(if $(filter $(OS),WNT), configmgr/source/winreg)
+# ENABLE_DCONF is detected in LibreStudioConfigHeaders.cmake (autodetected via
+# pkg-config, the same "on when the library is found" rule configure.ac
+# applies); dconf is not installed on this machine, so this branch is dead
+# here but wired up for one that has it.  WIN32 is this build's equivalent of
+# configure.ac's $(OS) = WNT.
+if (ENABLE_DCONF)
+    list(APPEND CONFIGMGR_SOURCES configmgr/source/dconf)
+endif ()
+
+if (WIN32)
+    # Library_configmgr.mk's use_externals names nothing WNT-specific
+    # alongside this source file, so there is no extra Windows link library
+    # to add here.
+    list(APPEND CONFIGMGR_SOURCES configmgr/source/winreg)
+endif ()
 
 librestudio_expand_cxx(CONFIGMGR_SOURCES)
 add_library(configmgr SHARED ${CONFIGMGR_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(configmgr PRIVATE
+        "${CMAKE_SOURCE_DIR}/configmgr/inc/pch/precompiled_configmgr.hxx")
+    target_compile_definitions(configmgr PRIVATE PCH_LEVEL=2)
+endif ()
 
 target_include_directories(configmgr PRIVATE
     "${CMAKE_SOURCE_DIR}/configmgr/inc"
@@ -62,6 +81,16 @@ target_link_libraries(configmgr PRIVATE
     comphelper cppu cppuhelper i18nlangtag sal salhelper tl xmlreader
     Boost::boost)
 
+if (ENABLE_DCONF)
+    # Library_configmgr.mk's use_externals pulls in "dconf", which
+    # RepositoryExternal.mk's gb_LinkTarget__use_dconf resolves to plain
+    # DCONF_CFLAGS/DCONF_LIBS from configure.ac's
+    # PKG_CHECK_MODULES([DCONF], [dconf >= 0.40.0]) -- i.e. just the "dconf"
+    # pkg-config module itself, nothing else named alongside it.
+    pkg_check_modules(DCONF_LIB REQUIRED IMPORTED_TARGET dconf)
+    target_link_libraries(configmgr PRIVATE PkgConfig::DCONF_LIB)
+endif ()
+
 librestudio_add_component(configmgr
     COMPONENT "${CMAKE_SOURCE_DIR}/configmgr/source/configmgr.component"
     LIBRARY   configmgr
@@ -69,3 +98,9 @@ librestudio_add_component(configmgr
 
 librestudio_set_library_output_name(configmgr configmgr OOO)
 install(TARGETS configmgr LIBRARY DESTINATION program)
+
+# CppunitTest_configmgr_unit.mk: registered in configmgr/CppunitTest_
+# deferred.cmake, NOT here, include()'d from the root CMakeLists.txt only
+# after unoxml/ucb/test are all add_subdirectory()'d (use_components on
+# unoxml/ucb1/ucpfile1, use_libraries on test_fixtures + its protector
+# plug-ins) -- see that file for the full detail.

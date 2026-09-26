@@ -396,6 +396,12 @@ set(XO_SOURCES
 
 librestudio_expand_cxx(XO_SOURCES)
 add_library(xo SHARED ${XO_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(xo PRIVATE
+        "${CMAKE_SOURCE_DIR}/xmloff/inc/pch/precompiled_xo.hxx")
+    target_compile_definitions(xo PRIVATE PCH_LEVEL=2)
+endif ()
 add_dependencies(xo xmloff_generated)
 
 target_include_directories(xo PRIVATE

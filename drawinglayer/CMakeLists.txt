@@ -35,6 +35,12 @@ set(DRAWINGLAYERCORE_SOURCES
 librestudio_expand_cxx(DRAWINGLAYERCORE_SOURCES)
 add_library(drawinglayercore SHARED ${DRAWINGLAYERCORE_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(drawinglayercore PRIVATE
+        "${CMAKE_SOURCE_DIR}/drawinglayer/inc/pch/precompiled_drawinglayercore.hxx")
+    target_compile_definitions(drawinglayercore PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(drawinglayercore PRIVATE
     "${CMAKE_SOURCE_DIR}/drawinglayer/inc"
     "${OFFICECFG_INCLUDE_DIR}"
@@ -207,6 +213,12 @@ set(DRAWINGLAYER_SOURCES
 librestudio_expand_cxx(DRAWINGLAYER_SOURCES)
 add_library(drawinglayer SHARED ${DRAWINGLAYER_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(drawinglayer PRIVATE
+        "${CMAKE_SOURCE_DIR}/drawinglayer/inc/pch/precompiled_drawinglayer.hxx")
+    target_compile_definitions(drawinglayer PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(drawinglayer PRIVATE
     "${CMAKE_SOURCE_DIR}/drawinglayer/inc"
     "${OFFICECFG_INCLUDE_DIR}"
@@ -222,6 +234,19 @@ target_link_libraries(drawinglayer PRIVATE
     LibXml2::LibXml2
     PkgConfig::CAIRO)
 
+# Library_drawinglayer.mk: gb_Library_use_system_win32_libs(drawinglayer,
+# d2d1 dxguid) -- an unconditional call, but d2d1/dxguid (Direct2D) are
+# meaningless outside Windows, same reasoning as ucbhelper's Winhttp case --
+# plus the separate ifeq ($(OS),WNT) gb_Library_use_system_win32_libs(
+# drawinglayer, gdi32) block, which resolves to the same WIN32 condition in
+# practice. Kept structurally present, behind if (WIN32), per this port's
+# policy of not silently dropping Windows-only gbuild targets -- see
+# sal/CMakeLists.txt's sal_comtools for the same pattern. Inert on this
+# Linux build.
+if (WIN32)
+    target_link_libraries(drawinglayer PRIVATE d2d1 dxguid gdi32)
+endif ()
+
 librestudio_add_component(drawinglayer
     COMPONENT "${CMAKE_SOURCE_DIR}/drawinglayer/drawinglayer.component"
     LIBRARY   drawinglayer
@@ -229,3 +254,24 @@ librestudio_add_component(drawinglayer
 
 librestudio_set_library_output_name(drawinglayer drawinglayer OOO)
 install(TARGETS drawinglayer LIBRARY DESTINATION program)
+
+# --- CppunitTest ---------------------------------------------------------------
+#
+# 2 CppunitTest_*.mk files exist for drawinglayer (CppunitTest_drawinglayer_
+# processors.mk, CppunitTest_drawinglayer_border.mk); both are deferred to
+# drawinglayer/CppunitTest_deferred.cmake, NOT wired here, include()'d from
+# the root CMakeLists.txt only after ucb (both tests' use_components need
+# ucb1/ucpfile1; drawinglayer_processors additionally needs framework's fwk)
+# is add_subdirectory()'d -- configmgr's and i18npool's components, which
+# both tests also need, ARE already available at drawinglayer's own position
+# here, but ucb/framework are not. Defining either here would hit
+# librestudio_add_cppunit_test()'s COMPONENTS lookup (a GLOBAL property read
+# eagerly via get_property(GLOBAL ...)) before those modules have run, and
+# abort configure with its own FATAL_ERROR -- the same shape of problem
+# comphelper_test/sax_parser/svl_urihelper/etc. already hit (see svl/
+# CppunitTest_deferred.cmake's header comment, the closest precedent). See
+# drawinglayer/CppunitTest_deferred.cmake for the full per-test detail,
+# including the canvas::vclcanvas/canvas::Factory components
+# drawinglayer_processors needs but this port has not ported yet (flagged
+# there, not invented), and its include() call site in the root
+# CMakeLists.txt for why it sits where it does.

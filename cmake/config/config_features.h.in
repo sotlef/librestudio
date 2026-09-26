@@ -18,14 +18,34 @@ defined so that "#if HAVE_FEATURE_x" and "#ifdef HAVE_FEATURE_x" agree.
 #define CONFIG_FEATURES_H
 
 #define HAVE_FEATURE_AFDKO 0
-#define HAVE_FEATURE_AVMEDIA 0
-#define HAVE_FEATURE_DBCONNECTIVITY 0
-/* basic (sb) is built, matching BUILD_TYPE's default SCRIPTING entry
-   (configure.ac:3538, enable_scripting defaults to yes) -- SbiGlobals's
-   factory members (basic/source/inc/sbintern.hxx) only exist under this. */
-#define HAVE_FEATURE_SCRIPTING 1
+/* Formalized as ENABLE_AVMEDIA in cmake/LibreStudioConfigHeaders.cmake (plain
+   feature switch, default ON -- configure.ac:1648-1651 defaults
+   enable_avmedia to yes outside --enable-wasm-strip, and configure.ac:3513-
+   3515 appends AVMEDIA to BUILD_TYPE and AC_DEFINEs this exact macro under
+   that same condition). Not checked anywhere inside avmedia itself (the
+   framework picks a backend through UNO service lookup, not this
+   preprocessor macro), but avmedia/CMakeLists.txt gates the media-player
+   framework/viewer sources and the avmedia.component registration on the
+   same ENABLE_AVMEDIA switch, so leaving this at a fixed 0 would silently
+   disagree with what that library actually built the moment the flag is
+   read anywhere else. */
+#define HAVE_FEATURE_AVMEDIA @ENABLE_AVMEDIA_CONFIG@
+/* Both formalized as real CMake options (cmake/LibreStudioConfigHeaders.cmake,
+   ENABLE_DBCONNECTIVITY/ENABLE_SCRIPTING, both default ON) rather than
+   hardcoded literals -- basic (sb) is built, matching BUILD_TYPE's default
+   SCRIPTING entry (configure.ac:3538, enable_scripting defaults to yes) --
+   SbiGlobals's factory members (basic/source/inc/sbintern.hxx) only exist
+   under this. */
+#define HAVE_FEATURE_DBCONNECTIVITY @ENABLE_DBCONNECTIVITY_CONFIG@
+#define HAVE_FEATURE_SCRIPTING @ENABLE_SCRIPTING_CONFIG@
 #define HAVE_FEATURE_MULTIUSER_ENVIRONMENT @HAVE_FEATURE_MULTIUSER_ENVIRONMENT@
-#define HAVE_FEATURE_AVAHI 0
+/* Formalized as ENABLE_AVAHI in cmake/LibreStudioConfigHeaders.cmake
+   (autodetected from avahi-client.pc, currently absent -> 0) -- consumed by
+   sd/source/ui/remotecontrol/DiscoveryService.cxx, already built
+   unconditionally, so this must track ENABLE_AVAHI rather than stay a fixed
+   0 or the two would silently disagree the moment avahi-client is
+   installed. */
+#define HAVE_FEATURE_AVAHI @ENABLE_AVAHI_CONFIG@
 #define HAVE_FEATURE_MACOSX_SANDBOX 0
 #define HAVE_FEATURE_READONLY_INSTALLSET 0
 #define HAVE_FEATURE_BREAKPAD 0
@@ -37,7 +57,15 @@ defined so that "#if HAVE_FEATURE_x" and "#ifdef HAVE_FEATURE_x" agree.
 #define HAVE_FEATURE_POPPLER 0
 #define HAVE_FEATURE_UPDATE_MAR 0
 #define HAVE_FEATURE_ANDROID_LOK 0
-#define HAVE_FEATURE_XMLHELP 0
+/* Formalized as ENABLE_XMLHELP in cmake/LibreStudioConfigHeaders.cmake
+   (plain feature switch, default ON -- configure.ac:2379 defaults
+   enable_xmlhelp to yes on desktop builds, the hardcoded 0 here was just
+   autoheader's unconfigured template default). Not checked anywhere inside
+   xmlhelp itself, but sfx2/source/appl/app.cxx gates SfxHelp/
+   Application::SetHelp wiring on it, so leaving it at a fixed 0 would
+   silently compile out interactive Help (F1) even after xmlhelp's
+   ucpchelp1 is built and registered. */
+#define HAVE_FEATURE_XMLHELP @ENABLE_XMLHELP_CONFIG@
 #define HAVE_FEATURE_PAGEIN 0
 #define HAVE_FEATURE_JUMBO_SHEETS 0
 

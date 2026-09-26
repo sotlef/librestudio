@@ -58,3 +58,15 @@ librestudio_add_component(lng
 librestudio_set_library_output_name(lng lng OOO)
 
 install(TARGETS lng LIBRARY DESTINATION program)
+
+# CppunitTest_linguistic_restprotocol.mk: registered in linguistic/
+# CppunitTest_deferred.cmake, NOT here, include()'d from the root
+# CMakeLists.txt only after program_services_rdb exists (use_rdb(services))
+# and officecfg/test/unotest are add_subdirectory()'d (use_custom_headers/
+# use_configuration/use_ure), all well after linguistic's own position. See
+# that file for the full per-test detail and its include() call site in the
+# root CMakeLists.txt for why it sits where it does.
+#
+# JunitTest_linguistic_unoapi and JunitTest_linguistic_complex (Module_
+# linguistic.mk's subsequentcheck targets) are Java tests, out of scope like
+# every other JunitTest in this port.

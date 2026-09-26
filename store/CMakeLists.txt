@@ -31,3 +31,15 @@ target_link_libraries(store PRIVATE sal salhelper)
 librestudio_set_library_output_name(store store OOO)
 
 install(TARGETS store LIBRARY DESTINATION program)
+
+# --- store (CppunitTest) -------------------------------------------------------
+#
+# CppunitTest_store.mk: 1 source, use_libraries sal salhelper store.
+# No use_sdk_api/use_ure/use_vcl. Note the CppunitTest shares the plain name
+# "store" with the library target above -- gbuild's CppunitTest and Library
+# namespaces are separate, but CMake's is not, so this would collide if the
+# CppunitTest target were also literally named "store".
+librestudio_add_cppunit_test(store_test
+    SOURCES
+        store/qa/store
+    LIBRARIES sal salhelper store)

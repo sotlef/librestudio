@@ -27,3 +27,20 @@ target_link_options(salhelper PRIVATE
 librestudio_set_library_output_name(salhelper salhelper RT)
 
 install(TARGETS salhelper LIBRARY DESTINATION program)
+
+# --- salhelper_testapi --------------------------------------------------------
+#
+# CppunitTest_salhelper_testapi.mk: 2 sources, use_libraries salhelper sal.
+# No use_sdk_api/use_ure/use_vcl.
+#
+# Module_salhelper.mk:17-21 -- gb_Module_add_check_targets only registers this
+# under `ifneq ($(OS),iOS)`: iOS excludes it. Inert on this Linux build (the
+# condition is always true here), but kept faithful to the real gbuild gate
+# rather than added unconditionally.
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    librestudio_add_cppunit_test(salhelper_testapi
+        SOURCES
+            salhelper/qa/test_api
+            salhelper/qa/timer
+        LIBRARIES salhelper sal)
+endif ()

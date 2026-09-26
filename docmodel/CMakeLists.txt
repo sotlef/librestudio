@@ -26,6 +26,12 @@ set(DOCMODEL_SOURCES
 librestudio_expand_cxx(DOCMODEL_SOURCES)
 add_library(docmodel SHARED ${DOCMODEL_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(docmodel PRIVATE
+        "${CMAKE_SOURCE_DIR}/docmodel/inc/pch/precompiled_docmodel.hxx")
+    target_compile_definitions(docmodel PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(docmodel PRIVATE
     "${CMAKE_SOURCE_DIR}/docmodel/inc"
     "${FROZEN_INCLUDE_DIR}"

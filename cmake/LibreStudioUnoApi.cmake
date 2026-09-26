@@ -80,6 +80,42 @@ function(librestudio_uno_api_rdb name)
     set(${name}_RDB "${_rdb_OUTPUT}" CACHE INTERNAL "${name} type registry")
 endfunction ()
 
+# librestudio_uno_api_rdb_file(<name>
+#     IDL      <file.idl>       # a single loose .idl file
+#     OUTPUT   <file.rdb>
+#     [DEP_RDBS <rdb>...])
+#
+# Same job as librestudio_uno_api_rdb(), for the other shape
+# gb_InternalUnoApi_InternalUnoApi's second argument can take: a single loose
+# .idl file rather than a directory tree. unoidl::Manager::addProvider()
+# (unoidl/source/unoidl-write.cxx) accepts a lone .idl file directly -- the
+# entity's fully qualified name comes from the module{} nesting written
+# inside the file, not from its path -- so unlike librestudio_uno_api_rdb()
+# this needs no staging copy at all, just a direct unoidl-write invocation.
+# testtools/InternalUnoApi_bridgetest.mk and .../InternalUnoApi_performance.mk
+# are the two gbuild targets that use this shape (confirmed via
+# UnoApiTarget.mk's own "may be dir, though" comment on that argument).
+function(librestudio_uno_api_rdb_file name)
+    cmake_parse_arguments(_rdb "" "IDL;OUTPUT" "DEP_RDBS" ${ARGN})
+
+    if (NOT _rdb_IDL OR NOT _rdb_OUTPUT)
+        message(FATAL_ERROR "librestudio_uno_api_rdb_file(${name}): IDL and OUTPUT are required")
+    endif ()
+
+    get_filename_component(_rdb_out_dir "${_rdb_OUTPUT}" DIRECTORY)
+
+    add_custom_command(
+        OUTPUT "${_rdb_OUTPUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_rdb_out_dir}"
+        COMMAND "$<TARGET_FILE:unoidl-write>" ${_rdb_DEP_RDBS} "${_rdb_IDL}" "${_rdb_OUTPUT}"
+        DEPENDS unoidl-write "${_rdb_IDL}" ${_rdb_DEP_RDBS}
+        COMMENT "unoidl-write: ${name}.rdb"
+        VERBATIM)
+
+    add_custom_target(${name}_rdb DEPENDS "${_rdb_OUTPUT}")
+    set(${name}_RDB "${_rdb_OUTPUT}" CACHE INTERNAL "${name} type registry")
+endfunction ()
+
 # librestudio_uno_api_headers(<name>
 #     RDB     <file.rdb>
 #     OUTPUT_DIR <dir>
@@ -138,4 +174,58 @@ function(librestudio_uno_api_headers name)
     set(${name}_HEADERS_TARGET "${name}_headers" CACHE INTERNAL "${name} headers target")
     set(${name}_HEADERS_INCLUDE_DIR "${_hdr_OUTPUT_DIR}" CACHE INTERNAL
         "${name} generated C++ headers")
+endfunction ()
+
+# librestudio_uno_api_java(<name>
+#     RDB     <file.rdb>
+#     OUTPUT_DIR <dir>
+#     [EXTRA_RDBS <rdb>...])
+#
+# Runs javamaker over <rdb> and sets <name>_JAVA_TARGET and
+# <name>_JAVA_OUTPUT_DIR. Only used by the Java part of the UNO core (unoil,
+# ridljar), both gated behind LIBRESTUDIO_ENABLE_JAVA.
+#
+# Same idea as librestudio_uno_api_headers, minus the variant: javamaker takes
+# no -L/-C/bootstrap flag (unoil/CustomTarget_javamaker.mk and
+# ridljar/CustomTarget_javamaker.mk both just pass -O<dir> <rdb> [-X<rdb>]).
+# Unlike cppumaker, javamaker does not emit .java source text at all -- it
+# writes JVM .class bytecode directly (codemaker/source/javamaker/classfile.cxx,
+# writeClassFile() in javatype.cxx), so <name>_JAVA_OUTPUT_DIR is a ready-to-
+# package com/... class-file tree, not something a consumer still needs to
+# run javac over. That also means there is no -Gc leave-timestamp-alone flag
+# here either -- javamaker has no such option, and every upstream customtarget
+# that calls it does a plain `rm -r <dir> && javamaker ...` on each run.
+function(librestudio_uno_api_java name)
+    cmake_parse_arguments(_jm "" "RDB;OUTPUT_DIR" "EXTRA_RDBS" ${ARGN})
+
+    if (NOT _jm_RDB OR NOT _jm_OUTPUT_DIR)
+        message(FATAL_ERROR
+            "librestudio_uno_api_java(${name}): RDB and OUTPUT_DIR are required")
+    endif ()
+
+    set(_extra_flags "")
+    foreach (_extra IN LISTS _jm_EXTRA_RDBS)
+        list(APPEND _extra_flags "-X${_extra}")
+    endforeach ()
+
+    # javamaker writes one .java file per entity with no timestamp-preserving
+    # flag, so -- like upstream's own customtargets -- the output directory is
+    # wiped and fully regenerated on every run that the stamp file triggers.
+    set(_stamp "${_jm_OUTPUT_DIR}/.generated")
+
+    add_custom_command(
+        OUTPUT "${_stamp}"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${_jm_OUTPUT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_jm_OUTPUT_DIR}"
+        COMMAND "$<TARGET_FILE:javamaker>" "-O${_jm_OUTPUT_DIR}" "${_jm_RDB}" ${_extra_flags}
+        COMMAND ${CMAKE_COMMAND} -E touch "${_stamp}"
+        DEPENDS javamaker "${_jm_RDB}" ${_jm_EXTRA_RDBS}
+        COMMENT "javamaker: ${name}"
+        VERBATIM)
+
+    add_custom_target(${name}_java DEPENDS "${_stamp}")
+
+    set(${name}_JAVA_TARGET "${name}_java" CACHE INTERNAL "${name} java target")
+    set(${name}_JAVA_OUTPUT_DIR "${_jm_OUTPUT_DIR}" CACHE INTERNAL
+        "${name} generated Java sources")
 endfunction ()

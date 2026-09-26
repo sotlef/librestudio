@@ -274,6 +274,10 @@ set(LOCALEDATA_EURO_SOURCES
     "${I18NPOOL_LOCALEDATA_DIR}/localedata_wa_BE.cxx"
 )
 add_library(localedata_euro SHARED ${LOCALEDATA_EURO_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(localedata_euro REUSE_FROM precompiled_system)
+endif ()
 target_include_directories(localedata_euro PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_euro i18npool_localedata)
 target_link_libraries(localedata_euro PRIVATE sal localedata_en)
@@ -427,6 +431,10 @@ set(LOCALEDATA_OTHERS_SOURCES
     "${I18NPOOL_LOCALEDATA_DIR}/localedata_zu_ZA.cxx"
 )
 add_library(localedata_others SHARED ${LOCALEDATA_OTHERS_SOURCES})
+
+if (ENABLE_PCH)
+    target_precompile_headers(localedata_others REUSE_FROM precompiled_system)
+endif ()
 target_include_directories(localedata_others PRIVATE "${CMAKE_SOURCE_DIR}/i18npool/inc")
 add_dependencies(localedata_others i18npool_localedata)
 target_link_libraries(localedata_others PRIVATE sal localedata_en)

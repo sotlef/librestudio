@@ -81,6 +81,12 @@ set(PACKAGE2_SOURCES
 librestudio_expand_cxx(PACKAGE2_SOURCES)
 add_library(package2 SHARED ${PACKAGE2_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(package2 PRIVATE
+        "${CMAKE_SOURCE_DIR}/package/inc/pch/precompiled_package2.hxx")
+    target_compile_definitions(package2 PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(package2 PRIVATE
     "${CMAKE_SOURCE_DIR}/package/inc"
     "${ZSTD_INCLUDE_DIR}"
@@ -126,6 +132,12 @@ set(XSTOR_SOURCES
 librestudio_expand_cxx(XSTOR_SOURCES)
 add_library(xstor SHARED ${XSTOR_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(xstor PRIVATE
+        "${CMAKE_SOURCE_DIR}/package/inc/pch/precompiled_xstor.hxx")
+    target_compile_definitions(xstor PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(xstor PRIVATE
     "${CMAKE_SOURCE_DIR}/package/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -143,3 +155,25 @@ librestudio_add_component(xstor
 
 librestudio_set_library_output_name(xstor xstor OOO)
 install(TARGETS xstor LIBRARY DESTINATION program)
+
+# --- Package_dtd ---------------------------------------------------------------
+#
+# Package_dtd.mk: the single DTD the ODF manifest is validated against,
+# packaged verbatim into share/dtd/officedocument/1_0 -- the same
+# gb_Package_add_file destination and plain install(FILES ...) convention
+# already established for framework/CMakeLists.txt's and xmlscript/
+# CMakeLists.txt's own Package_dtd.mk ports (see either for the
+# LIBO_SHARE_FOLDER derivation; not repeated here). This was the one target
+# from Module_package.mk not yet ported (Library_package2/Library_xstor were
+# already wired above; verified against the live Module_package.mk, which
+# lists exactly these three targets and nothing else).
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/Manifest.dtd"
+    DESTINATION share/dtd/officedocument/1_0)
+
+# CppunitTest_package2_test.mk: registered in package/CppunitTest_
+# deferred.cmake, NOT here, include()'d from the root CMakeLists.txt only
+# after ucb is add_subdirectory()'d (use_components on ucb1/ucpfile1), well
+# after package's own position. See that file for the full per-test detail
+# and its include() call site in the root CMakeLists.txt for why it sits
+# where it does.

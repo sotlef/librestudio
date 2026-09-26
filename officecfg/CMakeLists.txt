@@ -59,7 +59,24 @@ foreach (_xcs IN LISTS OFFICECFG_XCS_FILES)
     list(APPEND OFFICECFG_HEADERS "${_out}")
 endforeach ()
 
-add_custom_target(officecfg_headers DEPENDS ${OFFICECFG_HEADERS})
+# officecfg_qa_allheaders.hxx (CustomTarget_registry.mk lines ~22-28): one
+# "#include <officecfg/<name>.hxx>" line per header generated above, in the
+# same order as OFFICECFG_XCS_FILES. Used only by officecfg/qa/cppheader.cxx
+# (CppunitTest_officecfg_cppheader_test.mk, wired below) as a "do all the
+# generated headers coexist without name clashes" smoke test. Written
+# directly at configure time, the same way this file already writes
+# OFFICECFG_MAIN_LIST/OFFICECFG_MAIN_SED further down -- OFFICECFG_XCS_FILES
+# is already known here and does not need a build-time step to enumerate.
+set(OFFICECFG_QA_ALLHEADERS "${OFFICECFG_HEADER_ROOT}/officecfg_qa_allheaders.hxx")
+set(_officecfg_qa_allheaders_content "")
+foreach (_xcs IN LISTS OFFICECFG_XCS_FILES)
+    string(REGEX REPLACE "\\.xcs$" "" _base "${_xcs}")
+    string(APPEND _officecfg_qa_allheaders_content "#include <officecfg/${_base}.hxx>\n\n")
+endforeach ()
+file(WRITE "${OFFICECFG_QA_ALLHEADERS}" "${_officecfg_qa_allheaders_content}")
+unset(_officecfg_qa_allheaders_content)
+
+add_custom_target(officecfg_headers DEPENDS ${OFFICECFG_HEADERS} "${OFFICECFG_QA_ALLHEADERS}")
 
 set(OFFICECFG_INCLUDE_DIR "${OFFICECFG_INCLUDE_DIR}" CACHE INTERNAL
     "officecfg generated configuration headers")
@@ -785,4 +802,64 @@ add_custom_target(officecfg_registry ALL
     DEPENDS "${LIBRESTUDIO_REGISTRY_DIR}/main.xcd"
             ${OFFICECFG_XCS_OUTPUTS} ${OFFICECFG_XCU_OUTPUTS}
             ${OFFICECFG_XCM_OUTPUTS})
+
+# --- Package_misc ---------------------------------------------------------
+#
+# Package_misc.mk: three *.xcd.sample files packaged verbatim (no xsltproc
+# pass -- these are hand-authored LDAP/Windows-user-info templates, not
+# schema/data compiled through the registry pipeline above) into
+# $(LIBO_SHARE_FOLDER)/registry, i.e. share/registry (OFFICECFG_SHARE_FOLDER
+# above). Plain install(FILES ...), this port's established convention for a
+# handful of static files (see e.g. udkapi/CMakeLists.txt, oovbaapi/
+# CMakeLists.txt) -- no generic Package helper needed for three files.
+# oo-winuser.xcd.sample is WNT-only in the .mk (`ifeq ($(OS),WNT)`), kept
+# behind the same if(WIN32) this port's now-open platform-scope policy uses
+# elsewhere (see cmake/LibreStudioPlatform.cmake) rather than silently
+# dropped.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/registry/schema/oo-ldap.xcd.sample"
+    "${CMAKE_CURRENT_SOURCE_DIR}/registry/schema/oo-ad-ldap.xcd.sample"
+    DESTINATION "${OFFICECFG_SHARE_FOLDER}/registry")
+if (WIN32)
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/registry/schema/oo-winuser.xcd.sample"
+        DESTINATION "${OFFICECFG_SHARE_FOLDER}/registry")
+endif ()
+
+# --- CppunitTest targets ---------------------------------------------------
+#
+# officecfg's 2 CppunitTest_*.mk files (Module_officecfg.mk's gb_Module_
+# add_check_targets list), checked directly against their live .mk files.
+
+# CppunitTest_officecfg_cppheader_test.mk: 1 source (officecfg/qa/cppheader),
+# use_custom_headers officecfg/registry (OFFICECFG_INCLUDE_DIR, so
+# <officecfg/officecfg_qa_allheaders.hxx> resolves), use_api udkapi (normal
+# variant -- use_api, not use_sdk_api, but this port's o3tl/basegfx precedent
+# already maps gb_*_use_api($1,udkapi ...) the same way use_sdk_api's udkapi
+# half does: the "normal" header variant), use_externals boost_headers
+# (header-only, nothing to link). No use_libraries at all in the .mk -- not a
+# guess, re-checked directly -- so LIBRARIES is left empty here too: every
+# CppunitTest already gets PkgConfig::CPPUNIT unconditionally (see cmake/
+# LibreStudioTest.cmake's own header comment on gb_STDLIBS), and this test's
+# only translation unit includes nothing beyond the generated officecfg
+# headers plus bare cppunit macros. No use_ure/use_vcl*/use_rdb/
+# use_configuration either, so no PROTECTORS/CONFIGURATION.
+librestudio_add_cppunit_test(officecfg_cppheader_test
+    SOURCES
+        officecfg/qa/cppheader
+    INCLUDE
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS officecfg_headers udkapi_normal_headers)
+
+# CppunitTest_officecfg_accelerator_key_checker_test.mk: RESOLVED, but not
+# wired here -- now ported (subsequenttest, its former blocker, exists as a
+# real target: test/CMakeLists.txt's add_library(subsequenttest SHARED ...)),
+# but it also calls use_rdb(services), which needs the program_services_rdb
+# target that only exists near the very end of the root CMakeLists.txt, well
+# after officecfg's own add_subdirectory() position -- so it is registered
+# from officecfg/CppunitTest_deferred.cmake instead, include()'d from the
+# root CMakeLists.txt at that later point (see that file for the full
+# per-test detail and the root CMakeLists.txt include() call site for the
+# ordering rationale).
 

@@ -188,6 +188,12 @@ librestudio_expand_cxx(FWK_SOURCES)
 
 add_library(fwk SHARED ${FWK_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(fwk PRIVATE
+        "${CMAKE_SOURCE_DIR}/framework/inc/pch/precompiled_fwk.hxx")
+    target_compile_definitions(fwk PRIVATE PCH_LEVEL=2)
+endif ()
+
 # gb_Library_set_include plus gb_Library_use_sdk_api and
 # gb_Library_use_custom_headers(... officecfg/registry).
 target_include_directories(fwk PRIVATE
@@ -209,6 +215,17 @@ if (LIBRESTUDIO_ENABLE_BREAKPAD)
     target_link_libraries(fwk PRIVATE crashreport)
 endif ()
 
+# Library_fwk.mk: ifeq ($(OS),WNT) gb_Library_use_system_win32_libs,fwk,
+# advapi32 endif. Kept structurally present, behind if (WIN32), per this
+# port's policy of not silently dropping Windows-only gbuild targets -- see
+# sal/CMakeLists.txt's sal_comtools for the same structural-but-inert
+# pattern and the Windows/MSVC research explaining why this cannot actually
+# be built or exercised on this machine (no cl.exe/ml64.exe/SDK). Inert on
+# this Linux build: the if (WIN32) block below never executes here.
+if (WIN32)
+    target_link_libraries(fwk PRIVATE advapi32)
+endif ()
+
 # gb_Library_add_componentimpl,fwk,autorecovery -- fwk.component marks the
 # AutoRecovery implementation <optional/>, and fwk.component.autorecovery
 # names it as one this build does provide.
@@ -221,3 +238,65 @@ librestudio_add_component(fwk
 librestudio_set_library_output_name(fwk fwk OOO)
 
 install(TARGETS fwk LIBRARY DESTINATION program)
+
+# --- Package_dtd --------------------------------------------------------------
+#
+# Package_dtd.mk: the 7 DTDs framework's own XML formats (accelerator config,
+# event binding, menubar/toolbar/statusbar config, images, group-UI-names)
+# are validated against, packaged verbatim into share/dtd/officedocument/1_0
+# -- same gb_Package_add_files destination and plain install(FILES ...)
+# convention already established for xmlscript/CMakeLists.txt's own
+# Package_dtd.mk port (see that file's comment for the LIBO_SHARE_FOLDER
+# derivation; not repeated here).
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/accelerator.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/event.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/groupuinames.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/image.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/menubar.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/statusbar.dtd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dtd/toolbar.dtd"
+    DESTINATION share/dtd/officedocument/1_0)
+
+# --- UIConfig_startmodule -----------------------------------------------------
+#
+# UIConfig_startmodule.mk: 1 menubar config file (framework/uiconfig/
+# startmodule/menubar/menubar.xml) packaged for the "modules/StartModule"
+# UIConfig via gb_UIConfig_add_menubarfiles. gb_UIConfig_add_menubarfile
+# expands the destination to $(gb_UIConfig_INSTDIR)/$(1)/menubar/
+# $(notdir $(2)).xml (solenv/gbuild/UIConfig.mk), i.e.
+# share/config/soffice.cfg/modules/StartModule/menubar/menubar.xml --
+# gb_UIConfig_INSTDIR being $(LIBO_SHARE_FOLDER)/config/soffice.cfg, the same
+# "share/config/soffice.cfg" root UIConfig_svt's/UIConfig_vcl's own
+# install(FILES ... DESTINATION share/config/soffice.cfg/<module>/ui) blocks
+# already use (svtools/CMakeLists.txt, vcl/CMakeLists.txt), just with
+# "menubar" in place of "ui" as the leaf directory and "modules/StartModule"
+# in place of a plain module name. gb_UIMenubarTarget__command on this port's
+# unxgcc.mk platform is a plain "cp $(3) $(1)" (solenv/gbuild/platform/
+# unxgcc.mk:426-432) -- no transformation happens on Linux -- so a plain
+# install(FILES ...) copy is the exact equivalent, not an approximation.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/startmodule/menubar/menubar.xml"
+    DESTINATION share/config/soffice.cfg/modules/StartModule/menubar)
+
+# --- CppunitTest targets -------------------------------------------------------
+#
+# All 5 of framework's CppunitTest_*.mk files (dispatch, loadenv, CheckXTitle,
+# accelerators, services), re-checked directly against their live .mk files
+# rather than trusted from any prior summary, call use_sdk_api, use_ure +
+# use_vcl (3 protector pairs), use_rdb(services) and use_configuration. None
+# calls use_components/set_include. use_rdb(services) needs no COMPONENTS --
+# see scaddins/CppunitTest_deferred.cmake's header comment for what this port
+# makes of that (a DEPENDS on program_services_rdb, the whole-services.rdb
+# ini-default fallback) -- but use_configuration still needs
+# LIBRESTUDIO_TEST_UNITTEST_DIR (test/CMakeLists.txt's staged test/
+# user-template copy) and program_services_rdb itself is not a real target
+# until the very end of the root CMakeLists.txt, both well AFTER framework's
+# own add_subdirectory() (root CMakeLists.txt line ~523, long before
+# add_subdirectory(test) at ~688 or program_services_rdb's own definition).
+# So none of these 5 can be registered here directly -- all 5 are deferred
+# into framework/CppunitTest_deferred.cmake, include()'d from the root
+# CMakeLists.txt at the same point as vcl's/svtools' own use_rdb(services)
+# tests; see that file for the per-test detail, including framework_services'
+# ifneq($(OS),MACOSX) exclusion (Module_framework.mk) preserved there as
+# if (NOT APPLE).

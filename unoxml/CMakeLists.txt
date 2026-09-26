@@ -45,6 +45,12 @@ set(UNOXML_SOURCES
 librestudio_expand_cxx(UNOXML_SOURCES)
 add_library(unoxml SHARED ${UNOXML_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(unoxml PRIVATE
+        "${CMAKE_SOURCE_DIR}/unoxml/inc/pch/precompiled_unoxml.hxx")
+    target_compile_definitions(unoxml PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(unoxml PRIVATE
     "${CMAKE_SOURCE_DIR}/unoxml/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"

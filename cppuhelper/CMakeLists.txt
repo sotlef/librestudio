@@ -69,6 +69,12 @@ librestudio_expand_cxx(CPPUHELPER_SOURCES)
 
 add_library(cppuhelper SHARED ${CPPUHELPER_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(cppuhelper PRIVATE
+        "${CMAKE_SOURCE_DIR}/cppuhelper/inc/pch/precompiled_cppuhelper.hxx")
+    target_compile_definitions(cppuhelper PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(cppuhelper BEFORE PRIVATE
     "${CMAKE_SOURCE_DIR}/cppuhelper/inc"
     "${cppuhelper_unotypes_comprehensive_HEADERS_INCLUDE_DIR}"
@@ -82,6 +88,22 @@ add_dependencies(cppuhelper
 
 target_compile_definitions(cppuhelper PRIVATE CPPUHELPER_DLLIMPLEMENTATION)
 
+# Library_cppuhelper.mk:
+#   ifeq ($(OS),iOS)
+#   $(eval $(call gb_Library_add_cxxflags,cppuhelper, $(gb_OBJCXXFLAGS) ))
+#   endif
+#
+# gb_OBJCXXFLAGS is a real, confirmed value, not a guess: it is defined once
+# per platform file, and solenv/gbuild/platform/iOS.mk:60 sets it to exactly
+# `-x objective-c++` (no -fobjc-exceptions -- that extra flag is only added
+# by the sibling macosx.mk:59 definition, which does not apply here). This
+# is structurally present but inert on this Linux build (CMAKE_SYSTEM_NAME
+# is never "iOS" here), same status as the rest of this port's iOS/Android/
+# Windows branches -- see sal/CMakeLists.txt's own header comment.
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    target_compile_options(cppuhelper PRIVATE "-x" "objective-c++")
+endif ()
+
 target_link_libraries(cppuhelper PRIVATE
     findsofficepath
     cppu reg sal salhelper unoidl xmlreader
@@ -93,3 +115,50 @@ target_link_options(cppuhelper PRIVATE
 librestudio_set_library_output_name(cppuhelper cppuhelper RT)
 
 install(TARGETS cppuhelper LIBRARY DESTINATION program)
+
+# --- CppunitTest targets ------------------------------------------------------
+#
+# cppuhelper's 4 CppunitTest_*.mk files, ported via
+# librestudio_add_cppunit_test() (cmake/LibreStudioTest.cmake). All 4 were
+# re-checked directly against their live .mk files before wiring. None of
+# them call use_internal_comprehensive_api or use_ure -- gb_CppunitTest_use_api
+# here always means the plain "normal" udkapi variant (see cppu/CMakeLists.txt's
+# CppunitTest section header comment for why use_api resolves to "normal", not
+# "comprehensive").
+
+# CppunitTest_cppuhelper_cppu_ifcontainer.mk: 1 source, use_libraries cppu
+# cppuhelper sal, use_api udkapi -> plain udkapi.
+librestudio_add_cppunit_test(cppuhelper_cppu_ifcontainer
+    SOURCES
+        cppuhelper/qa/ifcontainer/cppu_ifcontainer
+    LIBRARIES cppu cppuhelper sal
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)
+
+# CppunitTest_cppuhelper_cppu_unourl.mk: 1 source, use_libraries cppu
+# cppuhelper sal, no use_api call at all -- confirmed by reading the .mk file
+# in full, matching cppuhelper/qa/unourl/cppu_unourl.cxx's own #include list
+# (cppuhelper/unourl.hxx, rtl/*, sal/types.h -- nothing generated). No API
+# header wiring needed for this one.
+librestudio_add_cppunit_test(cppuhelper_cppu_unourl
+    SOURCES
+        cppuhelper/qa/unourl/cppu_unourl
+    LIBRARIES cppu cppuhelper sal)
+
+# CppunitTest_cppuhelper_qa_misc.mk: 1 source, use_libraries cppu cppuhelper
+# sal, use_api udkapi -> plain udkapi.
+librestudio_add_cppunit_test(cppuhelper_qa_misc
+    SOURCES
+        cppuhelper/qa/misc/test_misc
+    LIBRARIES cppu cppuhelper sal
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)
+
+# CppunitTest_cppuhelper_qa_weak.mk: 1 source, use_libraries cppu cppuhelper
+# sal, use_api udkapi -> plain udkapi.
+librestudio_add_cppunit_test(cppuhelper_qa_weak
+    SOURCES
+        cppuhelper/qa/weak/test_weak
+    LIBRARIES cppu cppuhelper sal
+    INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers)

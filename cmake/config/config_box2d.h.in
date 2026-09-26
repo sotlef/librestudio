@@ -1,0 +1,19 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreOffice project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+#ifndef INCLUDED_CONFIG_BOX2D_H
+#define INCLUDED_CONFIG_BOX2D_H
+
+#define BOX2D_MAJOR @BOX2D_MAJOR@
+#define BOX2D_MINOR @BOX2D_MINOR@
+#define BOX2D_HEADER <box2d/box2d.h>
+
+#endif
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

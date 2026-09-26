@@ -63,6 +63,12 @@ set(SVGIO_SOURCES
 librestudio_expand_cxx(SVGIO_SOURCES)
 add_library(svgio SHARED ${SVGIO_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(svgio PRIVATE
+        "${CMAKE_SOURCE_DIR}/svgio/inc/pch/precompiled_svgio.hxx")
+    target_compile_definitions(svgio PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(svgio PRIVATE
     "${CMAKE_SOURCE_DIR}/svgio/inc"
     "${OFFICECFG_INCLUDE_DIR}"

@@ -8,7 +8,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /*
 Whether the OpenCL-backed implementations are built.  Upstream turns them on
-for a BUILD_TYPE of OPENCL; this build is DESKTOP.
+for a BUILD_TYPE of OPENCL, which this DESKTOP build never has -- but
+ENABLE_OPENCL (cmake/LibreStudioConfigHeaders.cmake) tracks whether
+opencl/clew are actually built here regardless, since both are real,
+locally-buildable targets on this platform.
 */
 
 #ifndef CONFIG_FEATURE_OPENCL_H

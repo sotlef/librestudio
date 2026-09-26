@@ -11,46 +11,55 @@
 # precompiled header, and the WNT/WNTINTEL-only asm/dllmgr variants -- this is
 # a non-Windows build, so dllmgr-none is the one that applies unconditionally.
 
-set(SB_SOURCES
-    # ifneq ($(filter SCRIPTING,$(BUILD_TYPE)),) -- applies: enable_scripting
-    # defaults to yes, so configure.ac appends SCRIPTING to BUILD_TYPE.
-    basic/source/basmgr/basicmanagerrepository
-    basic/source/basmgr/basmgr
-    basic/source/basmgr/vbahelper
-    basic/source/classes/codecompletecache
-    basic/source/classes/eventatt
-    basic/source/classes/image
-    basic/source/classes/propacc
-    basic/source/classes/sb
-    basic/source/classes/sbunoobj
-    basic/source/classes/sbxmod
-    basic/source/comp/buffer
-    basic/source/comp/codegen
-    basic/source/comp/dim
-    basic/source/comp/exprtree
-    basic/source/comp/exprgen
-    basic/source/comp/exprnode
-    basic/source/comp/io
-    basic/source/comp/loops
-    basic/source/comp/parser
-    basic/source/comp/sbcomp
-    basic/source/comp/scanner
-    basic/source/comp/symtbl
-    basic/source/comp/token
-    basic/source/uno/dlgcont
-    basic/source/uno/modsizeexceeded
-    basic/source/uno/namecont
-    basic/source/uno/scriptcont
-    basic/source/runtime/comenumwrapper
-    basic/source/runtime/ddectrl
-    basic/source/runtime/inputbox
-    basic/source/runtime/iosys
-    basic/source/runtime/props
-    basic/source/runtime/stdobj
-    basic/source/runtime/stdobj1
-    basic/source/classes/errobject
-    basic/source/util/sbutil
+# ifneq ($(filter SCRIPTING,$(BUILD_TYPE)),) in Library_sb.mk gates this
+# chunk of exception objects (and, further below, the sb.component
+# registration itself -- dlgcont/scriptcont implement the two services
+# sb.component declares, so without these sources there is nothing to
+# register). ENABLE_SCRIPTING defaults ON (matching configure.ac), so this
+# is included by default; see cmake/LibreStudioConfigHeaders.cmake.
+set(SB_SOURCES)
+if (ENABLE_SCRIPTING)
+    list(APPEND SB_SOURCES
+        basic/source/basmgr/basicmanagerrepository
+        basic/source/basmgr/basmgr
+        basic/source/basmgr/vbahelper
+        basic/source/classes/codecompletecache
+        basic/source/classes/eventatt
+        basic/source/classes/image
+        basic/source/classes/propacc
+        basic/source/classes/sb
+        basic/source/classes/sbunoobj
+        basic/source/classes/sbxmod
+        basic/source/comp/buffer
+        basic/source/comp/codegen
+        basic/source/comp/dim
+        basic/source/comp/exprtree
+        basic/source/comp/exprgen
+        basic/source/comp/exprnode
+        basic/source/comp/io
+        basic/source/comp/loops
+        basic/source/comp/parser
+        basic/source/comp/sbcomp
+        basic/source/comp/scanner
+        basic/source/comp/symtbl
+        basic/source/comp/token
+        basic/source/uno/dlgcont
+        basic/source/uno/modsizeexceeded
+        basic/source/uno/namecont
+        basic/source/uno/scriptcont
+        basic/source/runtime/comenumwrapper
+        basic/source/runtime/ddectrl
+        basic/source/runtime/inputbox
+        basic/source/runtime/iosys
+        basic/source/runtime/props
+        basic/source/runtime/stdobj
+        basic/source/runtime/stdobj1
+        basic/source/classes/errobject
+        basic/source/util/sbutil
+    )
+endif ()
 
+list(APPEND SB_SOURCES
     basic/source/classes/global
     basic/source/classes/sbintern
     basic/source/comp/basiccharclass
@@ -84,6 +93,12 @@ librestudio_expand_cxx(SB_SOURCES)
 
 add_library(sb SHARED ${SB_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(sb PRIVATE
+        "${CMAKE_SOURCE_DIR}/basic/inc/pch/precompiled_sb.hxx")
+    target_compile_definitions(sb PRIVATE PCH_LEVEL=2)
+endif ()
+
 # gb_Library_set_include plus gb_Library_use_sdk_api,
 # gb_Library_use_api(sb, oovbaapi), and
 # gb_Library_use_custom_headers(... officecfg/registry).
@@ -104,10 +119,17 @@ target_link_libraries(sb PRIVATE
     vcl xmlscript
     ICU::uc ICU::i18n)
 
-librestudio_add_component(sb
-    COMPONENT "${CMAKE_SOURCE_DIR}/basic/util/sb.component"
-    LIBRARY   sb
-    LAYER     OOO)
+# Library_sb.mk's gb_Library_set_componentfile call sits inside the same
+# SCRIPTING ifneq block as the sources above (its two declared services are
+# implemented by dlgcont.cxx/scriptcont.cxx, which only exist in the build
+# when ENABLE_SCRIPTING is ON), so the componentfile registration is gated
+# the same way.
+if (ENABLE_SCRIPTING)
+    librestudio_add_component(sb
+        COMPONENT "${CMAKE_SOURCE_DIR}/basic/util/sb.component"
+        LIBRARY   sb
+        LAYER     OOO)
+endif ()
 
 librestudio_set_library_output_name(sb sb OOO)
 

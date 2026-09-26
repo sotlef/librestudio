@@ -39,6 +39,12 @@ set(CANVASTOOLS_SOURCES
 librestudio_expand_cxx(CANVASTOOLS_SOURCES)
 add_library(canvastools SHARED ${CANVASTOOLS_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(canvastools PRIVATE
+        "${CMAKE_SOURCE_DIR}/canvas/inc/pch/precompiled_canvastools.hxx")
+    target_compile_definitions(canvastools PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(canvastools PRIVATE
     "${CMAKE_SOURCE_DIR}/canvas/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"

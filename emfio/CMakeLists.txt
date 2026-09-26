@@ -19,6 +19,12 @@ set(EMFIO_SOURCES
 librestudio_expand_cxx(EMFIO_SOURCES)
 add_library(emfio SHARED ${EMFIO_SOURCES})
 
+if (ENABLE_PCH)
+    target_precompile_headers(emfio PRIVATE
+        "${CMAKE_SOURCE_DIR}/emfio/inc/pch/precompiled_emfio.hxx")
+    target_compile_definitions(emfio PRIVATE PCH_LEVEL=2)
+endif ()
+
 target_include_directories(emfio PRIVATE
     "${CMAKE_SOURCE_DIR}/emfio/inc"
     "${OFFICECFG_INCLUDE_DIR}"
