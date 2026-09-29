@@ -56,7 +56,7 @@ target_link_libraries(ucpchelp1 PRIVATE
     EXPAT::EXPAT
     LibXml2::LibXml2
     PkgConfig::LIBXSLT
-    PkgConfig::LIBCLUCENE_CORE)
+    ${LIBRESTUDIO_CLUCENE_TARGET})
 
 librestudio_add_component(ucpchelp1
     COMPONENT "${CMAKE_SOURCE_DIR}/xmlhelp/util/ucpchelp1.component"

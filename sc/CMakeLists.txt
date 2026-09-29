@@ -29,8 +29,8 @@
 #                                 ON (cmake/LibreStudioConfigHeaders.cmake), so
 #                                 vbaobj is still built by default.
 #
-# Status (2026-09-26): all five targets below are ported. Two exclusions
-# remain, plus one gate now flipped ON:
+# Status (2026-09-26): all five targets below are ported. One exclusion
+# remains, plus two gates now flipped ON:
 #  * OPENCL (sc's 10-file sc/source/core/opencl/* block, and the clew/opencl
 #    use_externals/use_libraries entries that go with it) -- gb_Helper_optional
 #    guarded. Formerly excluded ("no clew port"); as of this wave, opencl/clew
@@ -39,8 +39,14 @@
 #    `if (ENABLE_OPENCL)` guards around SC_SOURCES and target_link_libraries
 #    below, both real, toggleable conditionals (not hardcoded).
 #  * CoinMP (solver's CoinMPSolver/CoinMPModel/SlpSolver, and the coinmp
-#    external) -- gb_Helper_optional(ENABLE_COINMP, ...) guarded, not defined
-#    in this port.
+#    external) -- gb_Helper_optional(ENABLE_COINMP, ...) guarded. 2026-09-28:
+#    now real, see "solver -- Library_solver.mk" below -- ENABLE_COINMP
+#    defaults ON (matching configure.ac's own real default on a Linux
+#    desktop build), system coinmp+coinutils preferred, external/coinmp/'s
+#    download.lst tarball (a genuine autotools `./configure && make` over
+#    the whole COIN-OR tree, not a file-list compile) built otherwise -- no
+#    system coinmp package exists on this platform, so that is always the
+#    path taken here.
 #  * vbaobj's Module_sc.mk-level SCRIPTING gate -- this port does not track
 #    the SCRIPTING build-type switch, so vbaobj is built unconditionally (its
 #    own Library_vbaobj.mk carries no internal gate once reached).
@@ -54,7 +60,9 @@
 #
 # External packages consumed (all resolved via directory-local
 # pkg_check_modules(... IMPORTED_TARGET ...), per this port's convention):
-#  * md4c (sc's own use_externals, not just sw's) -- `pkg-config md4c`.
+#  * md4c (sc's own use_externals, not just sw's) -- LIBRESTUDIO_MD4C_TARGET/
+#    LIBRESTUDIO_MD4C_HTML_TARGET (resolved right below via
+#    librestudio_pkgconfig(), cmake/LibreStudioTarballs.cmake).
 #  * orcus / orcus-spreadsheet-model, SYSTEM_LIBORCUS path (liborcus-devel is
 #    installed) -- `liborcus-0.18` and `liborcus-spreadsheet-model-0.18`
 #    (upstream API-version pc-file stamps; actual installed version is
@@ -82,11 +90,58 @@ librestudio_add_sdi_target(sc_sdi
     SDI        "${CMAKE_SOURCE_DIR}/sc/sdi/scslots.sdi"
     EXPORTS    "${CMAKE_SOURCE_DIR}/sc/sdi/scalc.sdi"
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/SdiTarget/sc/sdi"
-    INCLUDES   "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
+    INCLUDES   "${CMAKE_SOURCE_DIR}/sc/inc" "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
 
-pkg_check_modules(MD4C REQUIRED IMPORTED_TARGET md4c)
-pkg_check_modules(ORCUS REQUIRED IMPORTED_TARGET liborcus-0.18)
-pkg_check_modules(ORCUS_SPREADSHEET REQUIRED IMPORTED_TARGET liborcus-spreadsheet-model-0.18)
+# md4c/md4c-html: resolved right here (this module is one of the two real
+# consumers, alongside sw) via librestudio_pkgconfig() (cmake/
+# LibreStudioTarballs.cmake) -- both are needed: configure.ac's own
+# MD4C_LIBS (lines 10156-10161) is "-lmd4c -lmd4c-html" combined, not
+# "-lmd4c" alone -- md_html() (the HTML-rendering entry point,
+# sc/source/ui/docshell/impex.cxx) lives in the separate libmd4c-html.so/
+# md4c-html.pc, not libmd4c.so/md4c.pc. DRIVER omitted for MD4C (MODULES
+# md4c is a single clean element, auto-detected); MD4C_HTML needs it
+# explicit (MODULES md4c-html has a hyphen, and shares md4c's own driver
+# file, not a separate external/md4c_html/).
+librestudio_pkgconfig(MODULES md4c)
+librestudio_pkgconfig(
+    NAME MD4C_HTML
+    MODULES md4c-html
+    DRIVER md4c)
+
+# orcus/orcus-spreadsheet-model: sc/scfilt's orcus_autofilter.hxx etc. need
+# orcus's spreadsheet-model API in its 0.21-version shape (import_interface_
+# auto_filter.hpp, format_t::xml/json, single-arg orcus::detect()), which
+# this system's real installed orcus (0.19.2) does not have -- not a
+# packaging bug, a genuine version gap (this fork's own download.lst pins
+# liborcus-0.21.0.tar.xz). MODULES names BOTH liborcus-0.21 and liborcus-
+# spreadsheet-model-0.21 together (matching orcus's own real, API-version-
+# suffixed pkg-config module names): the combined probe decides found-vs-
+# vendor as ONE atomic decision (a system without spreadsheet-model support
+# falls through to vendoring both) -- but the resulting PkgConfig::ORCUS
+# target from that combined call is discarded below in favour of two
+# genuinely separate imported targets, one per module, since scqahelper
+# (further down in this file) links only the base orcus library, not
+# spreadsheet-model. DRIVER explicit ("orcus"): more than one MODULES
+# element, so no auto-detection candidate exists at all.
+# LIBRESTUDIO_FORCE_VENDOR_ORCUS is declared once in cmake/
+# LibreStudioTarballs.cmake, alongside its 4 sibling force-vendor options --
+# not re-declared here.
+librestudio_pkgconfig(
+    NAME ORCUS
+    MODULES liborcus-0.21 liborcus-spreadsheet-model-0.21
+    VERSION 0.21.0
+    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_ORCUS
+    DRIVER orcus
+    FOUND_VAR _orcus_found)
+if (_orcus_found)
+    message(STATUS "orcus: using system package (>= 0.21.0)")
+    pkg_check_modules(ORCUS_SYS REQUIRED IMPORTED_TARGET GLOBAL "liborcus-0.21>=0.21.0")
+    pkg_check_modules(ORCUS_SPREADSHEET_SYS REQUIRED IMPORTED_TARGET GLOBAL
+        "liborcus-spreadsheet-model-0.21>=0.21.0")
+    set(LIBRESTUDIO_ORCUS_TARGET PkgConfig::ORCUS_SYS CACHE INTERNAL "" FORCE)
+    set(LIBRESTUDIO_ORCUS_SPREADSHEET_TARGET PkgConfig::ORCUS_SPREADSHEET_SYS CACHE INTERNAL "" FORCE)
+endif ()
+unset(_orcus_found)
 
 set(SC_SOURCES
     sc/source/core/data/attarray
@@ -782,6 +837,15 @@ if (ENABLE_OPENCL)
 endif ()
 
 librestudio_expand_cxx(SC_SOURCES)
+
+# Cached for reuse by sc_ucalc_test's own 15 tests (sc/CppunitTest_
+# deferred.cmake), which need to recompile sc's own sources directly into
+# each test binary via gb_CppunitTest_use_library_objects(sc_ucalc$(1), sc
+# scqahelper) -- same CACHE INTERNAL reuse pattern already established by
+# editeng/CMakeLists.txt's own EDITENG_SOURCES for editeng_core.
+set(SC_SOURCES "${SC_SOURCES}" CACHE INTERNAL
+    "sc library's own expanded source list, for sc_ucalc_test's use_library_objects")
+
 add_library(sc SHARED ${SC_SOURCES})
 
 if (ENABLE_PCH)
@@ -817,8 +881,8 @@ target_link_libraries(sc PRIVATE
     Boost::boost
     ICU::uc ICU::i18n
     LibXml2::LibXml2
-    PkgConfig::MD4C
-    PkgConfig::ORCUS PkgConfig::ORCUS_SPREADSHEET
+    ${LIBRESTUDIO_MD4C_TARGET} ${LIBRESTUDIO_MD4C_HTML_TARGET}
+    ${LIBRESTUDIO_ORCUS_TARGET} ${LIBRESTUDIO_ORCUS_SPREADSHEET_TARGET}
     rt)
 
 if (ENABLE_OPENCL)
@@ -1009,6 +1073,41 @@ set(SCFILT_SOURCES
     sc/source/filter/orcus/utils
 )
 
+# KNOWN BLOCKER, not resolved (first real `cmake --build`, 2026-09-27):
+# download.lst pins this LibreOffice checkout's own expected orcus version at
+# 0.21.0 (ORCUS_TARBALL := liborcus-0.21.0.tar.xz), but the newest orcus
+# package available on this system (via apt, both installed and candidate)
+# is 0.19.2-alt1 -- confirmed no newer liborcus-devel candidate exists in any
+# configured repository. Five of these seven sources (autofilter, interface,
+# orcusfiltersimpl, xmlcontext, filterdetect -- global and utils are fine)
+# fail to compile: orcus_autofilter.hxx (sc/source/filter/inc, transitively
+# pulled in by orcusinterface.hxx, which nearly every file in this directory
+# includes) needs <orcus/spreadsheet/import_interface_auto_filter.hpp> and
+# the orcus::spreadsheet::iface::import_auto_filter_multi_values abstract
+# interface it declares (ScOrcusAutoFilterMultiValues implements it) --
+# neither exists in orcus 0.19.2's headers at all, not a renamed/reorganized
+# header (checked orcus/spreadsheet/auto_filter.hpp, the one auto_filter-
+# related header 0.19.2 does ship: no such interface class in it). This is a
+# genuine added-between-0.19-and-0.21 orcus feature, not a build-script gap.
+#
+# NOT worked around by excluding these 5 files: ScOrcusFiltersImpl
+# (orcusfiltersimpl.cxx) is instantiated by sc/source/filter/ftools/
+# ftools.cxx's ScFormatFilterPluginImpl::GetOrcusFilters() (grepped: called
+# from sc/source/ui/docshell/docsh.cxx, docsh2.cxx, sc/source/ui/dataprovider/
+# xmldataprovider.cxx, sc/source/ui/xmlsource/xmlsourcedlg.cxx), a real,
+# load-bearing part of Calc's own document-loading/external-data-source
+# machinery, not an isolated leaf -- removing it would just move the
+# "undefined reference" failure to ftools.cxx and everything scfilt links
+# from there instead of fixing anything.
+#
+# Left as-is (still listed, still fails to build) rather than silently
+# patched around: resolving this needs either a real orcus >= 0.21 (vendored
+# tarball build, same class of infrastructure this port already built for
+# harfbuzz/mdds/zxcvbn-c when the system package was too old) or a
+# considered decision to stub the newer interface -- both are real, scoped
+# follow-up work, not a build-script fix, and not attempted in this
+# unattended overnight session.
+
 librestudio_expand_cxx(SCFILT_SOURCES)
 add_library(scfilt SHARED ${SCFILT_SOURCES})
 
@@ -1039,7 +1138,18 @@ target_link_libraries(scfilt PRIVATE
     i18nlangtag msfilter oox sal salhelper sax sb sc sfx sot svl svt svx
     svxcore tk tl ucbhelper utl vcl
     Boost::boost
-    PkgConfig::ORCUS PkgConfig::ORCUS_SPREADSHEET)
+    ${LIBRESTUDIO_ORCUS_TARGET} ${LIBRESTUDIO_ORCUS_SPREADSHEET_TARGET})
+
+# Fix (first real `cmake --build`, 2026-09-27): Library_scfilt.mk links clew
+# under gb_Helper_optional(OPENCL, clew) (line 37, no separate opencl link
+# for this target) -- missing here, same "OPENCL BUILD_TYPE vs ENABLE_OPENCL"
+# class of gap already found and fixed for vcl/scui/sofficeapp/cui.
+# xetable.cxx (and others) reach <opencl/platforminfo.hxx>, a public global
+# header needing <clew/clew.h> -- unreachable without linking clew directly
+# (clew's own target_include_directories is PUBLIC, so this alone suffices).
+if (ENABLE_OPENCL)
+    target_link_libraries(scfilt PRIVATE clew)
+endif ()
 
 librestudio_add_component(scfilt
     COMPONENT "${CMAKE_SOURCE_DIR}/sc/util/scfilt.component"
@@ -1142,6 +1252,21 @@ target_link_libraries(scui PRIVATE
     Boost::boost
     ICU::uc ICU::i18n)
 
+# Fix (first real `cmake --build`, 2026-09-27): Library_scui.mk links both
+# clew and opencl under gb_Helper_optional(OPENCL, ...) (lines 41-42, 58-59)
+# -- missing here, the same "OPENCL BUILD_TYPE vs ENABLE_OPENCL" mismatch
+# already found and fixed for vcl (see vcl/CMakeLists.txt's own comment on
+# this exact class of gap): tpcalc.cxx includes <opencl/openclwrapper.hxx>
+# (a public, global header), which itself needs <clew/clew.h> -- "fatal
+# error: clew/clew.h: No such file" without this. clew's own
+# target_include_directories(clew PUBLIC ...) (external/clew/CMakeLists.txt)
+# propagates the include path automatically once linked directly (opencl
+# links clew PRIVATE, so linking opencl alone would not be enough -- both
+# are linked here, matching the real .mk's own list).
+if (ENABLE_OPENCL)
+    target_link_libraries(scui PRIVATE clew opencl)
+endif ()
+
 librestudio_add_component(scui
     COMPONENT "${CMAKE_SOURCE_DIR}/sc/util/scui.component"
     LIBRARY   scui
@@ -1154,11 +1279,37 @@ install(TARGETS scui LIBRARY DESTINATION program)
 # ---------------------------------------------------------------------------
 # solver -- Library_solver.mk
 # ---------------------------------------------------------------------------
+#
+# ENABLE_COINMP and its detection (COINMP_DETECT_FOUND) are declared in
+# cmake/LibreStudioConfigHeaders.cmake (included into scope from the root
+# CMakeLists.txt well before this module's own add_subdirectory()) --
+# sc/CppunitTest_deferred.cmake's solver test already reads ENABLE_COINMP
+# too, so this reuses that one real, already-existing option. The actual
+# CoinMP acquisition (system-or-vendor detection, the ~17-patch autotools
+# `./configure && make` over the whole COIN-OR tree when vendored) is
+# resolved right below via librestudio_pkgconfig() (cmake/
+# LibreStudioTarballs.cmake) -- external/coinmp/coinmp.cmake's own header
+# comment has the vendoring story; this file just adds the 3 CoinMP-specific
+# source files and links LIBRESTUDIO_COINMP_TARGET, whichever branch
+# resolved it. DRIVER explicit ("coinmp"): MODULES has 2 elements
+# (coinmp+coinutils), so no auto-detection candidate exists at all.
 
 set(SOLVER_SOURCES
     sc/source/solver/SwarmSolver
     sc/source/solver/SolverComponent
 )
+
+if (ENABLE_COINMP)
+    librestudio_pkgconfig(
+        NAME COINMP
+        MODULES coinmp coinutils
+        DRIVER coinmp)
+
+    list(APPEND SOLVER_SOURCES
+        sc/source/solver/CoinMPSolver
+        sc/source/solver/CoinMPModel
+        sc/source/solver/SlpSolver)
+endif ()
 
 librestudio_expand_cxx(SOLVER_SOURCES)
 add_library(solver SHARED ${SOLVER_SOURCES})
@@ -1173,11 +1324,36 @@ add_dependencies(solver udkapi_normal_headers offapi_normal_headers)
 target_link_libraries(solver PRIVATE
     comphelper cppu cppuhelper sal sc utl i18nlangtag
     Boost::boost)
+if (ENABLE_COINMP)
+    target_link_libraries(solver PRIVATE ${LIBRESTUDIO_COINMP_TARGET})
+endif ()
+
+# gb_Library_add_componentimpls,solver,$(if $(ENABLE_COINMP),coinmp)):
+# solver.component marks its CoinMPSolver/SLPSolver <implementation>s
+# <optional/> -- librestudio_add_component()'s own IMPLEMENTATION parameter
+# (cmake/LibreStudioComponent.cmake:80-134, read in full) filters an
+# optional implementation OUT of the built .component unless its name
+# appears in one of the given IMPLEMENTATION files. solver.component.coinmp
+# names exactly those two, so passing it when ENABLE_COINMP is on keeps both
+# (they really are compiled in); when off, an empty file forces both back
+# out. PRE-EXISTING BUG FOUND AND FIXED HERE: before this change this call
+# passed no IMPLEMENTATION at all, which skips the filter entirely (see the
+# early "if (_comp_IMPLEMENTATION)" guard) -- both optionals stayed listed
+# in solver.component even with ENABLE_COINMP undefined and neither source
+# file compiled in, a latent "services.rdb names a constructor symbol the
+# .so does not export" bug this fix removes as a side effect.
+if (ENABLE_COINMP)
+    set(SC_SOLVER_IMPLEMENTATION "${CMAKE_SOURCE_DIR}/sc/source/solver/solver.component.coinmp")
+else ()
+    set(SC_SOLVER_IMPLEMENTATION "${CMAKE_CURRENT_BINARY_DIR}/solver.component.none")
+    file(WRITE "${SC_SOLVER_IMPLEMENTATION}" "")
+endif ()
 
 librestudio_add_component(solver
-    COMPONENT "${CMAKE_SOURCE_DIR}/sc/source/solver/solver.component"
-    LIBRARY   solver
-    LAYER     OOO)
+    COMPONENT      "${CMAKE_SOURCE_DIR}/sc/source/solver/solver.component"
+    IMPLEMENTATION "${SC_SOLVER_IMPLEMENTATION}"
+    LIBRARY        solver
+    LAYER          OOO)
 
 librestudio_set_library_output_name(solver solver OOO)
 
@@ -1332,3 +1508,435 @@ librestudio_add_component(scd
 librestudio_set_library_output_name(scd scd OOO)
 
 install(TARGETS scd LIBRARY DESTINATION program)
+
+# --- scqahelper (Library_scqahelper.mk) --------------------------------------
+#
+# Not a product library -- a shared helper (QueryHelper/Test base classes,
+# tiled-rendering/view-callback test harness) that several of sc's own
+# CppunitTest_*.mk files link against (sc_functions_test/sc_subsequent_test,
+# plain use_libraries) or recompile directly into the test binary
+# (sc_ucalc_test, use_library_objects -- see sc/CppunitTest_deferred.cmake).
+# Repository.mk registers it under gb_Helper_register_libraries(
+# PLAINLIBS_NONE,...), the same "PLAIN naming, never installed" group as
+# subsequenttest/test/unotest/the *protector libraries -- so PLAIN naming,
+# no install() call, matching test/CMakeLists.txt's own subsequenttest
+# precedent exactly.
+#
+# use_externals: boost_headers -> Boost::boost, mdds_headers ->
+# ${MDDS_INCLUDE_DIR} (matching sc's own resolution above), cppunit ->
+# PkgConfig::CPPUNIT (librestudio_add_cppunit_test() already resolves this
+# same way; scqahelper needs it directly too, since qahelper.cxx and
+# friends use CPPUNIT_ASSERT macros themselves), libxml2 ->
+# LibXml2::LibXml2, OPENCL's optional clew skipped (inert everywhere else
+# in this port, ENABLE_OPENCL/OPENCL never configured here). The ifneq(
+# SYSTEM_LIBORCUS) branch resolves to its "else" (orcus-parser) in this
+# environment -- re-verified against sc/CMakeLists.txt's own header
+# comment: the system liborcus (0.19.2) is too old, so this whole tree
+# already resolves through the vendored-or-system-if-new-enough smart-
+# detection block in root CMakeLists.txt, landing on the same
+# ${LIBRESTUDIO_ORCUS_TARGET} sc's own library already links (not also
+# ${LIBRESTUDIO_ORCUS_SPREADSHEET_TARGET} -- scqahelper's own qa/unit/
+# helper/*.cxx sources need no spreadsheet-model-specific orcus interface,
+# only the base parser one gb_Library_use_externals(scqahelper,orcus-
+# parser) itself names).
+set(SCQAHELPER_SOURCES
+    sc/qa/unit/helper/qahelper
+    sc/qa/unit/helper/scfiltertestbase
+    sc/qa/unit/helper/sctiledrenderingtest
+    sc/qa/unit/helper/sctestviewcallback
+    sc/qa/unit/functions_test
+)
+librestudio_expand_cxx(SCQAHELPER_SOURCES)
+
+# Cached for reuse by sc_ucalc_test's own 15 tests, same reason/pattern as
+# SC_SOURCES just above.
+set(SCQAHELPER_SOURCES "${SCQAHELPER_SOURCES}" CACHE INTERNAL
+    "scqahelper library's own expanded source list, for sc_ucalc_test's use_library_objects")
+
+add_library(scqahelper SHARED ${SCQAHELPER_SOURCES})
+
+# PkgConfig::CPPUNIT is normally resolved lazily, on first use, by
+# librestudio_add_cppunit_test() itself (cmake/LibreStudioTest.cmake) -- but
+# that import target's own visibility (pkg_check_modules(...IMPORTED_TARGET)
+# without GLOBAL) is scoped to the directory that first creates it plus its
+# own subdirectories, and scqahelper is a plain add_library() here in sc's
+# own directory scope, not reached through that function -- confirmed by a
+# real reconfigure: `target_link_libraries(scqahelper ... PkgConfig::CPPUNIT)`
+# fails with "the target was not found" without this guard, since every
+# CppunitTest that would otherwise have created it first is itself deferred
+# to run in the root directory's own scope, at the very end -- long after
+# sc's own (non-deferred) processing point. Same guard, verbatim.
+if (NOT TARGET PkgConfig::CPPUNIT)
+    pkg_check_modules(CPPUNIT REQUIRED IMPORTED_TARGET cppunit)
+endif ()
+
+target_include_directories(scqahelper PRIVATE
+    "${CMAKE_SOURCE_DIR}/sc/inc"
+    "${CMAKE_SOURCE_DIR}/sc/source/ui/inc"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${oovbaapi_normal_HEADERS_INCLUDE_DIR}"
+    "${MDDS_INCLUDE_DIR}")
+add_dependencies(scqahelper
+    udkapi_normal_headers offapi_normal_headers oovbaapi_normal_headers)
+
+target_compile_definitions(scqahelper PRIVATE SCQAHELPER_DLLIMPLEMENTATION)
+
+target_link_libraries(scqahelper PRIVATE
+    comphelper cppu cppuhelper docmodel editeng for sal sc sfx sot
+    subsequenttest svl svt svx svxcore test_fixtures tl unotest utl
+    ucbhelper vcl
+    Boost::boost LibXml2::LibXml2 PkgConfig::CPPUNIT
+    ${LIBRESTUDIO_ORCUS_TARGET})
+
+# Same gap already found and fixed for scfilt just above (search this file
+# for "Library_scfilt.mk links clew"): qahelper.cxx includes sc/inc/
+# formulagroup.hxx, a public sc header reaching <opencl/platforminfo.hxx> ->
+# <clew/clew.h> -- but sc's own link to clew (line ~889, `target_link_
+# libraries(sc PRIVATE opencl clew)`) is PRIVATE, so it does not propagate
+# clew's PUBLIC include dirs to scqahelper just by linking sc. Confirmed live
+# on the remote test build: "fatal error: clew/clew.h: No such file or
+# directory". clew's own target_include_directories is PUBLIC, so linking it
+# here directly is sufficient, same fix as scfilt's.
+target_link_libraries(scqahelper PRIVATE clew)
+
+librestudio_set_library_output_name(scqahelper scqahelper PLAIN)
+
+# --- UIConfig_scalc (gb_UIConfig_UIConfig(modules/scalc)) -------------------
+#
+# UIConfig_scalc.mk, re-checked directly: 1 menubar, 29 popupmenu, 1
+# statusbar, 38 toolbar, 188 ui files -- same shape/pattern as simpress_
+# uiconfig/sdraw_uiconfig above (different module). Every file verified
+# present on disk before writing this block (python3 script, not assumed).
+# Closes the "scalc_uiconfig does not exist" gap already documented at
+# several sc CppunitTest call sites this session (5 tests' own UICONFIG
+# omitting "scalc").
+set(SC_SCALC_UICONFIG_MENUBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/menubar/menubar.xml"
+)
+
+set(SC_SCALC_UICONFIG_POPUPMENU_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/anchor.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/audit.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/cell.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/celledit.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/colheader.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/column_operations.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/conditional.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/conditional_easy.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/datatablemenu.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/draw.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/drawtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/form.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/formrichtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/formulabar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/freezepanes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/graphic.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/media.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/notebookbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/oleobject.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/pagebreak.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/pivot.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/preview.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/printranges.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/rowheader.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/row_operations.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/sheettab.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/sparkline.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/sparklinemenu.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/popupmenu/statisticsmenu.xml"
+)
+
+set(SC_SCALC_UICONFIG_STATUSBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/statusbar/statusbar.xml"
+)
+
+set(SC_SCALC_UICONFIG_TOOLBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/alignmentbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/arrowsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/arrowshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/basicshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/calloutshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/classificationbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/colorbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/connectorsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/datastreams.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/drawbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/drawobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/extrusionobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/findbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/flowchartshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/fontworkobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/fontworkshapetype.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formatobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formcontrols.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formdesign.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formsfilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formsnavigationbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/formtextobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/fullscreenbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/graffilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/graphicobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/insertbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/insertcellsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/linesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/mediaobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/notebookbarshortcuts.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/previewbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/singlemode.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/standardbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/starshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/symbolshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/textobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/toolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/toolbar/viewerbar.xml"
+)
+
+set(SC_SCALC_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/advancedfilterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/allheaderfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/analysisofvariancedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/autoformattable.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/autosum.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/cellprotectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/duplicaterecordsdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/changesourcedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/chardialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/checkwarningdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/chisquaretestdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/colormenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/colorrowdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/colwidthdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/condformatmanager.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/conditionaleasydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/conditionalformatdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/conditionalentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/conditionaliconset.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/conflictsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/consolidatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/correlationdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/covariancedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/createnamesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/dapiservicedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/databaroptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/datafielddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/datafieldoptionsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/dataform.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/dataformfragment.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/datastreams.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/dataproviderdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/definedatabaserangedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/definename.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/definetablerangedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/deletecells.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/deletecolumnentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/deletecontents.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/descriptivestatisticsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/drawtemplatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/dropmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/doubledialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/erroralerttabpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/externaldata.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/exponentialsmoothingdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/filldlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/filterlist.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/filterdropdown.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/filtersubdropdown.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/footerdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/formatcellsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/formulacalculationoptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/fourieranalysisdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/floatingborderstyle.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/floatinglinestyle.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/functionpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/goalseekdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/gotosheetdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/groupdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/groupbydate.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/groupbynumber.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/headerdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/headerfootercontent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/headerfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/imoptdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/inputbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/inputstringdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/insertcells.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/insertname.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/insertsheet.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/integerdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/leftfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/leftheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/listmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/namerangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/notebookbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/notebookbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/notebookbar_groups.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/notebookbar_groupedbar_full.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/notebookbar_groupedbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/numberbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/managenamesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/mergecellsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/mergecolumnentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/texttransformationentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sorttransformationentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/aggregatefunctionentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/numbertransformationentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/replacenulltransformationentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/datetimetransformationentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/findreplaceentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/deleterowentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/swaprowsentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/movecopysheet.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/movingaveragedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/multipleoperationsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/navigatorpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/nosolutiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optcalculatepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optchangespage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optcompatibilitypage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optdefaultpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optformula.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optimalcolwidthdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optimalrowheightdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/optsortlists.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pagelistmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pagetemplatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pastespecial.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/paradialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/paratemplatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/passfragment.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pivotcalcfielddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pivotfielddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pivotfilterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/pivottablelayoutdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/posbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/printareasdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/printeroptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/protectsheetdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/queryrunstreamscriptdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/randomnumbergenerator.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/recalcquerydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/regressiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/retypepassdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/retypepassworddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/rightfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/rightheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/rowheightdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/samplingdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/standardfilterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/scenariodialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/scenariomenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/scgeneralpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/searchresults.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/selectdatasource.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/selectrange.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/selectsheetviewdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/selectsource.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sheetprintpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedocumentdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedfirstfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedfirstheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedleftfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedleftheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedheaderdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sharedwarningdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sheetviewbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/showchangesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/showdetaildialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/showsheetdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sidebaralignment.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sidebarnumberformat.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sidebarcellappearance.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sidebardatabase.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/simplerefdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/solverdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/solveroptionsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/solverprogressdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/solversuccessdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sortcriteriapage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sortdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sortkey.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sortoptionspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sortwarning.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sparklinedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/sparklinedatarangedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/splitcolumnentry.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/subtotaldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/subtotaloptionspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/subtotalgrppage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/statisticsinfopage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/tablestylesbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/tabcolordialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/textimportoptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/textimportcsv.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/tpviewpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/ttestdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/ungroupdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/validationdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/validationcriteriapage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/validationhelptabpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/warnautocorrect.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/xmlsourcedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/zoombox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/scalc/ui/ztestdialog.ui"
+)
+
+install(FILES ${SC_SCALC_UICONFIG_MENUBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/scalc/menubar)
+install(FILES ${SC_SCALC_UICONFIG_POPUPMENU_FILES}
+    DESTINATION share/config/soffice.cfg/modules/scalc/popupmenu)
+install(FILES ${SC_SCALC_UICONFIG_STATUSBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/scalc/statusbar)
+install(FILES ${SC_SCALC_UICONFIG_TOOLBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/scalc/toolbar)
+install(FILES ${SC_SCALC_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/modules/scalc/ui)
+
+set(_scalc_uiconfig_outputs "")
+foreach (_scalc_uiconfig_pair
+        "SC_SCALC_UICONFIG_MENUBAR_FILES:menubar"
+        "SC_SCALC_UICONFIG_POPUPMENU_FILES:popupmenu"
+        "SC_SCALC_UICONFIG_STATUSBAR_FILES:statusbar"
+        "SC_SCALC_UICONFIG_TOOLBAR_FILES:toolbar"
+        "SC_SCALC_UICONFIG_UI_FILES:ui")
+    string(REPLACE ":" ";" _scalc_uiconfig_pair "${_scalc_uiconfig_pair}")
+    list(GET _scalc_uiconfig_pair 0 _scalc_uiconfig_var)
+    list(GET _scalc_uiconfig_pair 1 _scalc_uiconfig_category)
+    foreach (_scalc_uiconfig_src IN LISTS ${_scalc_uiconfig_var})
+        get_filename_component(_scalc_uiconfig_name "${_scalc_uiconfig_src}" NAME)
+        set(_scalc_uiconfig_dest
+            "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/scalc/${_scalc_uiconfig_category}/${_scalc_uiconfig_name}")
+        add_custom_command(
+            OUTPUT "${_scalc_uiconfig_dest}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/scalc/${_scalc_uiconfig_category}"
+            COMMAND ${CMAKE_COMMAND} -E copy "${_scalc_uiconfig_src}" "${_scalc_uiconfig_dest}"
+            DEPENDS "${_scalc_uiconfig_src}"
+            COMMENT "Copying ${_scalc_uiconfig_name} into build-tree soffice.cfg/modules/scalc/${_scalc_uiconfig_category}")
+        list(APPEND _scalc_uiconfig_outputs "${_scalc_uiconfig_dest}")
+    endforeach ()
+endforeach ()
+unset(_scalc_uiconfig_pair)
+unset(_scalc_uiconfig_var)
+unset(_scalc_uiconfig_category)
+unset(_scalc_uiconfig_src)
+unset(_scalc_uiconfig_name)
+unset(_scalc_uiconfig_dest)
+
+add_custom_target(scalc_uiconfig ALL DEPENDS ${_scalc_uiconfig_outputs})
+unset(_scalc_uiconfig_outputs)
+
+
+# --- CppunitTests ------------------------------------------------------------
+#
+# 189 CppunitTest_*.mk files -- split out to sc/CppunitTest_deferred.cmake
+# (deferred: needs program_services_rdb, only set much later in the root
+# CMakeLists.txt, same ordering constraint as every other module's own
+# CppunitTest_deferred.cmake). See that file's own header comment for the
+# real structure (4 shared gbuild macros covering most of the 189, ported
+# incrementally wave by wave rather than 189 independent hand transcriptions)
+# and current progress.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/sc/CppunitTest_deferred.cmake")

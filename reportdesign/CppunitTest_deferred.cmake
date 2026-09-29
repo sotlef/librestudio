@@ -15,10 +15,10 @@
 # mechanism this follows identically.
 #
 # CppunitTest_reportdesign_basic_test.mk (the module's other CppunitTest) is
-# NOT wired anywhere -- see reportdesign/CMakeLists.txt's own "documented gap"
-# comment on it (ENABLE_JAVA off by default, plus its use_jars(sdbc_hsqldb)
-# dependency on an SDBC driver connectivity/CMakeLists.txt already documents
-# as out of scope).
+# now wired for real too, gated behind if (LIBRESTUDIO_ENABLE_JAVA) below --
+# its former blocker, connectivity's Jar_sdbc_hsqldb, is now ported
+# (connectivity/CMakeLists.txt's own "--- sdbc_hsqldb ---" section, plus the
+# bundled hsqldb external next to java_websocket in root CMakeLists.txt).
 #
 # Because this file runs in the root CMakeLists.txt's own directory scope
 # (include() does not create a new directory scope the way add_subdirectory()
@@ -67,3 +67,63 @@ librestudio_add_cppunit_test(reportdesign_dialogs_test
     NONHEADLESS
     UICONFIG dbreport
     CONFIGURATION)
+
+# --- reportdesign_basic_test (CppunitTest_reportdesign_basic_test.mk) --------
+#
+# Module_reportdesign.mk: `ifeq ($(ENABLE_JAVA),TRUE)` around this test's own
+# gb_Module_add_check_targets call -- gated behind LIBRESTUDIO_ENABLE_JAVA
+# below, this port's own real, tested (default OFF) switch. Re-checked
+# directly against the live .mk: use_externals(boost_headers,libxml2), 1
+# source (reportdesign/qa/unit/ReportDesignBasicTests), set_include(-I
+# reportdesign/source/inc -I reportdesign/inc), use_libraries comphelper cppu
+# cppuhelper dbaxml dbtools sal subsequenttest utl test tk tl unotest xo
+# ("test" -> test_fixtures), use_api(offapi oovbaapi udkapi) -> the normal
+# variant of all three (use_api, not use_sdk_api -- oovbaapi's own normal
+# headers target already exists, wired the same way editeng/CMakeLists.txt's
+# CppunitTest_deferred.cmake consumes it, see postprocess/CMakeLists.txt's
+# own oovbaapi citation for another precedent), use_ure + use_vcl -> 3
+# protector pairs, use_rdb(services) -> DEPENDS program_services_rdb,
+# use_configuration -> CONFIGURATION, use_jars(sdbc_hsqldb) -> DEPENDS
+# sdbc_hsqldb_jar (connectivity/CMakeLists.txt, a build-order-only
+# dependency -- the jar is presumably loaded via the Java UNO bridge at
+# runtime, never linked into this native C++ test binary, matching gb_
+# CppunitTest_use_jars' own gb_CppunitTest_use_jar -> plain target
+# prerequisite, no compile/link flags at all).
+#
+# use_uiconfigs(reportdesign_basic_test, reportdesign) is a genuine upstream
+# oddity, not a porting gap: grepped this entire tree (including every
+# UIConfig_*.mk) for "UIConfig_reportdesign" -- zero hits anywhere.
+# Module_reportdesign.mk itself only ever adds "UIConfig_dbreport" (see its
+# own gb_Module_add_targets call, and reportdesign_dialogs_test's own
+# UICONFIG dbreport above) -- there is no "UIConfig_reportdesign" target
+# anywhere in upstream LibreOffice for gb_UIConfig_get_target(reportdesign)
+# to resolve to, so this exact dependency could not be satisfied even by a
+# complete, real upstream gbuild build. Read as an upstream typo for
+# "dbreport" (the module's only real UIConfig, already wired here as
+# dbreport_uiconfig) and wired that way below, rather than left broken or
+# given a fabricated "reportdesign_uiconfig" target that would correspond to
+# nothing real.
+if (LIBRESTUDIO_ENABLE_JAVA)
+    librestudio_add_cppunit_test(reportdesign_basic_test
+        SOURCES
+            reportdesign/qa/unit/ReportDesignBasicTests
+        LIBRARIES
+            comphelper cppu cppuhelper dbaxml dbtools sal subsequenttest
+            test_fixtures tk tl unotest utl xo Boost::boost LibXml2::LibXml2
+        INCLUDE
+            "${CMAKE_SOURCE_DIR}/reportdesign/source/inc"
+            "${CMAKE_SOURCE_DIR}/reportdesign/inc"
+            "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+            "${offapi_normal_HEADERS_INCLUDE_DIR}"
+            "${oovbaapi_normal_HEADERS_INCLUDE_DIR}"
+            "${LIBXML2_INCLUDE_DIRS}"
+        DEPENDS
+            udkapi_normal_headers offapi_normal_headers oovbaapi_normal_headers
+            program_services_rdb sdbc_hsqldb_jar
+        PROTECTORS
+            unobootstrapprotector unobootstrapprotector
+            unoexceptionprotector unoexceptionprotector
+            vclbootstrapprotector vclbootstrapprotector
+        UICONFIG dbreport
+        CONFIGURATION)
+endif ()

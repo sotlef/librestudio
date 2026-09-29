@@ -151,6 +151,54 @@ librestudio_add_cppunit_test(sfx2_doc
         vclbootstrapprotector vclbootstrapprotector
     CONFIGURATION)
 
+# --- sfx2_dialogs_test (gb_CppunitTest_CppunitScreenShot) ---------------------
+#
+# CppunitTest_sfx2_dialogs_test.mk, re-checked directly against the live
+# file: 1 source (sfx2/qa/unit/sfx2-dialogs-test), use_sdk_api (normal
+# udkapi+offapi, called twice -- a no-op repeat), use_libraries basegfx
+# comphelper cppu cppuhelper drawinglayer editeng i18nlangtag i18nutil
+# msfilter oox sal salhelper sax sfx sot svl svt test tl tk ucbhelper unotest
+# utl vcl xo ("test" -> test_fixtures, this port's established rename; "sfx"
+# is this module's own production library; all other 21 names are the same
+# already-ported targets cui_dialogs_test's own near-identical library list
+# already proves out -- basegfx/comphelper/cppu/cppuhelper/drawinglayer/
+# editeng/i18nlangtag/i18nutil/msfilter/oox/sal/salhelper/sax/sot/svl/svt/tl/
+# tk/ucbhelper/unotest/utl/vcl/xo), use_external(boost_headers) ->
+# Boost::boost, use_ure + use_vcl_non_headless_with_windows -> NONHEADLESS +
+# 3 protector pairs, use_rdb(services) -> DEPENDS program_services_rdb (no
+# COMPONENTS, same ini-fallback reasoning as every other use_rdb(services)
+# test in this port), use_configuration -> CONFIGURATION (full three-layer
+# form), use_uiconfigs(sfx) -> UICONFIG sfx.
+#
+# UICONFIG sfx: sfx2/CMakeLists.txt's own "sfx_uiconfig" ALL target (added
+# alongside this wiring -- verified directly beforehand that no such target
+# existed yet in this port, unlike vcl_uiconfig/svt_uiconfig/svx_uiconfig/
+# cui_uiconfig, which each already had one). librestudio_add_cppunit_test()'s
+# UICONFIG option resolves the module argument "sfx" to the literal target
+# name "sfx_uiconfig" -- matching this UIConfig's own gb_UIConfig_UIConfig
+# name "sfx" (not the module directory name "sfx2"), independently confirmed
+# by this very .mk's own use_uiconfigs(sfx2_dialogs_test,sfx) call.
+librestudio_add_cppunit_test(sfx2_dialogs_test
+    SOURCES
+        sfx2/qa/unit/sfx2-dialogs-test
+    LIBRARIES
+        basegfx comphelper cppu cppuhelper drawinglayer editeng i18nlangtag
+        i18nutil msfilter oox sal salhelper sax sfx sot svl svt test_fixtures
+        tl tk ucbhelper unotest utl vcl xo Boost::boost
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+        program_services_rdb
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    NONHEADLESS
+    UICONFIG sfx
+    CONFIGURATION)
+
 # --- sfx2_autoredaction --------------------------------------------------------
 #
 # CppunitTest_sfx2_autoredaction.mk, re-checked directly against the live

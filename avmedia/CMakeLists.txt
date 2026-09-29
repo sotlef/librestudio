@@ -60,12 +60,19 @@ target_link_libraries(avmedia PRIVATE
     comphelper cppu cppuhelper sal svl ucbhelper vcl
     Boost::boost)
 
-# Library_avmedia.mk:47-52's extra use_libraries, needed only by the
-# AVMEDIA-gated sources above (i18nlangtag/svt/tl/utl are not pulled in by
+# Library_avmedia.mk:46-52's extra use_libraries, needed only by the
+# AVMEDIA-gated sources above (i18nlangtag/sfx/svt/tl/utl are not pulled in by
 # mediaitem.cxx alone).
+#
+# Fix (first real `cmake --build`, 2026-09-27): "sfx" was missing from this
+# list -- re-checked directly against the live .mk (lines 46-52: i18nlangtag,
+# sfx, svt, tl, utl), needed by avmedia/source/framework/mediaplayer.cxx
+# (SfxViewFrame/SfxChildWindow/SfxDockingWindow/SfxChildWinFactory), which
+# only compiles under this same ENABLE_AVMEDIA gate -- linking failed with
+# "undefined reference" for all of those symbols.
 if (ENABLE_AVMEDIA)
     target_link_libraries(avmedia PRIVATE
-        i18nlangtag svt tl utl)
+        i18nlangtag sfx svt tl utl)
 endif (ENABLE_AVMEDIA)
 
 # gb_Library_set_componentfile(avmedia,avmedia/util/avmedia,services) --

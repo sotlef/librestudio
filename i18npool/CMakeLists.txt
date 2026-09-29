@@ -79,7 +79,24 @@ foreach (_xml IN LISTS I18NPOOL_LOCALEDATA_XML)
         COMMAND saxparser "${_name}"
                 "${CMAKE_SOURCE_DIR}/i18npool/source/localedata/data/${_xml}"
                 "${_out}"
+        # program_services_rdb/program_types_rdb/program_offapi_rdb/
+        # program_oovbaapi_rdb/sax used to be wired on ONLY via the
+        # add_dependencies(i18npool_localedata ...) call below, which does
+        # NOT work: add_dependencies() on the aggregate add_custom_target()
+        # only orders that phony node itself against these targets -- it
+        # does not reach back into the per-file add_custom_command() edges
+        # that are the phony target's own DEPENDS, since those are separate,
+        # sibling ninja build edges with no edge between them. Confirmed live
+        # on the remote test build: ninja ran `saxparser en_US ...` before
+        # program_oovbaapi_rdb had installed program/types/oovbaapi.rdb,
+        # saxparser's own cppuhelper::bootstrap() failed with "file:...
+        # oovbaapi.rdb: no such file" for the large majority of locales (a
+        # real race, not deterministic per-locale -- whichever ninja happened
+        # to schedule first). Listing the real runtime prerequisites directly
+        # on THIS custom command is what actually orders them.
         DEPENDS saxparser "${CMAKE_SOURCE_DIR}/i18npool/source/localedata/data/${_xml}"
+                program_services_rdb program_types_rdb program_offapi_rdb
+                program_oovbaapi_rdb sax
         COMMENT "saxparser: localedata_${_name}.cxx"
         VERBATIM)
     list(APPEND I18NPOOL_LOCALEDATA_SOURCES "${_out}")
@@ -529,7 +546,18 @@ foreach (_txt IN LISTS I18NPOOL_INDEXENTRY_TXTS)
         VERBATIM)
     list(APPEND I18NPOOL_INDEXENTRY_SOURCES "${_out}")
 endforeach ()
-add_custom_target(i18npool_indexentry DEPENDS ${I18NPOOL_INDEXENTRY_SOURCES})
+# Named "i18npool_indexentry_codegen", not the bare "i18npool_indexentry" the
+# variable/comment names above would suggest: CppunitTest_i18npool_
+# indexentry.mk's own CppunitTest needs the literal name "i18npool_
+# indexentry" for librestudio_add_cppunit_test() (matching this port's own
+# strict "CppunitTest target name == gbuild test name" convention, load-
+# bearing everywhere else in this whole port), and CMake's flat target
+# namespace cannot have both -- same two-different-gbuild-namespaces-sharing-
+# one-literal-name collision, and the same "rename the internal helper, not
+# the CppunitTest" resolution, sfx2_classification's own Package_
+# classification/CppunitTest_sfx2_classification name clash already
+# established (see sfx2/CMakeLists.txt's own comment on that rename).
+add_custom_target(i18npool_indexentry_codegen DEPENDS ${I18NPOOL_INDEXENTRY_SOURCES})
 
 add_executable(genconv_dict
     "${CMAKE_SOURCE_DIR}/i18npool/source/textconversion/genconv_dict.cxx")
@@ -736,7 +764,7 @@ target_include_directories(i18npool PRIVATE
 # library, and i18npool_collator in particular has to have written
 # lrl_include.hxx before collator_unicode.cxx is compiled.
 add_dependencies(i18npool
-    i18npool_collator i18npool_indexentry i18npool_textconversion
+    i18npool_collator i18npool_indexentry_codegen i18npool_textconversion
     i18npool_breakiterator
     officecfg_headers udkapi_normal_headers offapi_normal_headers)
 
@@ -778,3 +806,167 @@ librestudio_add_component(i18nsearch
 
 librestudio_set_library_output_name(i18nsearch i18nsearch OOO)
 install(TARGETS i18nsearch LIBRARY DESTINATION program)
+
+# --- i18npool's 8 CppunitTest_*.mk files, re-checked directly ---------------
+#
+# 7 of the 8 need only this module's own "i18npool"/"i18nsearch" components
+# (both already registered above, in this same file, so no ordering issue)
+# plus plain sal/cppu/cppuhelper/unotest libraries -- wired directly below,
+# no deferral needed. Only i18npool_defaultnumberingprovider calls use_rdb
+# (services), needing program_services_rdb (defined much later in the root
+# CMakeLists.txt) -- that one is deferred, see i18npool/CppunitTest_
+# deferred.cmake.
+
+# CppunitTest_i18npool_transliteration.mk: registers as "i18npool_
+# transliteration" (matches its own filename, unlike breakiterator below).
+# 1 source, use_components(i18npool/util/i18npool) -> "i18npool", use_
+# libraries cppu cppuhelper i18npool sal, use_sdk_api, use_ure -> 2
+# protector pairs (no use_vcl in this .mk).
+librestudio_add_cppunit_test(i18npool_transliteration
+    SOURCES
+        i18npool/qa/cppunit/transliteration
+    LIBRARIES
+        cppu cppuhelper i18npool sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# CppunitTest_i18npool_breakiterator.mk: registers as "i18npool_break_
+# iterator" (NOT "i18npool_breakiterator" -- the gb_CppunitTest_CppunitTest
+# call's own first argument has an underscore the .mk's filename doesn't;
+# verified directly, not a typo introduced here). use_external(icu_headers)
+# -> ICU::uc (icu_headers alone maps to the plain headers-only usage already
+# established elsewhere in this port), use_sdk_api, use_libraries cppu
+# cppuhelper sal unotest, use_ure -> 2 protector pairs, use_components(
+# i18npool/util/i18npool) -> "i18npool".
+librestudio_add_cppunit_test(i18npool_break_iterator
+    SOURCES
+        i18npool/qa/cppunit/test_breakiterator
+    LIBRARIES
+        cppu cppuhelper sal unotest ICU::uc
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# CppunitTest_i18npool_textsearch.mk: use_sdk_api, use_ure -> 2 protector
+# pairs, use_components(i18npool/source/search/i18nsearch,
+# i18npool/util/i18npool) -> "i18nsearch"+"i18npool" (both registered above,
+# in this same file), use_externals(icui18n icuuc icu_headers) ->
+# ICU::i18n+ICU::uc, use_libraries cppu cppuhelper sal unotest.
+librestudio_add_cppunit_test(i18npool_textsearch
+    SOURCES
+        i18npool/qa/cppunit/test_textsearch
+    LIBRARIES
+        cppu cppuhelper sal unotest ICU::i18n ICU::uc
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18nsearch i18npool)
+
+# CppunitTest_i18npool_indexentry.mk: use_components(i18npool/util/i18npool)
+# -> "i18npool", use_libraries cppu cppuhelper sal, use_sdk_api, use_ure ->
+# 2 protector pairs.
+librestudio_add_cppunit_test(i18npool_indexentry
+    SOURCES
+        i18npool/qa/cppunit/indexentry
+    LIBRARIES
+        cppu cppuhelper sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# CppunitTest_i18npool_ordinalsuffix.mk: use_sdk_api, use_libraries cppu
+# cppuhelper sal unotest, use_ure -> 2 protector pairs, use_components(
+# i18npool/util/i18npool) -> "i18npool".
+librestudio_add_cppunit_test(i18npool_ordinalsuffix
+    SOURCES
+        i18npool/qa/cppunit/test_ordinalsuffix
+    LIBRARIES
+        cppu cppuhelper sal unotest
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# CppunitTest_i18npool_characterclassification.mk: use_sdk_api, use_libraries
+# cppu cppuhelper sal unotest, use_ure -> 2 protector pairs, use_components(
+# i18npool/util/i18npool) -> "i18npool".
+librestudio_add_cppunit_test(i18npool_characterclassification
+    SOURCES
+        i18npool/qa/cppunit/test_characterclassification
+    LIBRARIES
+        cppu cppuhelper sal unotest
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# CppunitTest_i18npool_calendar.mk: set_include(-Ii18npool/inc), use_sdk_api,
+# use_libraries cppu cppuhelper sal unotest i18npool, use_externals(icui18n
+# icuuc icu_headers) -> ICU::i18n+ICU::uc, use_ure -> 2 protector pairs,
+# use_components(i18npool/util/i18npool) -> "i18npool".
+librestudio_add_cppunit_test(i18npool_calendar
+    SOURCES
+        i18npool/qa/cppunit/test_calendar
+    LIBRARIES
+        cppu cppuhelper sal unotest i18npool ICU::i18n ICU::uc
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/i18npool/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# i18npool/CppunitTest_deferred.cmake needs data (program_services_rdb) from
+# a module add_subdirectory()'d later than this one -- scheduled here rather
+# than included directly, so it runs only once every add_subdirectory() in
+# the whole tree has completed. See that file's own header comment for the
+# specific constraint, and cmake/LibreStudioTest.cmake's header comment for
+# why CMAKE_SOURCE_DIR (not CMAKE_CURRENT_SOURCE_DIR) is required in the
+# path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/i18npool/CppunitTest_deferred.cmake")

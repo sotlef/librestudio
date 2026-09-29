@@ -361,34 +361,23 @@ librestudio_add_cppunit_test(svl_items
 # and its include() call site in the root CMakeLists.txt for why it sits
 # where it does.
 
-# CppunitTest_svl_lockfiles.mk: DEFERRED, not ported -- per this task's own
-# explicit instruction, regardless of what double-checking below found.
-#
-# The task brief driving this wave justified deferring this one test with
-# "it needs svt, sw, and vcl, none of which are part of this port's
-# currently-completed dependency chain". Re-checked directly against the
-# live tree, that premise is now STALE, the same way tools_test's own
-# deferral comment (tools/CMakeLists.txt) already had to correct a stale
-# "vcl doesn't exist yet" premise for itself: svt (svtools/CMakeLists.txt's
-# svt target), vcl (vcl/CMakeLists.txt's vcl target) and sw (sw/
-# CMakeLists.txt's sw target -- 1354 lines, sw/swui/swd all real
-# add_library() targets) all exist and are fully wired in this tree today.
-# So "svt/sw/vcl aren't part of the completed dependency chain" is no longer
-# the accurate reason.
-#
-# The real remaining reason is ordering, not existence: sw is
-# add_subdirectory()'d at root CMakeLists.txt line ~756, hundreds of lines
-# (many modules) after svl's own add_subdirectory() here, and this test also
-# calls gb_CppunitTest_use_rdb(svl_lockfiles,services) -- this port's
-# established handling of use_rdb(services) (see scaddins/CppunitTest_
-# deferred.cmake and its include() call site, right after
-# program_services_rdb is first defined near the very end of the root
-# CMakeLists.txt) requires deferring all the way to that point, later still
-# than sw itself. Reaching that point is mechanically possible -- the
-# deferred-file + later-include() pattern svl_urihelper/svl_qa_cppunit above
-# already use would extend the same way here -- but this task's brief
-# explicitly says "Do NOT port svl_lockfiles", so it is intentionally left
-# out of scope for this wave rather than wired through on this session's own
-# initiative. A later wave revisiting it should start from this note, not
-# from the original "svt/sw/vcl unreachable" reasoning, which no longer
-# holds.
+# CppunitTest_svl_lockfiles.mk is now ported for real -- see svl/
+# CppunitTest_deferred.cmake's own "svl_lockfiles" section, alongside
+# svl_urihelper/svl_qa_cppunit there. (Historical note: an earlier wave left
+# this one deferred on the belief that "it needs svt, sw, and vcl, none of
+# which are part of this port's currently-completed dependency chain" -- that
+# premise went stale once svt/vcl/sw were all actually ported; the only real
+# remaining issue was ordering, already solved by the same cmake_language(
+# DEFER) mechanism the other two tests in that file already use.)
+
+# svl/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/svl/CppunitTest_deferred.cmake")

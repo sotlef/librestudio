@@ -75,3 +75,76 @@ target_link_libraries(forui PRIVATE
 librestudio_set_library_output_name(forui forui OOO)
 
 install(TARGETS forui LIBRARY DESTINATION program)
+
+# --- UIConfig_formula ---------------------------------------------------------
+#
+# UIConfig_formula.mk: 4 .ui files under formula/uiconfig/ui, packaged into
+# share/config/soffice.cfg/formula/ui by gb_UIConfig_UIConfig(formula) --
+# same gb_UIConfig_DIR_FOR-derived destination convention already established
+# by svtools/CMakeLists.txt's own UIConfig_svt block (see that file's comment
+# for the full "share/config/soffice.cfg/<module>/ui" derivation) and vcl/
+# CMakeLists.txt's UIConfig_vcl block. Needed for real here (not just
+# documented as a gap): CppunitTest_formula_dialogs_test.mk calls gb_
+# CppunitTest_use_uiconfigs(formula_dialogs_test,formula), and cmake/
+# LibreStudioTest.cmake's UICONFIG parameter requires a real "formula_
+# uiconfig" build-time ALL target to depend on (FATAL_ERRORs by name
+# otherwise) -- ported below following the exact same per-file add_custom_
+# command + one add_custom_target(... ALL DEPENDS ...) shape as vcl_uiconfig/
+# svt_uiconfig, alongside (not instead of) the install(FILES ...) packaging
+# rule. Named formula_uiconfig, not for_uiconfig: gb_CppunitTest_use_uiconfigs
+# passes the literal module name "formula" (matching gb_UIConfig_UIConfig's
+# own first argument above), not the "for" library target name, so this
+# port's UICONFIG lookup key follows that same "formula" spelling.
+set(FORMULA_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/formuladialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/functionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/structpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/parameter.ui"
+)
+
+install(FILES ${FORMULA_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/formula/ui)
+
+set(_formula_uiconfig_outputs "")
+foreach (_formula_uiconfig_src IN LISTS FORMULA_UICONFIG_UI_FILES)
+    get_filename_component(_formula_uiconfig_name "${_formula_uiconfig_src}" NAME)
+    set(_formula_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/formula/ui/${_formula_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_formula_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/formula/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_formula_uiconfig_src}" "${_formula_uiconfig_dest}"
+        DEPENDS "${_formula_uiconfig_src}"
+        COMMENT "Copying ${_formula_uiconfig_name} into build-tree soffice.cfg/formula/ui"
+        VERBATIM)
+    list(APPEND _formula_uiconfig_outputs "${_formula_uiconfig_dest}")
+endforeach ()
+unset(_formula_uiconfig_src)
+unset(_formula_uiconfig_name)
+unset(_formula_uiconfig_dest)
+
+add_custom_target(formula_uiconfig ALL DEPENDS ${_formula_uiconfig_outputs})
+unset(_formula_uiconfig_outputs)
+
+# --- CppunitTest targets -------------------------------------------------------
+#
+# formula's 2 CppunitTest_*.mk files, ported via librestudio_add_cppunit_test()
+# (cmake/LibreStudioTest.cmake). Both are deferred to formula/CppunitTest_
+# deferred.cmake, include()'d from the root CMakeLists.txt well after this
+# point -- formula itself is add_subdirectory()'d before unotest/test, and
+# both tests need those modules' protector plug-ins (formula_ooxml) and/or
+# program_services_rdb (formula_dialogs_test, not defined until the very end
+# of the root CMakeLists.txt). See that file's own header comment for the
+# full per-test detail.
+
+# formula/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/formula/CppunitTest_deferred.cmake")

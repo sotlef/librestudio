@@ -66,13 +66,13 @@ librestudio_add_sdi_target(sd_sdslots
     SDI        "${CMAKE_SOURCE_DIR}/sd/sdi/sdslots.sdi"
     EXPORTS    "${CMAKE_SOURCE_DIR}/sd/sdi/sdslots.sdi"
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/SdiTarget/sd/sdi"
-    INCLUDES   "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
+    INCLUDES   "${CMAKE_SOURCE_DIR}/sd/inc" "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
 
 librestudio_add_sdi_target(sd_sdgslots
     SDI        "${CMAKE_SOURCE_DIR}/sd/sdi/sdgslots.sdi"
     EXPORTS    "${CMAKE_SOURCE_DIR}/sd/sdi/sdgslots.sdi"
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/SdiTarget/sd/sdi"
-    INCLUDES   "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
+    INCLUDES   "${CMAKE_SOURCE_DIR}/sd/inc" "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
 
 set(SD_SOURCES
     # ifneq ($(ENABLE_WASM_STRIP_ACCESSIBILITY),TRUE) -- applies, the flag is
@@ -496,6 +496,11 @@ if (ENABLE_SDREMOTE)
 endif ()
 
 librestudio_expand_cxx(SD_SOURCES)
+# Cached for sd_uimpress's own gb_CppunitTest_use_library_objects(sd_uimpress,sd)
+# -- same SAL_DLLPRIVATE-visibility recompile-not-link technique already
+# established for editeng_core/sc_ucalc_test/sw_uwriter (see any one's own
+# deferred-file comment for the full rationale).
+set(SD_SOURCES "${SD_SOURCES}" CACHE INTERNAL "sd's own expanded sources, reused by sd_uimpress")
 add_library(sd SHARED ${SD_SOURCES})
 
 if (ENABLE_PCH)
@@ -537,6 +542,22 @@ target_include_directories(sd PRIVATE
     "${FROZEN_INCLUDE_DIR}"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
+if (ENABLE_SDREMOTE AND ENABLE_SDREMOTE_BLUETOOTH)
+    # RepositoryExternal.mk's gb_LinkTarget__use_bluez_bluetooth_headers,
+    # !SYSTEM_BLUEZ branch (this port has no LIBRESTUDIO_WITH_SYSTEM_BLUEZ
+    # equivalent, so always this branch -- matching configure.ac's own real
+    # bare-configure default, `with_system_bluez` unset/not "yes"): -I onto
+    # the already-vendored external/bluez_bluetooth/inc/bluetooth/*.h headers
+    # (checked into the tree, no download needed). Found missing via the
+    # real remote build: ENABLE_SDREMOTE_BLUETOOTH auto-detects on whenever
+    # dbus-glib-1 is present (cmake/LibreStudioConfigHeaders.cmake), and this
+    # -I was never wired at all, so BluetoothServer.cxx failed with a real
+    # "fatal error: bluetooth/bluetooth.h: No such file or directory" the
+    # moment that default actually turned on somewhere with dbus-glib
+    # installed.
+    target_include_directories(sd PRIVATE
+        "${CMAKE_SOURCE_DIR}/external/bluez_bluetooth/inc")
+endif ()
 add_dependencies(sd udkapi_normal_headers offapi_normal_headers officecfg_headers)
 
 # gb_LinkTarget__use_bluez_bluetooth_headers (RepositoryExternal.mk, !SYSTEM_BLUEZ
@@ -727,3 +748,459 @@ librestudio_add_component(sdd
 librestudio_set_library_output_name(sdd sdd OOO)
 
 install(TARGETS sdd LIBRARY DESTINATION program)
+# --- UIConfig_simpress (registers internally as "modules/simpress") ------
+#
+# sd/UIConfig_simpress.mk: gb_UIConfig_UIConfig(modules/simpress) -- 154
+# files across 5 categories (1 menubarfiles, 33 popupmenufiles, 1
+# statusbarfiles, 52 toolbarfiles, 67 uifiles), unconditional (no ifeq/ifneq
+# gates in the live .mk -- verified by reading it in full), packaged into
+# share/config/soffice.cfg/modules/simpress/{menubar,popupmenu,statusbar,
+# toolbar,ui} -- same multi-category pattern UIConfig_basicide/UIConfig_svt/
+# UIConfig_swriter/UIConfig_smath/UIConfig_chart2 already established. All 154
+# files verified present on disk. CppunitTest_oox_drawingml.mk's own
+# use_uiconfigs(oox_drawingml, "modules/simpress", sfx, svt) and CppunitTest_
+# sfx2_view.mk's own use_uiconfigs(sfx2_view, "modules/simpress", sfx, svt,
+# svx) both need a real build-time ALL target for this module -- introduced
+# here as "simpress_uiconfig" (this port's own bare-leaf-name convention for
+# these targets -- "simpress" is the .mk's own leaf name under "modules/",
+# same convention starmath's "smath"/sw's "swriter"/chart2's "schart" already
+# use -- not gbuild's own "modules/simpress" path string). Ported here without
+# also wiring either test in this pass: oox_drawingml is a separate, deliberate
+# follow-up (see oox/CMakeLists.txt's own comment); sfx2_view remains blocked
+# on Executable_xpdfimport regardless (see sfx2/CMakeLists.txt's own comment),
+# so this alone does not unblock it.
+set(SD_SIMPRESS_UICONFIG_MENUBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/menubar/menubar.xml"
+)
+
+set(SD_SIMPRESS_UICONFIG_POPUPMENU_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/3dobject.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/3dscene2.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/3dscene.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/annotation.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/bezier.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/connector.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/curve.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/drawtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/draw.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/form.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/formrichtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/gluepoint.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/graphic.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/group.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/line.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/measure.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/media.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/multiselect.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/notebookbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/objectalign.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/oleobject.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/outline.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepanemaster.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepanecanvasmaster.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepanenoselmaster.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepanenosel.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/sectionheader.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepane.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagepanecanvas.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/pagetab.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/page.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/table.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/popupmenu/textbox.xml"
+)
+
+set(SD_SIMPRESS_UICONFIG_STATUSBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/statusbar/statusbar.xml"
+)
+
+set(SD_SIMPRESS_UICONFIG_TOOLBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/3dobjectsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/alignmentbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/arrowsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/arrowshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/basicshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/bezierobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/calloutshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/choosemodebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/classificationbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/colorbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/commentsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/commontaskbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/connectorsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/drawingobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/distributebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/ellipsesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/extrusionobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/findbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/flowchartshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/fontworkobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/fontworkshapetype.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/formcontrols.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/formdesign.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/formsfilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/formsnavigationbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/formtextobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/fullscreenbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/gluepointsobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/graffilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/graphicobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/insertbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/linesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/masterviewtoolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/mediaobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/notebookbarshortcuts.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/optimizetablebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/optionsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/outlinetoolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/positionbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/rectanglesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/slideviewobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/slideviewtoolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/singlemode.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/standardbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/starshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/symbolshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/tableobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/textbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/textobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/toolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/viewerbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/toolbar/zoombar.xml"
+)
+
+set(SD_SIMPRESS_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/annotation.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/annotationtagmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/clientboxfragment.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/currentmastermenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationspanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationproperties.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationeffecttab.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationfragment.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationtimingtab.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customanimationtexttab.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/customslideshows.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/definecustomslideshow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/displaywindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/dlgfield.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/dockinganimation.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/effectmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/fieldmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/fontsizemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/fontstylemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/gluebox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/headerfooterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/headerfootertab.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/impressprinteroptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/insertslides.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/interactiondialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/interactionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/layoutmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/layoutpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/layoutwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/masterlayoutdlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/mastermenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/masterpagemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/masterpagepanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/masterpagepanelall.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/masterpagepanelrecent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/navigatorpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar_single.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar_groups.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar_groupedbar_full.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notebookbar_groupedbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/noteschildwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/notespanelcontextmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/optimpressgeneralpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pagesfieldbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/photoalbum.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pmimagespage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pminfodialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pmintropage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pmobjectspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pmslidespage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/pmsummarypage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/presentationdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/prntopts.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/remotedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/rotatemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/scalemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/sdviewpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/sidebarslidebackground.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/slidecontextmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/slidedesigndialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/slidetransitionspanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/snapmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/tabviewbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/tabledesignpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/simpress/ui/templatedialog.ui"
+)
+
+install(FILES ${SD_SIMPRESS_UICONFIG_MENUBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/simpress/menubar)
+install(FILES ${SD_SIMPRESS_UICONFIG_POPUPMENU_FILES}
+    DESTINATION share/config/soffice.cfg/modules/simpress/popupmenu)
+install(FILES ${SD_SIMPRESS_UICONFIG_STATUSBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/simpress/statusbar)
+install(FILES ${SD_SIMPRESS_UICONFIG_TOOLBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/simpress/toolbar)
+install(FILES ${SD_SIMPRESS_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/modules/simpress/ui)
+
+set(_simpress_uiconfig_outputs "")
+foreach (_simpress_uiconfig_pair
+        "SD_SIMPRESS_UICONFIG_MENUBAR_FILES:menubar"
+        "SD_SIMPRESS_UICONFIG_POPUPMENU_FILES:popupmenu"
+        "SD_SIMPRESS_UICONFIG_STATUSBAR_FILES:statusbar"
+        "SD_SIMPRESS_UICONFIG_TOOLBAR_FILES:toolbar"
+        "SD_SIMPRESS_UICONFIG_UI_FILES:ui")
+    string(REPLACE ":" ";" _simpress_uiconfig_pair "${_simpress_uiconfig_pair}")
+    list(GET _simpress_uiconfig_pair 0 _simpress_uiconfig_var)
+    list(GET _simpress_uiconfig_pair 1 _simpress_uiconfig_category)
+    foreach (_simpress_uiconfig_src IN LISTS ${_simpress_uiconfig_var})
+        get_filename_component(_simpress_uiconfig_name "${_simpress_uiconfig_src}" NAME)
+        set(_simpress_uiconfig_dest
+            "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/simpress/${_simpress_uiconfig_category}/${_simpress_uiconfig_name}")
+        add_custom_command(
+            OUTPUT "${_simpress_uiconfig_dest}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/simpress/${_simpress_uiconfig_category}"
+            COMMAND ${CMAKE_COMMAND} -E copy "${_simpress_uiconfig_src}" "${_simpress_uiconfig_dest}"
+            DEPENDS "${_simpress_uiconfig_src}"
+            COMMENT "Copying ${_simpress_uiconfig_name} into build-tree soffice.cfg/modules/simpress/${_simpress_uiconfig_category}")
+        list(APPEND _simpress_uiconfig_outputs "${_simpress_uiconfig_dest}")
+    endforeach ()
+endforeach ()
+unset(_simpress_uiconfig_pair)
+unset(_simpress_uiconfig_var)
+unset(_simpress_uiconfig_category)
+unset(_simpress_uiconfig_src)
+unset(_simpress_uiconfig_name)
+unset(_simpress_uiconfig_dest)
+
+add_custom_target(simpress_uiconfig ALL DEPENDS ${_simpress_uiconfig_outputs})
+unset(_simpress_uiconfig_outputs)
+
+# --- UIConfig_sdraw (gb_UIConfig_UIConfig(modules/sdraw)) --------------------
+#
+# UIConfig_sdraw.mk, re-checked directly: 1 menubar, 30 popupmenu, 1
+# statusbar, 52 toolbar, 22 ui files -- same shape and pattern as simpress_
+# uiconfig above, just a different app module. Closes the "sdraw_uiconfig
+# does not exist" gap already documented at several call sites this session
+# (sd_dialogs_test's own UICONFIG omitting "sdraw", etc.) -- introduced here
+# as "sdraw_uiconfig", the same bare-leaf-name convention as "simpress"
+# above.
+set(SD_SDRAW_UICONFIG_MENUBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/menubar/menubar.xml"
+)
+
+set(SD_SDRAW_UICONFIG_POPUPMENU_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/3dobject.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/3dscene2.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/3dscene.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/annotation.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/bezier.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/connector.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/curve.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/drawtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/draw.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/form.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/formrichtext.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/gluepoint.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/graphic.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/group.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/layertab.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/line.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/measure.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/media.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/multiselect.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/notebookbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/objectalign.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/oleobject.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/pagepanemaster.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/pagepanenoselmaster.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/pagepanenosel.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/pagepane.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/pagetab.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/page.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/table.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/popupmenu/textbox.xml"
+)
+
+set(SD_SDRAW_UICONFIG_STATUSBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/statusbar/statusbar.xml"
+)
+
+set(SD_SDRAW_UICONFIG_TOOLBAR_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/3dobjectsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/alignmentbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/arrowsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/arrowshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/basicshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/bezierobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/calloutshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/choosemodebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/colorbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/commentsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/connectorsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/drawingobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/distributebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/ellipsesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/extrusionobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/findbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/flowchartshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/fontworkobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/fontworkshapetype.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/formcontrols.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/formdesign.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/formsfilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/formsnavigationbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/formtextobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/fullscreenbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/gluepointsobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/graffilterbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/graphicobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/insertbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/linesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/masterviewtoolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/mediaobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/notebookbarshortcuts.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/optimizetablebar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/optionsbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/positionbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/rectanglesbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/redactedexportbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/redactionbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/standardbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/starshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/symbolshapes.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/tableobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/textbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/textobjectbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/toolbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/viewerbar.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/toolbar/zoombar.xml"
+)
+
+set(SD_SDRAW_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/breakdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/bulletsandnumbering.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/crossfadedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/dlgsnap.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/copydlg.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/drawchardialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/drawprinteroptions.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/drawparadialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/drawpagedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/drawprtldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/insertlayer.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/insertslidesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/namedesign.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/navigatorcontextmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/notebookbar.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/notebookbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/notebookbar_single.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/notebookbar_groupedbar_compact.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/paranumberingtab.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/queryunlinkimagedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/selectlayerdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/sdraw/ui/vectorize.ui"
+)
+
+install(FILES ${SD_SDRAW_UICONFIG_MENUBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/sdraw/menubar)
+install(FILES ${SD_SDRAW_UICONFIG_POPUPMENU_FILES}
+    DESTINATION share/config/soffice.cfg/modules/sdraw/popupmenu)
+install(FILES ${SD_SDRAW_UICONFIG_STATUSBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/sdraw/statusbar)
+install(FILES ${SD_SDRAW_UICONFIG_TOOLBAR_FILES}
+    DESTINATION share/config/soffice.cfg/modules/sdraw/toolbar)
+install(FILES ${SD_SDRAW_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/modules/sdraw/ui)
+
+set(_sdraw_uiconfig_outputs "")
+foreach (_sdraw_uiconfig_pair
+        "SD_SDRAW_UICONFIG_MENUBAR_FILES:menubar"
+        "SD_SDRAW_UICONFIG_POPUPMENU_FILES:popupmenu"
+        "SD_SDRAW_UICONFIG_STATUSBAR_FILES:statusbar"
+        "SD_SDRAW_UICONFIG_TOOLBAR_FILES:toolbar"
+        "SD_SDRAW_UICONFIG_UI_FILES:ui")
+    string(REPLACE ":" ";" _sdraw_uiconfig_pair "${_sdraw_uiconfig_pair}")
+    list(GET _sdraw_uiconfig_pair 0 _sdraw_uiconfig_var)
+    list(GET _sdraw_uiconfig_pair 1 _sdraw_uiconfig_category)
+    foreach (_sdraw_uiconfig_src IN LISTS ${_sdraw_uiconfig_var})
+        get_filename_component(_sdraw_uiconfig_name "${_sdraw_uiconfig_src}" NAME)
+        set(_sdraw_uiconfig_dest
+            "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/sdraw/${_sdraw_uiconfig_category}/${_sdraw_uiconfig_name}")
+        add_custom_command(
+            OUTPUT "${_sdraw_uiconfig_dest}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/sdraw/${_sdraw_uiconfig_category}"
+            COMMAND ${CMAKE_COMMAND} -E copy "${_sdraw_uiconfig_src}" "${_sdraw_uiconfig_dest}"
+            DEPENDS "${_sdraw_uiconfig_src}"
+            COMMENT "Copying ${_sdraw_uiconfig_name} into build-tree soffice.cfg/modules/sdraw/${_sdraw_uiconfig_category}")
+        list(APPEND _sdraw_uiconfig_outputs "${_sdraw_uiconfig_dest}")
+    endforeach ()
+endforeach ()
+unset(_sdraw_uiconfig_pair)
+unset(_sdraw_uiconfig_var)
+unset(_sdraw_uiconfig_category)
+unset(_sdraw_uiconfig_src)
+unset(_sdraw_uiconfig_name)
+unset(_sdraw_uiconfig_dest)
+
+add_custom_target(sdraw_uiconfig ALL DEPENDS ${_sdraw_uiconfig_outputs})
+unset(_sdraw_uiconfig_outputs)
+
+# --- sdqahelper (Library_sdqahelper.mk) --------------------------------------
+#
+# Not a product library -- sd's own qa-helper (SdTiledRenderingTest base
+# class), needed by sd_lokit_search's own plain LIBRARIES linking. Same
+# PLAINLIBS_NONE/PLAIN-naming/never-installed shape as sc's scqahelper and
+# sw's swqahelper (Repository.mk registers all three, plus wpftqahelper, in
+# the same group).
+set(SDQAHELPER_SOURCES
+    sd/qa/unit/sdtiledrenderingtest
+)
+librestudio_expand_cxx(SDQAHELPER_SOURCES)
+add_library(sdqahelper SHARED ${SDQAHELPER_SOURCES})
+
+target_include_directories(sdqahelper PRIVATE
+    "${CMAKE_SOURCE_DIR}/sd/inc"
+    "${CMAKE_SOURCE_DIR}/sd/source/ui/inc"
+    "${CMAKE_SOURCE_DIR}/sd/qa/inc"
+    "${OFFICECFG_INCLUDE_DIR}"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${oovbaapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(sdqahelper
+    officecfg_headers
+    udkapi_normal_headers offapi_normal_headers oovbaapi_normal_headers)
+
+target_compile_definitions(sdqahelper PRIVATE SDQAHELPER_DLLIMPLEMENTATION)
+
+# PkgConfig::CPPUNIT -- same directory-scope-visibility guard already used
+# by sc/CMakeLists.txt's own scqahelper and sw/CppunitTest_deferred.cmake's
+# own swqahelper (see either one's own comment for the full rationale).
+if (NOT TARGET PkgConfig::CPPUNIT)
+    pkg_check_modules(CPPUNIT REQUIRED IMPORTED_TARGET cppunit)
+endif ()
+
+target_link_libraries(sdqahelper PRIVATE
+    comphelper cppu cppuhelper sal subsequenttest svxcore sd sfx tl utl vcl
+    test_fixtures unotest
+    Boost::boost LibXml2::LibXml2 PkgConfig::CPPUNIT)
+
+librestudio_set_library_output_name(sdqahelper sdqahelper PLAIN)
+
+# --- CppunitTests ------------------------------------------------------------
+#
+# 35 CppunitTest_*.mk files -- split out to sd/CppunitTest_deferred.cmake
+# (deferred: needs program_services_rdb, only set much later in the root
+# CMakeLists.txt, same ordering constraint as every other module's own
+# CppunitTest_deferred.cmake). See that file's own header comment for the
+# real structure (2 shared gbuild macros covering 12 of the 35).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/sd/CppunitTest_deferred.cmake")

@@ -63,8 +63,21 @@ function(librestudio_uno_api_rdb name)
             "librestudio_uno_api_rdb(${name}): no .idl directories found under ${_rdb_IDL_ROOT}")
     endif ()
 
+    # Bug found 2026-09-27 building in a brand-new, never-before-used binary
+    # directory (this project's own build/ had always already had every
+    # UnoApiTarget/ output directory left over from an earlier build, masking
+    # this): unlike librestudio_uno_api_rdb_file()/_headers()/_java() just
+    # below, each of which make_directory's its OWN OUTPUT's parent before
+    # writing to it, this function only ever created the staging directory,
+    # never $(dirname _rdb_OUTPUT) itself -- unoidl-write's own "Cannot open
+    # <file://...udkapi.rdb> for writing, error code 2" is a plain ENOENT
+    # from a genuinely fresh checkout, not anything specific to whichever
+    # target happens to be the first _rdb consumer built.
+    get_filename_component(_rdb_out_dir "${_rdb_OUTPUT}" DIRECTORY)
+
     add_custom_command(
         OUTPUT "${_rdb_OUTPUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_rdb_out_dir}"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${_staging}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_staging}"
         ${_stage_commands}

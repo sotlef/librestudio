@@ -20,8 +20,21 @@
 # Not reproduced:
 #  - gb_Library_set_precompiled_header,lwpft,... -- precompiled headers are
 #    not ported anywhere in this build.
-#  - CppunitTest_lotuswordpro_test_lotuswordpro / CppunitTest_import_test
-#    (gb_Module_add_check_targets): test targets outside this port's scope.
+#
+# CppunitTest_lotuswordpro_test_lotuswordpro.mk and CppunitTest_lotuswordpro_
+# import_test.mk (gb_Module_add_check_targets) -- previously listed above as
+# "outside this port's scope"; that blanket exclusion is superseded now, both
+# are ported via librestudio_add_cppunit_test() (cmake/LibreStudioTest.cmake).
+# lotuswordpro_test_lotuswordpro is wired directly below (see the "---
+# CppunitTest targets ---" block at the end of this file): it has no
+# dependency this module's own add_subdirectory() position (~1028 in the root
+# CMakeLists.txt) doesn't already satisfy -- unotest/test (~1017-1018) and
+# every one of its use_components names (configmgr, i18npool, this module's
+# own lwpft, ucb's ucb1/ucpfile1) are all add_subdirectory()'d before it.
+# lotuswordpro_import_test is deferred instead, to lotuswordpro/CppunitTest_
+# deferred.cmake -- see that file's own header comment for why (its use_rdb
+# (services) needs program_services_rdb, not defined until the very end of
+# the root CMakeLists.txt).
 
 set(LWPFT_SOURCES
     lotuswordpro/source/filter/bencont
@@ -220,3 +233,74 @@ librestudio_add_component(lwpft
 librestudio_set_library_output_name(lwpft lwpft OOO)
 
 install(TARGETS lwpft LIBRARY DESTINATION program)
+
+# --- CppunitTest targets -------------------------------------------------------
+
+# CppunitTest_lotuswordpro_test_lotuswordpro.mk, re-checked directly against
+# the live file: 1 source (lotuswordpro/qa/cppunit/test_lotuswordpro),
+# use_external(boost_headers), use_libraries (comphelper cppu cppuhelper sal
+# test unotest vcl -- "test" -> test_fixtures, this port's established
+# rename), use_sdk_api (normal udkapi+offapi), use_ure + use_vcl -> 3
+# protector pairs (unobootstrapprotector x2, unoexceptionprotector x2,
+# vclbootstrapprotector x2), use_components (5 names, resolved below), use_
+# configuration -> CONFIGURATION. No use_rdb anywhere in this .mk -- re-
+# checked directly -- so no program_services_rdb DEPENDS here, unlike
+# lotuswordpro_import_test (lotuswordpro/CppunitTest_deferred.cmake).
+#
+# COMPONENTS lookup keys, each verified against the owning module's own
+# librestudio_add_component() call (grep -n "librestudio_add_component("):
+#   - "configmgr/source/configmgr" -> "configmgr" (configmgr/CMakeLists.txt).
+#   - "i18npool/util/i18npool" -> "i18npool" (i18npool/CMakeLists.txt).
+#   - "lotuswordpro/util/lwpfilter" -> "lwpft", NOT "lwpfilter" -- this
+#     module's own librestudio_add_component(lwpft ...) call just above uses
+#     its CMake library-target name "lwpft" as the registered identifier, not
+#     gbuild's own component-path spelling (same "the registered name is not
+#     necessarily use_components' own spelling" case cmake/LibreStudioTest.
+#     cmake's own header comment warns about).
+#   - "ucb/source/core/ucb1" -> "ucb1" and "ucb/source/ucp/file/ucpfile1" ->
+#     "ucpfile1" (both ucb/CMakeLists.txt -- same mapping already established
+#     by editeng_core's own COMPONENTS list).
+# All five resolve to real, already-registered components -- configmgr (492),
+# i18npool (401) and ucb (601) are all add_subdirectory()'d before
+# lotuswordpro's own position (~1028); lwpft is registered earlier in this
+# same file, just above.
+librestudio_add_cppunit_test(lotuswordpro_test_lotuswordpro
+    SOURCES
+        lotuswordpro/qa/cppunit/test_lotuswordpro
+    LIBRARIES
+        comphelper cppu cppuhelper sal test_fixtures unotest vcl
+        Boost::boost
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    COMPONENTS
+        configmgr i18npool lwpft ucb1 ucpfile1
+    CONFIGURATION)
+
+# test_lotuswordpro.cxx's LotusWordProFilterTest needs SRC_ROOT/
+# WORKDIR_FOR_BUILD (BootstrapFixture's Directories member) -- now handled
+# generically by librestudio_add_cppunit_test() itself (cmake/
+# LibreStudioTest.cmake).
+
+# CppunitTest_lotuswordpro_import_test.mk is deferred to lotuswordpro/
+# CppunitTest_deferred.cmake -- see that file's own header comment for why
+# (its use_rdb(services) needs program_services_rdb, not defined until the
+# very end of the root CMakeLists.txt, well after this module's own position).
+
+# lotuswordpro/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/lotuswordpro/CppunitTest_deferred.cmake")

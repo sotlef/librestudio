@@ -80,14 +80,64 @@
 # would mean registering a CTest that can never pass, so it is left
 # unregistered, with this comment as the record of why, per this wave's own
 # instruction to defer rather than force it.
+#
+# --- 2026-09-28: the remaining 8 of vcl's ~50 CppunitTest_*.mk files, all
+# re-checked directly (not previously examined in any prior wave) ----------
+#
+# Only one, vcl_gen, is wireable and is wired below. The other 7:
+#   - vcl_filter_ipdf, vcl_pdf_encryption, vcl_pdfexport, vcl_pdfexport2,
+#     vcl_pdfexport3: each `$(if $(filter PDFIUM,$(BUILD_TYPE)),pdfium)` --
+#     same inert-by-default gate as vcl_pdfium_library_test above -- but
+#     re-checked directly against each one's own .cxx source (not assumed
+#     from the .mk alone): unlike vcl_graphic_test's own PDFIUM-gated EXTRA
+#     source (compiles away cleanly to nothing without it), these sources
+#     call PDFium APIs unconditionally and pervasively (grep count of
+#     "pdfium" case-insensitive: ipdf.cxx 5, PDFEncryptionTest.cxx 12,
+#     pdfexport.cxx 138, pdfexport2.cxx 73, pdfexport3.cxx 128 -- no
+#     HAVE_FEATURE_PDFIUM or similar preprocessor guard anywhere in any of
+#     the five, confirmed by grepping for `^#if`/`^#ifdef` in each), the
+#     exact same "test whose entire subject matter does not exist in this
+#     port yet" shape vcl_pdfium_library_test's own comment above already
+#     established -- not forced through for the same reason.
+#   - vcl_skia: `$(if $(filter SKIA,$(BUILD_TYPE)),skia)` -- SKIA is not in
+#     LIBRESTUDIO_BUILD_TYPE by default either (vcl/CMakeLists.txt's own
+#     "DESKTOP, plus OPENCL, SKIA, PDFIUM or AFDKO" comment), and skia.cxx
+#     itself (re-checked) uses Skia APIs unconditionally throughout (150
+#     case-insensitive "skia" hits, no feature guard) -- same shape as the
+#     PDFium-gated five above, not forced through either.
+#   - vcl_gtk3_a11y: needs $(ATSPI2_CFLAGS)/$(ATSPI2_LIBS) directly (its own
+#     set_include/add_libs calls) -- re-checked: `pkg-config --exists
+#     atspi-2` fails on this machine (genuinely not installed), a real,
+#     environment-specific external-dependency gap, not a design choice --
+#     same class of gap as e.g. GPGME/breakpad being off because the
+#     library is not present, not because this port decided not to support
+#     it. GTK3 itself IS available here (`pkg-config --exists gtk+-3.0`
+#     succeeds, and vcl/CMakeLists.txt's own ENABLE_GTK3 auto-detection
+#     already builds vclplug_gtk3), so this is specifically the
+#     accessibility-bus headers that are missing, not the whole GTK3
+#     backend -- left unwired rather than adding a pkg_check_modules(...
+#     REQUIRED ...) that would FATAL_ERROR every configure on this machine.
+# None of the 7 forced through with an invented mechanism -- each a real,
+# reproducible blocker (confirmed by reading the actual .cxx source, not
+# just the .mk), not a fabricated one.
 
 # CppunitTest_vcl_app_test.mk: 3 sources (vcl/qa/cppunit/app/
-# test_IconThemeInfo, test_IconThemeScanner, test_IconThemeSelector), no
-# set_include call (confirmed: this is the one test in this file that does
-# NOT add vcl/inc), use_libraries sal vcl, use_externals boost_headers,
-# use_sdk_api, use_ure + use_vcl -> 3 protector pairs (same precedent as
-# hwpfilter_test_hwpfilter/sax_parser/scaddins_analysis), use_rdb(services) ->
-# see this file's header comment, use_configuration -> CONFIGURATION.
+# test_IconThemeInfo, test_IconThemeScanner, test_IconThemeSelector),
+# use_libraries sal vcl, use_externals boost_headers, use_sdk_api, use_ure +
+# use_vcl -> 3 protector pairs (same precedent as hwpfilter_test_hwpfilter/
+# sax_parser/scaddins_analysis), use_rdb(services) -> see this file's header
+# comment, use_configuration -> CONFIGURATION.
+#
+# Fix (first real `cmake --build`, 2026-09-27): the previous wave's own claim
+# above ("this is the one test that does NOT add vcl/inc") was wrong --
+# re-checked directly against the live .mk (lines 18-21): it DOES call
+# gb_CppunitTest_set_include with "-I$(SRCDIR)/vcl/inc" on top of $$(INCLUDE),
+# same as every other test in this file. Without it, test_IconThemeScanner.cxx
+# / test_IconThemeSelector.cxx (which #include the private IconThemeScanner.hxx
+# / IconThemeSelector.hxx from vcl/inc directly) failed with "fatal error: ...
+# No such file" -- test_IconThemeInfo.cxx alone does not need it (confirmed:
+# it only reaches vcl/inc/IconThemeInfo.hxx, which is a genuinely public
+# header already reachable via this port's own global include/ tree).
 librestudio_add_cppunit_test(vcl_app_test
     SOURCES
         vcl/qa/cppunit/app/test_IconThemeInfo
@@ -95,6 +145,7 @@ librestudio_add_cppunit_test(vcl_app_test
         vcl/qa/cppunit/app/test_IconThemeSelector
     LIBRARIES sal vcl Boost::boost
     INCLUDE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
         "${offapi_normal_HEADERS_INCLUDE_DIR}"
     DEPENDS
@@ -134,7 +185,7 @@ librestudio_add_cppunit_test(vcl_bitmapfilter_test
 # bitmapcolor, ScanlineToolsTest, BitmapScaleTest, BmpFilterTest,
 # XpmFilterTest), set_include vcl/inc, use_externals boost_headers AND (a
 # second, separate use_externals call further down the .mk, after
-# use_rdb(services)) harfbuzz -> LIBRESTUDIO_HARFBUZZ_TARGETS, the same
+# use_rdb(services)) harfbuzz -> LIBRESTUDIO_HARFBUZZ_TARGET, the same
 # variable vcl/CMakeLists.txt's own fftester/listglyphs targets use rather
 # than a fixed target name (see that file's own comment on why). Same
 # use_libraries list as vcl_bitmapfilter_test above.
@@ -148,7 +199,7 @@ librestudio_add_cppunit_test(vcl_bitmap_test
         vcl/qa/cppunit/XpmFilterTest
     LIBRARIES
         basegfx comphelper cppu cppuhelper sal svt test_fixtures tl unotest
-        vcl utl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        vcl utl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -375,14 +426,15 @@ endif ()
 # svl/CppunitTest_deferred.cmake's own comment on this exact mapping).
 # ICU::uc comes from find_package(ICU ...) at the ROOT CMakeLists.txt's own
 # scope (line 129, before any add_subdirectory), so -- like Boost::boost,
-# LibXml2::LibXml2 and LIBRESTUDIO_HARFBUZZ_TARGETS -- it is directly visible
-# here with no guard. PkgConfig::GRAPHITE, needed only by vcl_font below, is
-# NOT root-scoped -- it is created inside vcl/CMakeLists.txt's own directory
-# scope by pkg_check_modules(GRAPHITE ...) -- so it gets the same
-# if (NOT TARGET ...) guard + pkg_check_modules() re-run this file already
-# uses for PkgConfig::NSS above, for the identical reason (see this file's own
-# header comment, and cmake/LibreStudioTest.cmake's, on directory-scoped
-# IMPORTED_TARGETs).
+# LibXml2::LibXml2 and LIBRESTUDIO_HARFBUZZ_TARGET -- it is directly visible
+# here with no guard. LIBRESTUDIO_GRAPHITE2_TARGET, needed only by vcl_font
+# below, is the same shape now too: a CACHE INTERNAL variable
+# librestudio_pkgconfig() exports (resolved by vcl/CMakeLists.txt's own
+# call, near its own top), visible everywhere regardless of
+# add_subdirectory() scope -- no guard needed, unlike PkgConfig::NSS above
+# (a real directory-scoped IMPORTED_TARGET, see this file's own header
+# comment, and cmake/
+# LibreStudioTest.cmake's, on why that one still needs one).
 #
 # Two upstream mechanisms this sub-wave newly encounters have no equivalent in
 # this port and are not modelled, each flagged at its one or two call sites
@@ -476,7 +528,7 @@ librestudio_add_cppunit_test(vcl_fontmetric
         vcl/qa/cppunit/fontmetric
     LIBRARIES
         comphelper cppu cppuhelper sal svt test_fixtures tl tk unotest vcl
-        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -510,7 +562,7 @@ librestudio_add_cppunit_test(vcl_font
     LIBRARIES
         basegfx comphelper cppu cppuhelper i18nlangtag sal salhelper svt
         test_fixtures tl tk unotest utl vcl Boost::boost
-        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -525,10 +577,7 @@ librestudio_add_cppunit_test(vcl_font
         configmgr i18npool ucb1
     CONFIGURATION)
 
-if (NOT TARGET PkgConfig::GRAPHITE)
-    pkg_check_modules(GRAPHITE REQUIRED IMPORTED_TARGET graphite2)
-endif ()
-target_link_libraries(vcl_font PRIVATE PkgConfig::GRAPHITE)
+target_link_libraries(vcl_font PRIVATE ${LIBRESTUDIO_GRAPHITE2_TARGET})
 
 # CppunitTest_vcl_fontvariation.mk: 1 source (vcl/qa/cppunit/
 # FontVariationTest), same shape as vcl_fontcharmap, plus use_more_fonts
@@ -635,7 +684,7 @@ librestudio_add_cppunit_test(vcl_treeview
         vcl/qa/cppunit/treeviewtest
     LIBRARIES
         comphelper cppu cppuhelper sal svt test_fixtures tk tl unotest vcl
-        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -689,7 +738,7 @@ librestudio_add_cppunit_test(vcl_backend_test
         vcl/qa/cppunit/BackendTest
     LIBRARIES
         basegfx comphelper cppu cppuhelper sal svt test_fixtures tl unotest
-        vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -741,7 +790,7 @@ librestudio_add_cppunit_test(vcl_bitmap_render_test
         vcl/qa/cppunit/bitmaprender/BitmapRenderTest
     LIBRARIES
         comphelper cppu cppuhelper sal svt test_fixtures tl unotest vcl
-        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -791,7 +840,7 @@ librestudio_add_cppunit_test(vcl_cjk
         vcl/qa/cppunit/cjktext
     LIBRARIES
         comphelper cppu cppuhelper i18nlangtag sal svt test_fixtures tl
-        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS} ICU::uc
+        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET} ICU::uc
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -911,40 +960,49 @@ librestudio_add_cppunit_test(vcl_png_test
 
 # --- remaining cluster --------------------------------------------------------
 
-# CppunitTest_vcl_apitests.mk is deliberately NOT registered anywhere in this
-# port, the same posture as vcl_pdfium_library_test at the top of this file.
-# 1 source (vcl/qa/api/XGraphicTest), use_externals boost_headers, use_api
-# (offapi udkapi), use_ure + use_vcl, use_configuration, and a 16-name
-# use_components list -- comphelper/util/comphelp, configmgr/source/configmgr,
-# filter/source/config/cache/filterconfig1, filter/source/
-# storagefilterdetect/storagefd, i18npool/util/i18npool, package/source/xstor/
-# xstor, package/util/package2, sfx2/util/sfx, sot/util/sot, svl/source/
-# fsstor/fsstorage, svtools/util/svt, ucb/source/core/ucb1, ucb/source/ucp/
-# file/ucpfile1, ucb/source/ucp/tdoc/ucptdoc1, unotools/util/utl, uui/util/
-# uui, vcl/vcl.common. Fourteen of those sixteen resolve (comphelper, configmgr,
-# i18npool, xstor, package2, sfx, sot, fsstorage, svt, ucb1, ucpfile1,
-# ucptdoc1, utl, uui, vcl -- all re-verified against their owning module's own
-# librestudio_add_component() call), but filterconfig1 and storagefd do not:
-# filter/CMakeLists.txt only ports msfilter and icg (Library_msfilter.mk /
-# Library_icg.mk); its own header comment names storagefd (Library_storagefd.mk)
-# and filterconfig (Library_filterconfig.mk) explicitly among the Library_*.mk
-# files "out of scope for this task" because they need externals (poppler,
-# cairo, and others) "not yet confirmed set up in this CMake port" -- there is
-# no filter/CMakeLists.txt target for either, and no librestudio_add_component
-# call registers them under any name. This is not an ordering problem (unlike
-# most COMPONENTS gaps elsewhere in this port, waiting for a later
-# add_subdirectory() to run) and not a link-graph problem either -- it is
-# infrastructure this port has not built yet, the same category of gap
-# vcl_pdfium_library_test's own comment documents for PDFium. Registering the
-# test with COMPONENTS missing those two names would either FATAL_ERROR at
-# configure time (librestudio_add_cppunit_test()'s own COMPONENTS lookup does
-# exactly that for any unregistered name) or, if those two names were quietly
-# dropped instead, produce a test that builds but can only fail at run time --
-# XGraphicTest.cxx exercises com.sun.star.graphic.GraphicProvider, whose
-# format detection depends on the storage/filter-config services those two
-# components register. Left unregistered, with this comment as the record of
-# why, per this wave's own instruction to defer rather than force a test
-# through that cannot genuinely pass.
+# CppunitTest_vcl_apitests.mk: RESOLVED. An earlier wave left this unregistered
+# because two of its sixteen use_components entries -- filter/source/config/
+# cache/filterconfig1 and filter/source/storagefilterdetect/storagefd -- did
+# not resolve at the time (filter/CMakeLists.txt then only ported msfilter and
+# icg). filter/CMakeLists.txt has since grown real filterconfig and storagefd
+# SHARED targets (its own "--- filterconfig ---"/"--- storagefd ---" blocks),
+# each registered via its own librestudio_add_component() call -- "filterconfig"
+# (filter/CMakeLists.txt, for the filterconfig1.component descriptor -- the
+# gbuild use_components spelling "filterconfig1" names the .component file,
+# not this port's lookup key, same "path spelling != lookup key" distinction
+# this file's own header comment already makes for other components) and
+# "storagefd" (spelling matches directly). Re-verified all sixteen keys
+# directly against each owning module's own librestudio_add_component() call:
+# comphelper, configmgr, filterconfig, storagefd, i18npool, xstor, package2,
+# sfx, sot, fsstorage, svt, ucb1, ucpfile1, ucptdoc1, utl, uui, vcl -- all
+# resolve now. 1 source (vcl/qa/api/XGraphicTest), use_externals boost_headers,
+# use_api(offapi,udkapi) (normal variant), use_ure + use_vcl -> 3 protector
+# pairs, use_configuration -> CONFIGURATION. No use_rdb(services) in this .mk
+# (explicit COMPONENTS covers it instead), so no program_services_rdb
+# dependency needed -- filter (580), uui (710), and every other component-
+# owning module above are already add_subdirectory()'d well before this file's
+# own include() point (root CMakeLists.txt, after program_services_rdb is
+# defined), so ordering was never the blocker for this one, only the missing
+# filter targets were.
+librestudio_add_cppunit_test(vcl_apitests
+    SOURCES
+        vcl/qa/api/XGraphicTest
+    LIBRARIES
+        comphelper cppu cppuhelper sal svt test_fixtures tl unotest vcl
+        Boost::boost
+    INCLUDE
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        offapi_normal_headers udkapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    COMPONENTS
+        comphelper configmgr filterconfig storagefd i18npool xstor package2
+        sfx sot fsstorage svt ucb1 ucpfile1 ucptdoc1 utl uui vcl
+    CONFIGURATION)
 
 # CppunitTest_vcl_jpeg_read_write_test.mk: 2 sources (vcl/qa/cppunit/jpeg/
 # JpegReaderTest, vcl/qa/cppunit/jpeg/JpegWriterTest), use_external(
@@ -1011,7 +1069,7 @@ librestudio_add_cppunit_test(vcl_outdev
         vcl/qa/cppunit/outdev
     LIBRARIES
         basegfx comphelper cppu cppuhelper sal svt test_fixtures tl unotest
-        vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${CMAKE_SOURCE_DIR}/vcl/source/window"
@@ -1063,7 +1121,7 @@ librestudio_add_cppunit_test(vcl_textlayout
         vcl/qa/cppunit/textlayout
     LIBRARIES
         comphelper cppu cppuhelper i18nlangtag sal svt test_fixtures tl
-        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS} ICU::uc
+        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET} ICU::uc
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -1094,7 +1152,7 @@ librestudio_add_cppunit_test(vcl_text
         vcl/qa/cppunit/text
     LIBRARIES
         comphelper cppu cppuhelper i18nlangtag sal svt test_fixtures tl
-        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS} ICU::uc
+        unotest vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET} ICU::uc
     INCLUDE
         "${CMAKE_SOURCE_DIR}/vcl/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -1136,7 +1194,7 @@ if (USING_X11)
             vcl/qa/cppunit/timer
         LIBRARIES
             comphelper cppu cppuhelper sal salhelper test_fixtures tl unotest
-            vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+            vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
         INCLUDE
             "${CMAKE_SOURCE_DIR}/vcl/inc"
             "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -1329,7 +1387,7 @@ if ("MORE_FONTS" IN_LIST LIBRESTUDIO_BUILD_TYPE)
             vcl/qa/unx/generic/generic
         LIBRARIES
             comphelper cppu cppuhelper sal subsequenttest test_fixtures tl
-            unotest utl vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+            unotest utl vcl Boost::boost ${LIBRESTUDIO_HARFBUZZ_TARGET}
             LibXml2::LibXml2
         INCLUDE
             "${CMAKE_SOURCE_DIR}/vcl/inc"
@@ -1404,4 +1462,45 @@ librestudio_add_cppunit_test(vcl_dialogs_test
         vclbootstrapprotector vclbootstrapprotector
     NONHEADLESS
     UICONFIG vcl
+    CONFIGURATION)
+
+# --- vcl_gen ----------------------------------------------------------------
+#
+# CppunitTest_vcl_gen.mk, re-checked directly: 1 source (vcl/qa/cppunit/gen/
+# gen), use_libraries (basegfx comphelper cppu cppuhelper sal sfx
+# subsequenttest test tl unotest utl vcl -- "test" -> test_fixtures),
+# use_externals(boost_headers libxml2), use_sdk_api, use_ure + use_vcl_non_
+# headless (NOT the "_with_windows" variant NONHEADLESS elsewhere in this
+# port already models -- but re-checked directly against solenv/gbuild/
+# CppunitTest.mk: the only difference between the two is that "_with_
+# windows" additionally clears the per-test HEADLESS make variable, which
+# this port's own cppunittester invocation never sets to "--headless" in
+# the first place -- see cmake/LibreStudioTest.cmake's own NONHEADLESS
+# header comment for why that half is already a no-op here -- so reusing
+# NONHEADLESS produces the identical effective behaviour: a real build-order
+# dependency on vclplug_gen plus "-env:SAL_USE_VCLPLUGIN=gen"),
+# use_rdb(services) -> DEPENDS program_services_rdb (no COMPONENTS),
+# use_configuration -> CONFIGURATION. gen.cxx itself (re-checked) has no
+# gen-plugin-specific API calls at all -- it exercises plain VirtualDevice/
+# Bitmap drawing through whatever backend SAL_USE_VCLPLUGIN picks, and the
+# whole point of the test is forcing that pick to be the real "gen" backend
+# rather than the default svp one, exactly what NONHEADLESS already does.
+librestudio_add_cppunit_test(vcl_gen
+    SOURCES
+        vcl/qa/cppunit/gen/gen
+    LIBRARIES
+        basegfx comphelper cppu cppuhelper sal sfx subsequenttest
+        test_fixtures tl unotest utl vcl
+        Boost::boost LibXml2::LibXml2
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+        program_services_rdb
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    NONHEADLESS
     CONFIGURATION)

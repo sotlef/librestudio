@@ -703,12 +703,18 @@ set(OFFICECFG_MAIN_MOD
     org/openoffice/Office/Paths-internallibnumbertextdata.xcu
 )
 
-# Eight more are named by the .mk and cannot be built here.  fcfg_base_filters
-# and its seven neighbours come from filter/Configuration_filter.mk, and the
-# filter module is not ported — it is a 979-line .mk of its own.  They are the
-# file-type table: which filter opens what.  Nothing in this build can open a
-# document through a filter yet, so the registry is complete without them and
-# says so rather than pretending.
+# Ten more are named by the .mk and still cannot be built here.  fcfg_base_
+# filters and its nine other neighbours (base, calc, cjk, ctl, ctlseqcheck,
+# draw, graphicfilter, lingucomponent, math, xsltfilter) come from filter/
+# Configuration_filter.mk, and the filter module itself is not ported — it is
+# a 979-line .mk of its own. They are the file-type table: which filter opens
+# what. Two of the twelve groups this drives -- fcfg_writer and fcfg_impress,
+# plus the fcfg_global/fcfg_web groups writer.xcd also folds in -- are built
+# below anyway (see "fcfg groups" and "writer.xcd / impress.xcd"), because
+# they are what let a document actually load through TypeDetection, which
+# four independent CppunitTests need to get anywhere at all. The other ten
+# are not needed by any test this port currently runs, so they stay undone
+# and the registry says so rather than pretending otherwise.
 
 # --- instantiating them --------------------------------------------------------
 
@@ -801,7 +807,373 @@ add_custom_command(
 add_custom_target(officecfg_registry ALL
     DEPENDS "${LIBRESTUDIO_REGISTRY_DIR}/main.xcd"
             ${OFFICECFG_XCS_OUTPUTS} ${OFFICECFG_XCU_OUTPUTS}
-            ${OFFICECFG_XCM_OUTPUTS})
+            ${OFFICECFG_XCM_OUTPUTS}
+            "${LIBRESTUDIO_REGISTRY_DIR}/writer.xcd"
+            "${LIBRESTUDIO_REGISTRY_DIR}/impress.xcd"
+            ${OFFICECFG_FCFG_OUTPUTS})
+
+# --- fcfg groups -----------------------------------------------------------
+#
+# filter/Configuration_filter.mk's fcfg_global/fcfg_web/fcfg_writer/
+# fcfg_impress groups: the four (of twelve) TypeDetection fragment groups that
+# writer.xcd/impress.xcd below actually need. Each group is a set of named
+# fragment files under filter/source/config/fragments/{types,filters}/*.xcu,
+# concatenated into one fcfg_<group>_{types,filters}.xcu by filter/source/
+# config/tools/merge/pyAltFCFGMerge -- read in full, its CLI contract is:
+#   tempdir=, share_subdir_name=, fragmentsdir=<parent of types/ and filters/>,
+#   outdir=, pkg=<output file>, xmlpackage=Types|Filter, and exactly one of
+#   tcfg=<response file> (Types) or fcfg=<response file> (Filter). The
+#   response file itself is one line, "items=name1,name2,...", which upstream
+#   builds at build time via gb_var2file + mktemp; here it is written once at
+#   configure time, same as OFFICECFG_MAIN_LIST/OFFICECFG_MAIN_SED above.
+#
+# pyAltFCFGMerge also reads SRCDIR from its process environment (to find
+# FCFGMerge.cfg next to it) -- nothing else in this tree sets a custom
+# command's environment, but ${CMAKE_COMMAND} -E env is a standard, portable
+# CMake mechanism, not a workaround.
+find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+
+set(OFFICECFG_FCFG_MERGE_TOOL
+    "${CMAKE_SOURCE_DIR}/filter/source/config/tools/merge/pyAltFCFGMerge")
+set(OFFICECFG_FCFG_MERGE_CFG
+    "${CMAKE_SOURCE_DIR}/filter/source/config/tools/merge/FCFGMerge.cfg")
+set(OFFICECFG_FCFG_FRAGMENTS_DIR
+    "${CMAKE_SOURCE_DIR}/filter/source/config/fragments")
+set(OFFICECFG_FCFG_BUILD "${OFFICECFG_REGISTRY_BUILD}/FCFGMerge")
+
+# librestudio_officecfg_fcfg(<output.xcu> Types|Filter <fragment-name>...)
+function(librestudio_officecfg_fcfg _output _kind)
+    set(_fragments ${ARGN})
+    if (_kind STREQUAL "Types")
+        set(_subdir "types")
+        set(_cfgkey "tcfg")
+    elseif (_kind STREQUAL "Filter")
+        set(_subdir "filters")
+        set(_cfgkey "fcfg")
+    else ()
+        message(FATAL_ERROR "librestudio_officecfg_fcfg: unknown kind '${_kind}'")
+    endif ()
+
+    set(_items "items=")
+    set(_deps)
+    set(_first TRUE)
+    foreach (_name IN LISTS _fragments)
+        if (_first)
+            string(APPEND _items "${_name}")
+            set(_first FALSE)
+        else ()
+            string(APPEND _items ",${_name}")
+        endif ()
+        list(APPEND _deps "${OFFICECFG_FCFG_FRAGMENTS_DIR}/${_subdir}/${_name}.xcu")
+    endforeach ()
+
+    set(_itemsfile "${OFFICECFG_FCFG_BUILD}/${_output}.items")
+    file(WRITE "${_itemsfile}" "${_items}\n")
+
+    set(_out "${OFFICECFG_FCFG_BUILD}/${_output}")
+    add_custom_command(
+        OUTPUT "${_out}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${OFFICECFG_FCFG_BUILD}"
+        COMMAND ${CMAKE_COMMAND} -E env "SRCDIR=${CMAKE_SOURCE_DIR}"
+                "${PYTHON3_EXECUTABLE}" "${OFFICECFG_FCFG_MERGE_TOOL}"
+                "tempdir=${OFFICECFG_FCFG_BUILD}"
+                "share_subdir_name=${OFFICECFG_SHARE_FOLDER}"
+                "fragmentsdir=${OFFICECFG_FCFG_FRAGMENTS_DIR}"
+                "outdir=${OFFICECFG_FCFG_BUILD}/"
+                "pkg=${_out}"
+                "xmlpackage=${_kind}"
+                "${_cfgkey}=${_itemsfile}"
+        DEPENDS "${_itemsfile}" "${OFFICECFG_FCFG_MERGE_TOOL}" "${OFFICECFG_FCFG_MERGE_CFG}"
+                ${_deps}
+        COMMENT "pyAltFCFGMerge: ${_output}"
+        VERBATIM)
+
+    set(OFFICECFG_FCFG_OUTPUTS "${OFFICECFG_FCFG_OUTPUTS}" "${_out}" PARENT_SCOPE)
+endfunction()
+
+set(OFFICECFG_FCFG_OUTPUTS)
+
+librestudio_officecfg_fcfg(fcfg_global_types.xcu Types
+    generic_Text
+    writer_StarOffice_XML_Writer
+    writer_globaldocument_StarOffice_XML_Writer_GlobalDocument
+    pdf_Portable_Document_Format
+    writerglobal8
+    writerglobal8_template)
+
+librestudio_officecfg_fcfg(fcfg_global_filters.xcu Filter
+    Text__encoded___StarWriter_GlobalDocument_
+    writer_globaldocument_StarOffice_XML_Writer
+    writer_globaldocument_StarOffice_XML_Writer_GlobalDocument
+    writer_globaldocument_pdf_Export
+    writerglobal8
+    writerglobal8_template
+    writerglobal8_writer
+    writerglobal8_HTML)
+
+librestudio_officecfg_fcfg(fcfg_web_types.xcu Types
+    generic_HTML
+    generic_Text
+    writer_web_HTML_help
+    writer_StarOffice_XML_Writer
+    writer_web_StarOffice_XML_Writer_Web_Template
+    pdf_Portable_Document_Format
+    writerweb8_writer_template)
+
+librestudio_officecfg_fcfg(fcfg_web_filters.xcu Filter
+    HTML
+    Text__StarWriter_Web_
+    Text__encoded___StarWriter_Web_
+    writer_web_HTML_help
+    writer_web_StarOffice_XML_Writer
+    writer_web_StarOffice_XML_Writer_Web_Template
+    writer_web_pdf_Export
+    writer_web_png_Export
+    writer_web_jpg_Export
+    writer_web_webp_Export
+    writerweb8_writer_template
+    writerweb8_writer)
+
+librestudio_officecfg_fcfg(fcfg_writer_types.xcu Types
+    generic_HTML
+    calc_MS_Excel_40
+    calc_MS_Excel_5095
+    calc_MS_Excel_95
+    writer_MS_WinWord_5
+    writer_MS_WinWord_60
+    writer_MS_Word_95
+    writer_MS_Word_95_Vorlage
+    writer_MS_Word_97
+    writer_MS_Word_97_Vorlage
+    writer_ODT_FlatXML
+    writer_Rich_Text_Format
+    writer_StarOffice_XML_Writer
+    writer_WordPerfect_Document
+    writer_MS_Works_Document
+    writer_MS_Write
+    writer_DosWord
+    writer_ClarisWorks
+    writer_Mac_Word
+    writer_Mac_Works
+    writer_MacWrite
+    writer_Mariner_Write
+    writer_WriteNow
+    writer_AbiWord_Document
+    writer_T602_Document
+    writer_LotusWordPro_Document
+    generic_Text
+    writer_MIZI_Hwp_97
+    writer_StarOffice_XML_Writer_Template
+    pdf_Portable_Document_Format
+    writer8_template
+    writer8
+    writer_MS_Word_2007_XML
+    writer_MS_Word_2007_XML_Template
+    writer_MS_Word_2007_XML_VBA
+    writer_OOXML
+    writer_OOXML_Template
+    writer_OOXML_VBA
+    writer_layout_dump_xml
+    writer_indexing_export_xml
+    writer_BroadBand_eBook
+    writer_FictionBook_2
+    writer_PalmDoc
+    writer_Plucker_eBook
+    writer_ApplePages
+    MWAW_Text_Document
+    Palm_Text_Document
+    StarOffice_Writer
+    writer_EPUB_Document
+    writer_PocketWord_File
+    generic_Markdown)
+
+librestudio_officecfg_fcfg(fcfg_writer_filters.xcu Filter
+    HTML__StarWriter_
+    MS_WinWord_5
+    MS_WinWord_6_0
+    MS_Word_95
+    MS_Word_95_Vorlage
+    MS_Word_97
+    MS_Word_97_Vorlage
+    ODT_FlatXML
+    Rich_Text_Format
+    StarOffice_XML__Writer_
+    WordPerfect
+    MS_Works
+    MS_Write
+    DosWord
+    ClarisWorks
+    Mac_Word
+    Mac_Works
+    MacWrite
+    Mariner_Write
+    WriteNow
+    AbiWord
+    T602Document
+    LotusWordPro
+    Text
+    Text__encoded_
+    writer_MIZI_Hwp_97
+    writer_StarOffice_XML_Writer_Template
+    writer_pdf_Export
+    writer8
+    writer8_template
+    MS_Word_2007_XML
+    MS_Word_2007_XML_Template
+    MS_Word_2007_XML_VBA
+    OOXML_Text
+    OOXML_Text_Template
+    OOXML_Text_VBA
+    writer_layout_dump
+    writer_indexing_export
+    BroadBand_eBook
+    FictionBook_2
+    PalmDoc
+    Plucker_eBook
+    ApplePages
+    MWAW_Text_Document
+    Palm_Text_Document
+    StarOffice_Writer
+    EPUB
+    PocketWord_File
+    Markdown)
+
+librestudio_officecfg_fcfg(fcfg_impress_types.xcu Types
+    draw_StarOffice_XML_Draw
+    impress_AppleKeynote
+    impress_MS_PowerPoint_97
+    impress_MS_PowerPoint_97_AutoPlay
+    impress_MS_PowerPoint_97_Vorlage
+    impress_ODP_FlatXML
+    impress_StarOffice_XML_Impress
+    impress_StarOffice_XML_Impress_Template
+    pdf_Portable_Document_Format
+    impress8
+    impress8_template
+    draw8
+    MS_PowerPoint_2007_XML
+    MS_PowerPoint_2007_XML_AutoPlay
+    MS_PowerPoint_2007_XML_Template
+    MS_PowerPoint_2007_XML_VBA
+    impress_OOXML_Presentation
+    impress_OOXML_Presentation_Template
+    impress_OOXML_Presentation_AutoPlay
+    impress_ClarisWorks
+    StarOffice_Presentation
+    MWAW_Presentation
+    impress_PowerPoint3)
+
+librestudio_officecfg_fcfg(fcfg_impress_filters.xcu Filter
+    AppleKeynote
+    MS_PowerPoint_97
+    MS_PowerPoint_97_AutoPlay
+    MS_PowerPoint_97_Vorlage
+    impress_StarOffice_XML_Draw
+    ODP_FlatXML
+    StarOffice_XML__Impress_
+    impress_StarOffice_XML_Impress_Template
+    impress_pdf_Export
+    impress8
+    impress8_template
+    impress8_draw
+    impress_MS_PowerPoint_2007_XML
+    impress_MS_PowerPoint_2007_XML_AutoPlay
+    impress_MS_PowerPoint_2007_XML_Template
+    impress_MS_PowerPoint_2007_XML_VBA
+    impress_OOXML
+    impress_OOXML_Template
+    impress_OOXML_AutoPlay
+    ClarisWorks_Impress
+    StarOffice_Presentation
+    MWAW_Presentation
+    PowerPoint3)
+
+# --- writer.xcd / impress.xcd -----------------------------------------------
+#
+# postprocess/CustomTarget_registry.mk's postprocess_FILES_writer/_impress,
+# packed the same way main.xcd is (packregistry.xslt over a <list> of
+# <filename> entries) except for two differences, both read directly from
+# that .mk: the generic "%.xcd" rule these two fall under has no sed pass (the
+# ${...} substitution is main.xcd's own special case), and postprocess_DEPS_
+# writer/_impress := main means the .list starts with a literal
+# <dependency file="main"/> element -- confirmed load-bearing by reading
+# configmgr/source/xcdparser.cxx, which resolves it against the other .xcd
+# files already found in the same registry directory.
+function(librestudio_officecfg_xcd _name _list_var)
+    set(_files ${ARGN})
+    set(_list "${OFFICECFG_REGISTRY_BUILD}/${_name}.list")
+    set(_content "<list><dependency file='main'/>")
+    foreach (_file IN LISTS _files)
+        string(APPEND _content "<filename>${_file}</filename>")
+    endforeach ()
+    string(APPEND _content "</list>")
+    file(WRITE "${_list}" "${_content}")
+
+    add_custom_command(
+        OUTPUT "${LIBRESTUDIO_REGISTRY_DIR}/${_name}.xcd"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBRESTUDIO_REGISTRY_DIR}"
+        COMMAND "${XSLTPROC_EXECUTABLE}" --nonet
+                -o "${LIBRESTUDIO_REGISTRY_DIR}/${_name}.xcd"
+                "${OFFICECFG_PACKREGISTRY}" "${_list}"
+        DEPENDS "${_list}" "${OFFICECFG_PACKREGISTRY}" ${_files}
+        COMMENT "packregistry.xslt: ${_name}.xcd"
+        VERBATIM)
+    set("${_list_var}" "${_list}" PARENT_SCOPE)
+endfunction()
+
+# postprocess_FILES_writer (postprocess/CustomTarget_registry.mk:373-396):
+# WriterCommands/WriterFormWindowState/WriterGlobalWindowState/
+# WriterReportWindowState/WriterWebWindowState/WriterWindowState/
+# XFormsWindowState schema+data, all three of fcfg_global/fcfg_web/
+# fcfg_writer (not just fcfg_writer -- verified by re-reading the .mk),
+# and Common-writer/Embedding-writer/Setup-writer.
+set(OFFICECFG_WRITER_FILES
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterCommands.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterFormWindowState.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterGlobalWindowState.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterReportWindowState.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterWebWindowState.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/WriterWindowState.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/XFormsWindowState.xcs"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterCommands.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterFormWindowState.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterGlobalWindowState.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterReportWindowState.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterWebWindowState.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/WriterWindowState.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/XFormsWindowState.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_global_filters.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_global_types.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_web_filters.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_web_types.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_writer_filters.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_writer_types.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/Common-writer.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/Embedding-writer.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Setup-writer.xcu")
+librestudio_officecfg_xcd(writer OFFICECFG_WRITER_LIST ${OFFICECFG_WRITER_FILES})
+
+# postprocess_FILES_impress (postprocess/CustomTarget_registry.mk:92-109):
+# PresentationMinimizer/PresenterScreen/Office-UI-Effects/
+# ImpressWindowState schema+data, fcfg_impress, and Common-impress/
+# Embedding-impress/Jobs-impress/ProtocolHandler-impress/Setup-impress.
+set(OFFICECFG_IMPRESS_FILES
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/PresentationMinimizer.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/PresenterScreen.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/Effects.xcs"
+    "${OFFICECFG_XCS_BUILD}/org/openoffice/Office/UI/ImpressWindowState.xcs"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/PresentationMinimizer.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/PresenterScreen.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/Effects.xcu"
+    "${OFFICECFG_XCU_BUILD}/org/openoffice/Office/UI/ImpressWindowState.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_impress_filters.xcu"
+    "${OFFICECFG_FCFG_BUILD}/fcfg_impress_types.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/Common-impress.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/Embedding-impress.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/Jobs-impress.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Office/ProtocolHandler-impress.xcu"
+    "${OFFICECFG_XCM_BUILD}/org/openoffice/Setup-impress.xcu")
+librestudio_officecfg_xcd(impress OFFICECFG_IMPRESS_LIST ${OFFICECFG_IMPRESS_FILES})
 
 # --- Package_misc ---------------------------------------------------------
 #
@@ -863,3 +1235,15 @@ librestudio_add_cppunit_test(officecfg_cppheader_test
 # per-test detail and the root CMakeLists.txt include() call site for the
 # ordering rationale).
 
+
+# officecfg/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/officecfg/CppunitTest_deferred.cmake")

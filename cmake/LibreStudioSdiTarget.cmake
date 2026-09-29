@@ -62,6 +62,18 @@ function(librestudio_add_sdi_target target)
 
     add_custom_target(${target} DEPENDS "${_map}" "${_header}")
 
-    set(${target}_HEADER "${_header}" PARENT_SCOPE)
-    set(${target}_INCLUDE_DIR "${_sdi_OUTPUT_DIR}" PARENT_SCOPE)
+    # 2026-09-29, found via the real remote build: a plain PARENT_SCOPE set()
+    # only reaches the directory scope that directly CALLS this function
+    # (sd/CMakeLists.txt's own scope, in sd's case) -- it does not reach a
+    # *_deferred.cmake file, which include()s back into the ROOT directory's
+    # own separate scope. sd/CppunitTest_deferred.cmake's sd_uimpress target
+    # references ${sd_sdslots_INCLUDE_DIR} in its own INCLUDE list, but that
+    # variable was empty there (cross-scope, same visibility gap already
+    # documented repeatedly in this tree for PkgConfig::CPPUNIT and friends),
+    # so `#include <sdslots.hxx>` failed with a real "No such file or
+    # directory" on the remote test build. CACHE INTERNAL makes both
+    # variables visible everywhere, the same fix already used throughout this
+    # port for exactly this class of cross-directory-scope problem.
+    set(${target}_HEADER "${_header}" CACHE INTERNAL "" FORCE)
+    set(${target}_INCLUDE_DIR "${_sdi_OUTPUT_DIR}" CACHE INTERNAL "" FORCE)
 endfunction ()

@@ -67,7 +67,17 @@ defined so that "#if HAVE_FEATURE_x" and "#ifdef HAVE_FEATURE_x" agree.
    ucpchelp1 is built and registered. */
 #define HAVE_FEATURE_XMLHELP @ENABLE_XMLHELP_CONFIG@
 #define HAVE_FEATURE_PAGEIN 0
-#define HAVE_FEATURE_JUMBO_SHEETS 0
+/* 2026-09-29, found via the real remote build (sc_jumbosheets_test.cxx
+   calling ScDefaultsOptions::SetInitJumboSheets(), compiled out by this
+   #if guard): configure.ac:7848-7867 -- jumbo sheets need 64-bit
+   tools::Long, so on any non-Windows OS this is `AC_DEFINE(HAVE_FEATURE_
+   JUMBO_SHEETS)` whenever sizeof(long) > 4, i.e. unconditionally true on
+   every 64-bit Linux target (the only platform this port builds for; the
+   Windows branch's own 64-bit special case is moot here). The 0 here was
+   just autoheader's unconfigured template default, like HAVE_FEATURE_
+   XMLHELP's own comment above already documents for that flag -- never
+   actually reviewed against configure.ac's real condition until now. */
+#define HAVE_FEATURE_JUMBO_SHEETS 1
 
 #define HAVE_FT_FACE_GETCHARVARIANTINDEX 0
 #define HAVE_EXPORT_VALIDATION 0

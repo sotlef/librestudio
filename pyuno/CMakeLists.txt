@@ -189,3 +189,13 @@ target_link_libraries(pyuno_wrapper PRIVATE ${CMAKE_DL_LIBS})
 set_target_properties(pyuno_wrapper PROPERTIES OUTPUT_NAME "pyuno" PREFIX "")
 
 install(TARGETS pyuno_wrapper LIBRARY DESTINATION program)
+
+# pyuno/CppunitTest_deferred.cmake needs data (program_services_rdb) from a
+# module add_subdirectory()'d later than this one -- scheduled here rather
+# than included directly, so it runs only once every add_subdirectory() in
+# the whole tree has completed. See that file's own header comment for the
+# specific constraint, and cmake/LibreStudioTest.cmake's header comment for
+# why CMAKE_SOURCE_DIR (not CMAKE_CURRENT_SOURCE_DIR) is required in the
+# path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/pyuno/CppunitTest_deferred.cmake")

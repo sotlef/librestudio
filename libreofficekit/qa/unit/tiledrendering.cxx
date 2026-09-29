@@ -241,7 +241,7 @@ void TiledRenderingTest::testPaintPartTile(Office* pOffice)
 
     // And try to paintPartTile() - this used to crash when the current viewId
     // was destroyed
-    pDocument->paintPartTile(aBuffer.data(), /*nPart=*/0, nCanvasWidth, nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/0, /*nTileWidth=*/3840, /*nTileHeight=*/3840);
+    pDocument->paintPartTile(aBuffer.data(), /*nPart=*/0, /*nMode=*/0, nCanvasWidth, nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/0, /*nTileWidth=*/3840, /*nTileHeight=*/3840);
 }
 
 void TiledRenderingTest::testDocumentLoadLanguage(Office* pOffice)

@@ -20,8 +20,6 @@
 #    configure.ac, never defined anywhere in this port, so this resolves the
 #    same as every other unset ENABLE_* switch elsewhere in this port: out
 #    of scope, not ported.
-#  - CppunitTest_slideshow / CppunitTest_slideshow_engine -- tests, out of
-#    scope.
 #  - $(call gb_Helper_optional,AVMEDIA,avmedia) -- gated on ENABLE_AVMEDIA
 #    below (default ON, cmake/LibreStudioConfigHeaders.cmake -- see
 #    avmedia/CMakeLists.txt's own comment for the configure.ac evidence),
@@ -132,6 +130,16 @@ set(SLIDESHOW_SOURCES
 )
 
 librestudio_expand_cxx(SLIDESHOW_SOURCES)
+
+# Cached (already librestudio_expand_cxx()'d, absolute-path) copy of the
+# source list, reused below by the "slideshow" CppunitTest's own
+# gb_CppunitTest_use_library_objects(slideshow,slideshow) call -- see that
+# target's own comment for why. Same CACHE INTERNAL pattern editeng/
+# CMakeLists.txt's EDITENG_SOURCES already established for the identical
+# use_library_objects shape (editeng_core).
+set(SLIDESHOW_SOURCES "${SLIDESHOW_SOURCES}" CACHE INTERNAL
+    "librestudio_expand_cxx()'d source list of the slideshow library, reused by CppunitTest_slideshow.mk's use_library_objects")
+
 add_library(slideshow SHARED ${SLIDESHOW_SOURCES})
 
 if (ENABLE_PCH)
@@ -166,3 +174,103 @@ librestudio_add_component(slideshow
     LAYER     OOO)
 librestudio_set_library_output_name(slideshow slideshow OOO)
 install(TARGETS slideshow LIBRARY DESTINATION program)
+
+# --- CppunitTest_slideshow ---------------------------------------------------
+#
+# CppunitTest_slideshow.mk, re-checked directly against the live file: 4
+# sources (slideshow/test/slidetest, testshape, testview, views),
+# set_include (-I$(SRCDIR)/slideshow/source/inc + $$(INCLUDE)), use_externals
+# (box2d), use_sdk_api (normal udkapi+offapi headers),
+# use_library_objects(slideshow,slideshow) -- recompiles the whole slideshow
+# library's own sources directly into the test binary rather than linking
+# against the built slideshow.so (gb_CppunitTest__forward_to_Linktarget,
+# solenv/gbuild/CppunitTest.mk:497) -- and use_libraries
+# ($(gb_Helper_optional,AVMEDIA,avmedia)) basegfx canvastools comphelper
+# cppcanvas cppu cppuhelper sal salhelper svl svt svx svxcore tl utl vcl.
+#
+# No use_ure / use_vcl / use_rdb / use_components / use_configuration
+# anywhere in this .mk -- unlike slideshow_engine below, this test never
+# bootstraps a UNO ComponentContext, so it needs none of
+# librestudio_add_cppunit_test()'s PROTECTORS/COMPONENTS/CONFIGURATION
+# machinery, and (unlike slideshow_engine) has no ordering dependency on
+# program_services_rdb either -- it can be registered right here, at
+# slideshow's own natural position, no deferred file needed.
+#
+# SLIDESHOW_SOURCES is the cached, already-librestudio_expand_cxx()'d list
+# set above; the 4 qa/test sources below are plain module-relative paths,
+# expanded the normal way by librestudio_add_cppunit_test()'s own SOURCES
+# handling -- same combined-list shape as editeng_core's own
+# EDITENG_SOURCES + qa/unit/*.
+#
+# Naming, a first-of-its-kind wrinkle in this port: upstream's own gbuild
+# name for this CppunitTest is the bare "slideshow"
+# (gb_CppunitTest_CppunitTest,slideshow) -- identical to Library_slideshow's
+# own name -- because gbuild keeps CppunitTest and Library in two separate
+# target namespaces (CppunitTest.mk's internal target is actually
+# "CppunitTest_slideshow", never colliding with "Library_slideshow").
+# librestudio_add_cppunit_test()'s <name> argument, by contrast, becomes the
+# bare CMake target name directly (add_library(${name} MODULE ...),
+# cmake/LibreStudioTest.cmake) -- CMake has one flat target namespace, so
+# passing "slideshow" here would collide with add_library(slideshow SHARED
+# ...) above and fail configure ("add_library cannot create target
+# 'slideshow' because another target with that name already exists").
+# Checked whether this port had already solved this exact shape (a
+# CppunitTest whose gbuild name equals its own module's Library name): grep
+# across every already-ported CppunitTest_*.mk turned up sax, svgio, store,
+# basegfx and i18nutil as the only other .mk files with this same bare-name
+# shape, and NONE of them are ported yet (each module's own CMakeLists.txt
+# instead ports a *different*, separately-named CppunitTest_<name>_test.mk
+# from the same module, e.g. basegfx_test/store_test/i18nutil_test are their
+# own distinct upstream .mk files, not this one) -- so there is no existing
+# precedent to follow here, this is the first time this port hits it. The
+# fix, local to this file only: the CMake/CTest target is named
+# "slideshow_test" instead (not otherwise used anywhere in this tree,
+# grepped) -- clearly disambiguated, in the same spirit as this port's other
+# forced boundary renames (e.g. test_fixtures for gbuild's bare "test",
+# test/CMakeLists.txt's own comment) -- with OUTPUT_NAME force-corrected
+# right after the call so the actual installed/dlopened file is still named
+# "libtest_slideshow.so", matching what upstream's own gb_CppunitTest_
+# get_filename would have produced for the name "slideshow" (no test source
+# here hardcodes that path the way sal_osl_Module's Module_DLL test does --
+# grepped slideshow/test/*.cxx for "libtest_"/"getDllURL", no hits -- so this
+# is a faithfulness correction, not a functional requirement). One real,
+# accepted deviation from upstream follows from the rename: `ctest -R
+# slideshow_test` is the way to run this test in this port, not `ctest -R
+# slideshow` (which is now unavailable, since only slideshow_engine below,
+# and no test at all named bare "slideshow", exist in CTest's target list).
+librestudio_add_cppunit_test(slideshow_test
+    SOURCES
+        ${SLIDESHOW_SOURCES}
+        slideshow/test/slidetest
+        slideshow/test/testshape
+        slideshow/test/testview
+        slideshow/test/views
+    LIBRARIES
+        basegfx canvastools comphelper cppcanvas cppu cppuhelper sal
+        salhelper svl svt svx svxcore tl utl vcl
+        Boost::boost box2d::box2d
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/slideshow/source/inc"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEFINITIONS SLIDESHOW_DLLIMPLEMENTATION
+    DEPENDS
+        officecfg_headers
+        udkapi_normal_headers offapi_normal_headers)
+set_target_properties(slideshow_test PROPERTIES OUTPUT_NAME "test_slideshow")
+if (ENABLE_AVMEDIA)
+    target_link_libraries(slideshow_test PRIVATE avmedia)
+endif ()
+
+# slideshow/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/slideshow/CppunitTest_deferred.cmake")

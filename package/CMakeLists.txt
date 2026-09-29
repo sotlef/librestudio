@@ -9,6 +9,9 @@
 # container behind the storage interfaces.  Source lists from
 # Library_package2.mk and Library_xstor.mk.
 
+# zlib, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+librestudio_find_package(NAME ZLIB)
+
 # --- argon2 -------------------------------------------------------------------
 #
 # package/source/zipapi/ZipFile.cxx verifies the argon2id hashes that protect a
@@ -105,7 +108,7 @@ target_compile_definitions(package2 PRIVATE
 target_link_libraries(package2 PRIVATE
     argon2
     comphelper cppu cppuhelper sal salhelper sax tl ucbhelper utl
-    ZLIB::ZLIB "${ZSTD_LIBRARY}")
+    ${LIBRESTUDIO_ZLIB_TARGET} "${ZSTD_LIBRARY}")
 
 librestudio_add_component(package2
     COMPONENT "${CMAKE_SOURCE_DIR}/package/util/package2.component"
@@ -177,3 +180,15 @@ install(FILES
 # after package's own position. See that file for the full per-test detail
 # and its include() call site in the root CMakeLists.txt for why it sits
 # where it does.
+
+# package/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/package/CppunitTest_deferred.cmake")

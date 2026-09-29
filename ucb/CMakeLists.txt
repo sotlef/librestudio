@@ -505,3 +505,80 @@ librestudio_add_component(cached1
 librestudio_set_library_output_name(cached1 cached1 OOO)
 
 install(TARGETS cached1 LIBRARY DESTINATION program)
+
+# --- CppunitTest_ucb_webdav_core --------------------------------------------
+#
+# CppunitTest_ucb_webdav_core.mk, re-checked directly against the live file:
+# 4 sources (ucb/qa/cppunit/webdav/webdav_resource_access,
+# webdav_propfindcache, webdav_options, webdav_local_neon), use_sdk_api
+# (normal udkapi+offapi), use_libraries(comphelper cppu cppuhelper sal
+# salhelper svl test ucbhelper tl -- "test" -> test_fixtures, this port's
+# established rename), use_library_objects(ucpdav1), use_externals(
+# boost_headers curl), use_custom_headers(officecfg/registry), set_include(
+# $$(INCLUDE), -I ucb/source/ucp/webdav-curl). No use_ure/use_vcl/
+# use_components/use_configuration anywhere in this .mk -- confirmed by
+# grepping the live file for all four, no hits -- so no PROTECTORS/COMPONENTS/
+# CONFIGURATION and, in turn, no ordering constraint forcing deferral: "test"
+# (test_fixtures, test/CMakeLists.txt, add_subdirectory()'d well after ucb's
+# own position) is only referenced via LIBRARIES, a target_link_libraries()
+# call resolved at CMake's generate step against whatever exists by the end
+# of the whole configure run -- the same forward-reference precedent
+# sal/CMakeLists.txt's own sal_osl comment and sot/CMakeLists.txt's own
+# sot_test_sot comment (both re-verified this same session) already
+# established, not something new introduced here.
+#
+# use_custom_headers(officecfg/registry) -> gb_CppunitTest_use_custom_headers,
+# which just adds the given directory's *generated* headers to the include
+# path plus an order-only dependency on whatever custom target produces
+# them -- this port's own equivalent is exactly what every other ucp*
+# library in this same file already does for the identical need (see e.g.
+# ucpdav1's own production block just above: "${OFFICECFG_INCLUDE_DIR}" +
+# add_dependencies(... officecfg_headers ...)), reused as-is rather than
+# re-derived: OFFICECFG_INCLUDE_DIR (officecfg/CMakeLists.txt, CACHE INTERNAL,
+# add_subdirectory()'d at CMakeLists.txt line ~719, long before ucb's own
+# position ~943) and the officecfg_headers target it depends on.
+#
+# use_library_objects(ucb_webdav_core, ucpdav1): modelled as a plain LIBRARIES
+# ucpdav1 link, NOT a second recompilation of UCPDAV1_SOURCES, following
+# svx/CMakeLists.txt's svx_removewhichrange precedent (re-checked directly
+# before choosing this): this port sets no -fvisibility=hidden anywhere
+# (grepped cmake/*.cmake and the root CMakeLists.txt, no matches, same
+# finding svx_removewhichrange's own comment already recorded) and no *.map
+# linker version-script exists anywhere under ucb/ (grepped, no matches, same
+# as svxcore's own case) -- ucpdav1's own production block above applies no
+# -Wl,--version-script either. So every symbol the 4 test sources need
+# (CurlUri, DAVResourceAccess, DAVException's types, DAVTypes' types,
+# PropfindCache) is already reachable by linking against the real ucpdav1
+# *shared library* as this port actually builds it, with GCC's plain default
+# (exported) visibility -- recompiling ucpdav1's ~30-file source list a
+# second time into this one small test would be real, unnecessary extra
+# build cost with no functional benefit here, the same conclusion
+# svx_removewhichrange's own comment reached for svxcore. Flagged here rather
+# than silently presented as identical to sal_osl_file_details's or editeng_
+# core's heavier precedent (both of which needed the real recompilation,
+# for a genuinely different reason -- see their own comments).
+#
+# DAVResourceAccess.hxx/DAVException.hxx/DAVTypes.hxx/PropfindCache.hxx/
+# CurlUri.hxx all live directly under ucb/source/ucp/webdav-curl/ (verified
+# with `find`), matching the .mk's own set_include -I path below.
+librestudio_add_cppunit_test(ucb_webdav_core
+    SOURCES
+        ucb/qa/cppunit/webdav/webdav_resource_access
+        ucb/qa/cppunit/webdav/webdav_propfindcache
+        ucb/qa/cppunit/webdav/webdav_options
+        ucb/qa/cppunit/webdav/webdav_local_neon
+    LIBRARIES
+        comphelper cppu cppuhelper sal salhelper svl test_fixtures ucbhelper
+        tl ucpdav1
+        Boost::boost CURL::libcurl
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${CMAKE_SOURCE_DIR}/ucb/source/ucp/webdav-curl"
+    DEPENDS udkapi_normal_headers offapi_normal_headers officecfg_headers)
+
+# 3 of the 4 sources derive their fixture from test::BootstrapFixture, which
+# needs SRC_ROOT/WORKDIR_FOR_BUILD (BootstrapFixtureBase's Directories
+# member) -- now handled generically by librestudio_add_cppunit_test()
+# itself (cmake/LibreStudioTest.cmake).

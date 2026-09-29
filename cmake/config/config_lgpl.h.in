@@ -1,0 +1,27 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Include this file to ensure that this code is not
+compiled into the MPL subset.
+
+Transcribed verbatim from config_host/config_lgpl.h.in -- MPL_HAVE_SUBSET is
+already 0 in this port's config_mpl.h (cmake/config/config_mpl.h.in), so this
+#error branch never fires here either.
+*/
+
+#ifndef CONFIG_LGPL_H
+#define CONFIG_LGPL_H
+
+#include "config_mpl.h"
+
+#if MPL_HAVE_SUBSET
+#  error "Attempting to compile LGPL code into MPL subset"
+#endif
+
+#endif

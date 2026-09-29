@@ -21,6 +21,9 @@
 # LIBRESTUDIO_CPPU_ENV/WIN32/APPLE/CMAKE_SYSTEM_NAME plumbing this file reuses
 # rather than re-deriving.
 
+# zlib, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+librestudio_find_package(NAME ZLIB)
+
 # --- sources -----------------------------------------------------------------
 
 # sal/osl/all, sal/rtl and the platform-independent text encoders: always built.
@@ -350,7 +353,7 @@ target_include_directories(sal PRIVATE
     "${FAST_FLOAT_INCLUDE_DIR}")
 
 target_link_libraries(sal PRIVATE
-    ZLIB::ZLIB
+    ${LIBRESTUDIO_ZLIB_TARGET}
     ${CMAKE_DL_LIBS}
     Threads::Threads)
 
@@ -664,7 +667,7 @@ librestudio_add_cppunit_test(sal_osl_file_details
         ${SAL_COMMON_SOURCES}
         ${SAL_PLATFORM_SOURCES}
         sal/qa/osl/file/forbidden
-    LIBRARIES ZLIB::ZLIB ${CMAKE_DL_LIBS} rt Threads::Threads
+    LIBRARIES ${LIBRESTUDIO_ZLIB_TARGET} ${CMAKE_DL_LIBS} rt Threads::Threads
     INCLUDE ${SAL_INCLUDE_DIRS} "${DRAGONBOX_INCLUDE_DIR}" "${FAST_FLOAT_INCLUDE_DIR}"
     DEFINITIONS SAL_DLLIMPLEMENTATION COND_LIB_SAL_TEXTENC SYSTEM_ZLIB ZLIB_CONST)
 

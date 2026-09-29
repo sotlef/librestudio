@@ -453,7 +453,20 @@ add_custom_target(sfx2_classification_package ALL
 # mechanism as UIConfig_svt (svtools/CMakeLists.txt) and UIConfig_vcl (vcl/
 # CMakeLists.txt) -- just a longer file list, all 68 confirmed to exist on
 # disk (find sfx2/uiconfig/ui -name '*.ui' | wc -l).
-install(FILES
+#
+# Captured into a variable (SFX_UICONFIG_UI_FILES), not left as a bare
+# install(FILES ...) argument list, because CppunitTest_sfx2_dialogs_test.mk's
+# own gb_CppunitTest_use_uiconfigs(sfx2_dialogs_test,sfx) call (wired below in
+# sfx2/CppunitTest_deferred.cmake) needs a real build-time ALL target to
+# depend on -- verified directly first: no "sfx_uiconfig" target existed
+# anywhere in this file before this change (grep -n "_uiconfig" sfx2/
+# CMakeLists.txt was empty), unlike vcl/svtools/svx/cui, which each already
+# grew their own "<module>_uiconfig" mirror the first time one of their own
+# CppunitTests needed UICONFIG (see cmake/LibreStudioTest.cmake's own header
+# comment on this, and cui/CMakeLists.txt's "cui_uiconfig" for the identical
+# per-file add_custom_command + one add_custom_target(...ALL DEPENDS...)
+# shape reused verbatim below).
+set(SFX_UICONFIG_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/addtargetdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/autoredactdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/bookmarkdialog.ui"
@@ -522,7 +535,36 @@ install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/versionsofdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/versioncommentdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/versionscmis.ui"
+)
+
+install(FILES ${SFX_UICONFIG_UI_FILES}
     DESTINATION share/config/soffice.cfg/sfx/ui)
+
+# Real build-time mirror of the install() rule above, alongside it (not
+# instead of it) -- same per-file add_custom_command + one add_custom_target(
+# ... ALL DEPENDS ...) shape as UIConfig_vcl's/UIConfig_svx's/cui_uiconfig's
+# own blocks; see cui/CMakeLists.txt's own comment (right after its own
+# CUI_UICONFIG_UI_FILES install()) for the full reasoning, not repeated here.
+set(_sfx_uiconfig_outputs "")
+foreach (_sfx_uiconfig_src IN LISTS SFX_UICONFIG_UI_FILES)
+    get_filename_component(_sfx_uiconfig_name "${_sfx_uiconfig_src}" NAME)
+    set(_sfx_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/sfx/ui/${_sfx_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_sfx_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/sfx/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_sfx_uiconfig_src}" "${_sfx_uiconfig_dest}"
+        DEPENDS "${_sfx_uiconfig_src}"
+        COMMENT "Copying ${_sfx_uiconfig_name} into build-tree soffice.cfg/sfx/ui"
+        VERBATIM)
+    list(APPEND _sfx_uiconfig_outputs "${_sfx_uiconfig_dest}")
+endforeach ()
+unset(_sfx_uiconfig_src)
+unset(_sfx_uiconfig_name)
+unset(_sfx_uiconfig_dest)
+
+add_custom_target(sfx_uiconfig ALL DEPENDS ${_sfx_uiconfig_outputs})
+unset(_sfx_uiconfig_outputs)
 
 # --- CppunitTests --------------------------------------------------------------
 #
@@ -623,11 +665,32 @@ librestudio_add_cppunit_test(sfx2_controlleritem
 # use_uiconfigs(svx) above -- plus DEPENDS on the xpdfimport executable
 # target once it exists).
 #
-# sfx2_dialogs_test (gb_CppunitTest_CppunitScreenShot) is likewise NOT wired,
-# for a different, well-established reason: it is a screenshot target
-# (Module_sfx2.mk registers it via gb_Module_add_screenshot_targets, not
-# gb_Module_add_check_targets), the same "*_dialogs_test screenshot target"
-# out-of-scope treatment every other module with one already gets in this
-# port (vcl_dialogs_test, uui_dialogs_test, fpicker_dialogs_test,
-# desktop_dialogs_test, svtools_dialogs_test -- see svtools/CMakeLists.txt's
-# own comment on this exact pattern, right after CppunitTest_svtools_html).
+# sfx2_dialogs_test (gb_CppunitTest_CppunitScreenShot) IS NOW WIRED, in
+# sfx2/CppunitTest_deferred.cmake, alongside sfx2_misc/sfx2_classification/
+# sfx2_doc/sfx2_autoredaction: same subsequenttest/test_fixtures/unotest/
+# program_services_rdb/CONFIGURATION shape as those four (use_rdb(services),
+# use_configuration), PLUS use_ure + use_vcl_non_headless_with_windows ->
+# NONHEADLESS (cmake/LibreStudioTest.cmake's vcl_dialogs_test/svtools_
+# dialogs_test/svx_dialogs_test/cui_dialogs_test*/basctl_dialogs_test/
+# reportdesign_dialogs_test precedent), and use_uiconfigs(sfx) -> UICONFIG sfx
+# (this module's own new "sfx_uiconfig" ALL target, added just above
+# alongside this wiring -- re-verified directly that no such target existed
+# before this change, per that block's own comment). Unlike the earlier,
+# now-stale comment here (superseded 2026-09-28): this is a genuine
+# screenshot/*_dialogs_test target, same category as vcl_dialogs_test/
+# svtools_dialogs_test/svx_dialogs_test/cui_dialogs_test*/basctl_dialogs_test/
+# reportdesign_dialogs_test -- all of which this port DOES wire through
+# NONHEADLESS+UICONFIG, not skip; only sfx2_view remains genuinely
+# out-of-scope, for the separate xpdfimport reason above.
+
+# sfx2/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/sfx2/CppunitTest_deferred.cmake")

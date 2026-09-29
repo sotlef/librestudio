@@ -19,7 +19,15 @@
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
 find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
 
-set(XMLOFF_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+# CACHE INTERNAL (not a plain set()), same reason as oox/CMakeLists.txt's own
+# OOX_GENERATED_DIR: xmloff/CppunitTest_deferred.cmake's own
+# librestudio_add_cppunit_test(xmloff_uxmloff ...) call (use_custom_headers
+# xmloff/generated in CppunitTest_xmloff_uxmloff.mk) runs from the root
+# CMakeLists.txt's own include()'d scope, not this directory's, so a plain
+# set() here would not be visible there -- see that file's header comment for
+# the general "this file runs in the root scope" wrinkle.
+set(XMLOFF_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated" CACHE INTERNAL
+    "xmloff generated token headers directory")
 set(XMLOFF_TOKEN_SRC_DIR "${CMAKE_SOURCE_DIR}/xmloff/source/token")
 
 # generate-tokens.py turns tokens.txt into three files: an .inc of "const
@@ -444,6 +452,30 @@ install(TARGETS xo LIBRARY DESTINATION program)
 # transformer) is a leaf: nothing in the tree links it, it is only ever
 # resolved as a UNO service by name, so it stays unported along with the other
 # service-only libraries skipped so far (mtfrenderer, canvasfactory,
-# vclcanvas). The CppunitTest_xmloff_* check targets and JunitTest_xmloff_*
-# from Module_xmloff.mk are also out of scope, as is every other check target
-# throughout this port.
+# vclcanvas).
+#
+# Module_xmloff.mk's 5 CppunitTest check targets (xmloff_uxmloff, xmloff_draw,
+# xmloff_forms, xmloff_style, xmloff_text -- MERGELIBS is never defined
+# anywhere in this port, so xmloff_uxmloff's own "$(if $(MERGELIBS),,...)"
+# guard resolves to "include it") are now all ported too, but not in this
+# file: every one of them needs either program_services_rdb or
+# ucb/unoxml/test, none of which exist yet at this file's own
+# add_subdirectory() position (xmloff sits well before ucb, unoxml, test and
+# the root CMakeLists.txt's final services.rdb packaging) -- see
+# xmloff/CppunitTest_deferred.cmake, include()'d from the root CMakeLists.txt
+# at the appropriate later point, for all 5. JunitTest_xmloff_unoapi (Module_
+# xmloff.mk's gb_Module_add_subsequentcheck_targets) is Java/JUnit-based and
+# stays out of scope, same as every other JunitTest/PythonTest/UITest
+# elsewhere in this port.
+
+# xmloff/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/xmloff/CppunitTest_deferred.cmake")

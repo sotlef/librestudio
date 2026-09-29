@@ -191,6 +191,89 @@ function(librestudio_add_component name)
     endif ()
 endfunction ()
 
+# librestudio_add_java_component(<name>
+#     COMPONENT <file.component>
+#     JARFILE   <path-to-jar>
+#     [LAYER    URELIB|OOO]        # default: OOO
+#     [RDB      <rdb-name>])       # default: the main app registry
+#
+# The Java-loaded sibling of librestudio_add_component() above, for a
+# <component loader="com.sun.star.loader.Java2"> file (e.g. scripting's own
+# ScriptFramework/ScriptProviderForBeanShell.component) -- introduced
+# 2026-09-28 alongside scripting_beanshell's own wiring, the first call site
+# that needs it. Not a LAYER value on the native function above because the
+# uri computation genuinely differs, not just the prefix string:
+#   - gb_Jar_COMPONENTPREFIXES (solenv/gbuild/Jar.mk), re-checked directly,
+#     is a SEPARATE table from gb_Library__COMPONENTPREFIXES: OOO maps to
+#     vnd.sun.star.expand:$LO_JAVA_DIR/ (not $LO_LIB_DIR/), URE maps to
+#     vnd.sun.star.expand:$URE_INTERNAL_JAVA_DIR/ (not $URE_INTERNAL_LIB_DIR/)
+#     -- both new macros this port's own unorc did not define before this
+#     change (cmake/LibreStudioUnorc.cmake's own librestudio_generate_unorc()
+#     header comment has the detail; both resolve to the same ${ORIGIN}/
+#     classes directory as URE_INTERNAL_JAVA_DIR on this single-layer port).
+#   - gb_Jar_set_componentfile's own uri basename is `$(notdir $(call
+#     gb_Jar_get_target,$(1)))` -- the jar's own plain filename -- computed
+#     directly from a build-tree path this function already has (JARFILE,
+#     e.g. librestudio_add_uno_jar()'s own "${name}_JAR" cache variable),
+#     never needing the native function's own "$<TARGET_FILE_NAME:...>"
+#     generator expression (which requires a real binary CMake target --
+#     librestudio_add_uno_jar()'s own "<name>_jar" is a plain custom_target,
+#     not a SHARED/executable target, so that generator expression would not
+#     even resolve against it).
+# Otherwise identical to librestudio_add_component() above: same
+# createcomponent.xslt invocation (no IMPLEMENTATION/optionals handling --
+# no Java-loaded component in this port needs it yet, unlike e.g. xsec_
+# xmlsec's own nss_mscrypt/nss optionals), same LIBRESTUDIO_COMPONENT_FILE_
+# GLOBAL property a CppunitTest's own COMPONENTS parameter looks up by name,
+# same per-RDB routing.
+function(librestudio_add_java_component name)
+    cmake_parse_arguments(_jcomp "" "COMPONENT;JARFILE;LAYER;RDB" "" ${ARGN})
+
+    if (NOT _jcomp_COMPONENT OR NOT _jcomp_JARFILE)
+        message(FATAL_ERROR
+            "librestudio_add_java_component(${name}): COMPONENT and JARFILE are required")
+    endif ()
+    if (NOT _jcomp_LAYER)
+        set(_jcomp_LAYER OOO)
+    endif ()
+
+    if (_jcomp_LAYER STREQUAL "URELIB")
+        set(_jprefix "vnd.sun.star.expand:\$URE_INTERNAL_JAVA_DIR/")
+    elseif (_jcomp_LAYER STREQUAL "OOO")
+        set(_jprefix "vnd.sun.star.expand:\$LO_JAVA_DIR/")
+    else ()
+        message(FATAL_ERROR "librestudio_add_java_component(${name}): unknown LAYER '${_jcomp_LAYER}'")
+    endif ()
+
+    get_filename_component(_jarname "${_jcomp_JARFILE}" NAME)
+
+    set(_out "${CMAKE_CURRENT_BINARY_DIR}/components/${name}.component")
+
+    set_property(GLOBAL PROPERTY "LIBRESTUDIO_COMPONENT_FILE_${name}" "${_out}")
+
+    add_custom_command(
+        OUTPUT "${_out}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/components"
+        COMMAND "${XSLTPROC_EXECUTABLE}" --nonet
+                --stringparam uri "${_jprefix}${_jarname}"
+                --stringparam cppu_env "${LIBRESTUDIO_CPPU_ENV}"
+                --stringparam filtered ""
+                -o "${_out}"
+                "${LIBRESTUDIO_CREATE_COMPONENT_XSLT}"
+                "${_jcomp_COMPONENT}"
+        DEPENDS "${_jcomp_COMPONENT}" "${_jcomp_JARFILE}"
+        COMMENT "createcomponent.xslt: ${name}.component"
+        VERBATIM)
+
+    add_custom_target(${name}_component DEPENDS "${_out}")
+
+    if (_jcomp_RDB)
+        set_property(GLOBAL APPEND PROPERTY "LIBRESTUDIO_COMPONENTS_${_jcomp_RDB}" "${_out}")
+    else ()
+        set_property(GLOBAL APPEND PROPERTY LIBRESTUDIO_COMPONENTS "${_out}")
+    endif ()
+endfunction ()
+
 # librestudio_finalize_components(<rdb-name> [OUTPUT <file.rdb>])
 #
 # Packs every component declared with librestudio_add_component() -- via a

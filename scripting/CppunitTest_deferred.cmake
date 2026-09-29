@@ -1,0 +1,312 @@
+# This file is part of the LibreStudio project.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# scripting_pythonscript (CppunitTest_scripting_pythonscript.mk),
+# scripting_scripthandler (CppunitTest_scripting_scripthandler.mk),
+# scripting_jsprov (CppunitTest_scripting_jsprov.mk) and scripting_beanshell
+# (CppunitTest_scripting_beanshell.mk) -- split out of scripting/
+# CMakeLists.txt into their own file, scheduled via cmake_language(DEFER)
+# from that file's own tail. The DEFER call itself sits inside scripting/
+# CMakeLists.txt's outer `if (ENABLE_SCRIPTING)` (default ON) only, NOT
+# inside its narrower, nested `if (LIBRESTUDIO_ENABLE_JAVA)` block (default
+# OFF) -- so this file is included every time scripting is built at all,
+# regardless of Java. scripting_beanshell's own block below therefore
+# repeats an `if (LIBRESTUDIO_ENABLE_JAVA)` guard of its own, since it is
+# the only one of the four that references Java-only targets (java_uno,
+# java_uno_jar, ScriptProviderForBeanShell_component), none of which exist
+# when that flag is off.
+#
+# All four call gb_CppunitTest_use_configuration and either gb_CppunitTest_
+# use_rdb or gb_CppunitTest_use_rdbs, needing program_services_rdb/
+# services_rdb (both only set once librestudio_finalize_components(services)
+# has run, much later in the root CMakeLists.txt) and test/CMakeLists.txt's
+# own LIBRESTUDIO_TEST_UNITTEST_DIR -- the same later-binding-dependency
+# shape already documented in scaddins/CppunitTest_deferred.cmake's header
+# comment, xmlscript_cppunit's, svx's three tests', and sfx2's four (plus
+# sfx2_dialogs_test)'s own deferred files. scripting_beanshell additionally
+# needs ${java_uno}/${java_uno_jar} (bridges/Jar_java_uno_deferred.cmake) --
+# referenced here only as bare target names in DEPENDS, not as ${...}-
+# expanded CACHE variables, so CMake resolves them against the whole tree
+# after every add_subdirectory() and every deferred call have run; no extra
+# ordering care is needed for that part (see scripting_beanshell's own
+# section below for the one variable-style reference it does need --
+# RDBS's "services"/"scriptproviderforbeanshell" names, both already safe
+# for the reason given there).
+#
+# Because this file runs in the root CMakeLists.txt's own directory scope
+# (include() does not create a new directory scope the way add_subdirectory()
+# does), source/include paths below are still fine -- librestudio_expand_cxx
+# resolves them against CMAKE_SOURCE_DIR, never CMAKE_CURRENT_SOURCE_DIR (same
+# note as every other *_deferred.cmake in this port).
+
+# --- scripting_pythonscript ----------------------------------------------------
+#
+# CppunitTest_scripting_pythonscript.mk, re-checked directly against the
+# live file: 1 source (scripting/qa/cppunit/pythonscript/PythonScriptTest),
+# use_libraries cppu cppuhelper pythonloader pyuno sal subsequenttest test
+# unotest utl tl ("test" -> test_fixtures, this port's established rename;
+# pythonloader/pyuno are both real, already-ported targets -- pyuno/
+# CMakeLists.txt's add_library(pythonloader ...)/add_library(pyuno ...)),
+# use_externals(boost_headers libxml2) -> Boost::boost LibXml2::LibXml2,
+# use_api(udkapi offapi) (the normal variant -- same "_normal_" headers this
+# port already uses uniformly for use_api/use_sdk_api alike, see cui_dialogs_
+# test's own precedent), use_ure + use_vcl (plain, headless/SVP variant, not
+# use_vcl_non_headless*) -> 3 protector pairs, no NONHEADLESS, use_rdb(
+# services) -> DEPENDS program_services_rdb, use_configuration ->
+# CONFIGURATION.
+#
+# Two calls this test makes that neither use_libraries/use_externals/use_api
+# nor the shape above already covers:
+#
+#   $(eval $(call gb_CppunitTest_use_packages,scripting_pythonscript,
+#       scripting_scriptproviderforpython))
+#   $(call gb_CppunitTest_get_target,scripting_pythonscript): \
+#       UNO_SERVICES += $(SRCDIR)/scripting/source/pyprov/
+#       scriptproviderforpython.rdb
+#
+# gb_CppunitTest_use_packages(scripting_scriptproviderforpython): Package_
+# scriptproviderforpython.mk packages scripting/source/pyprov/
+# scriptproviderforpython.rdb and pythonscript.py into the INSTALLED tree
+# (LIBO_ETC_FOLDER/services, LIBO_LIB_PYUNO_FOLDER) for the real product's
+# own runtime use -- but the UNO_SERVICES line right below points the TEST
+# itself directly at the $(SRCDIR) source copy of the .rdb, not the packaged
+# instdir copy, so the Package_ build-order dependency is not actually
+# load-bearing for this test to run (re-verified: the .rdb is a real, static,
+# already-checked-in XML file -- `file scripting/source/pyprov/
+# scriptproviderforpython.rdb` reports "XML 1.0 document", and `git log -1`
+# on it shows it has been a tracked source file since a 2013 commit, nothing
+# generated by any CustomTarget). No CMake equivalent for gb_CppunitTest_
+# use_packages exists anywhere in this port (grepped project-wide, confirmed
+# empty) -- same documented-but-non-blocking-gap treatment this port already
+# gives a bare use_uiconfigs call (see sfx2/CppunitTest_deferred.cmake's own
+# sfx2_classification section) rather than either forcing an equivalent or
+# silently dropping the mention.
+#
+# The UNO_SERVICES += line is the genuinely load-bearing half: upstream joins
+# EVERY UNO_SERVICES entry (both gb_CppunitTest_use_components's own pyuno/
+# source/loader/pythonloader entry AND this literal .rdb path) into ONE
+# space-joined "-env:UNO_SERVICES=..." argument (gb_CppunitTest__make_args,
+# see cmake/LibreStudioTest.cmake's own header comment on this exact point).
+# librestudio_add_cppunit_test()'s COMPONENTS parameter cannot produce that
+# merged result on its own: it only draws from librestudio_add_component()-
+# registered names (pythonloader as pyuno/CMakeLists.txt's own name -- see
+# COMPONENTS below is NOT used here), and there is nowhere to also splice in
+# a literal, non-component file path into that same one argument. Worse,
+# passing COMPONENTS pythonloader AND a second "-env:UNO_SERVICES=..." via
+# EXTRA_ARGS would not merge either: EXTRA_ARGS's argument comes AFTER the
+# COMPONENTS-built one on cppunittester's command line (see the add_test()
+# call at the bottom of librestudio_add_cppunit_test()), and rtl::Bootstrap's
+# own getFromCommandLineArgs()/find() (sal/rtl/bootstrap.cxx) uses std::
+# find_if, which returns the FIRST matching "-env:UNO_SERVICES=" entry in
+# command-line order -- so a second, later "-env:UNO_SERVICES=" argument
+# would be silently ignored outright, not merged, dropping either
+# pythonloader or the .rdb path depending on which came first. Verified
+# directly against that file before choosing this approach, rather than
+# assumed.
+#
+# So this call deliberately does NOT pass COMPONENTS at all: it looks up
+# pythonloader's own registered component file via the same GLOBAL property
+# librestudio_add_component() records (LIBRESTUDIO_COMPONENT_FILE_
+# pythonloader, set by pyuno/CMakeLists.txt's own librestudio_add_component(
+# pythonloader ...) call, which has already run by this deferred include()
+# point) and builds the ONE merged "-env:UNO_SERVICES=..." argument by hand,
+# passing it through EXTRA_ARGS instead -- reproducing exactly what
+# COMPONENTS would have produced for pythonloader alone, plus the literal
+# scriptproviderforpython.rdb path, in the single argument upstream itself
+# uses. The pythonloader_component build-order dependency COMPONENTS would
+# also have added is reproduced explicitly via DEPENDS below (pythonloader_
+# component is librestudio_add_component()'s own custom target for it,
+# guaranteed to exist once the GLOBAL property lookup below succeeds).
+get_property(_scripting_pythonloader_component GLOBAL PROPERTY
+    "LIBRESTUDIO_COMPONENT_FILE_pythonloader")
+if (NOT _scripting_pythonloader_component)
+    message(FATAL_ERROR
+        "scripting_pythonscript: no librestudio_add_component(pythonloader ...) "
+        "has run yet -- pyuno/CMakeLists.txt's add_subdirectory() must run, "
+        "registering it, before this include() point")
+endif ()
+
+librestudio_add_cppunit_test(scripting_pythonscript
+    SOURCES
+        scripting/qa/cppunit/pythonscript/PythonScriptTest
+    LIBRARIES
+        cppu cppuhelper pythonloader pyuno sal subsequenttest test_fixtures
+        unotest utl tl Boost::boost LibXml2::LibXml2
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+        program_services_rdb
+        pythonloader_component
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    EXTRA_ARGS
+        "-env:UNO_SERVICES=file://${_scripting_pythonloader_component} file://${CMAKE_SOURCE_DIR}/scripting/source/pyprov/scriptproviderforpython.rdb"
+    CONFIGURATION)
+unset(_scripting_pythonloader_component)
+
+# --- scripting_scripthandler ----------------------------------------------------
+#
+# CppunitTest_scripting_scripthandler.mk, re-checked directly against the
+# live file: 1 source (scripting/qa/cppunit/scripthandler/ScriptHandlerTest),
+# use_libraries cppu cppuhelper sal subsequenttest test unotest utl tl vcl
+# ("test" -> test_fixtures, same rename), use_externals(boost_headers
+# libxml2), use_api(udkapi offapi), use_ure + use_vcl (plain) -> 3 protector
+# pairs, use_rdb(services) -> DEPENDS program_services_rdb (no COMPONENTS --
+# ScriptHandlerTest.cxx registers its own in-process DummyProvider service
+# rather than needing any real script-provider component built elsewhere),
+# use_configuration -> CONFIGURATION. No use_packages/use_components.
+librestudio_add_cppunit_test(scripting_scripthandler
+    SOURCES
+        scripting/qa/cppunit/scripthandler/ScriptHandlerTest
+    LIBRARIES
+        cppu cppuhelper sal subsequenttest test_fixtures unotest utl tl vcl
+        Boost::boost LibXml2::LibXml2
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+        program_services_rdb
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    CONFIGURATION)
+
+# --- scripting_jsprov ------------------------------------------------------------
+#
+# CppunitTest_scripting_jsprov.mk, re-checked directly against the live
+# file: 1 source (scripting/qa/cppunit/jsprov/jsprovtest), use_libraries
+# cppu cppuhelper sal subsequenttest test unotest utl tl ("test" ->
+# test_fixtures, same rename), use_externals(boost_headers libxml2), use_api(
+# udkapi offapi), use_ure + use_vcl (plain) -> 3 protector pairs, use_rdb(
+# services) -> DEPENDS program_services_rdb, use_configuration ->
+# CONFIGURATION. Notably, NEITHER jsprov NOR jsuno appears in this .mk's own
+# use_libraries list at all (re-verified character-for-character against the
+# live file) -- confirmed by reading scripting/qa/cppunit/jsprov/jsprovtest.cxx
+# itself: it never links jsprov/jsuno directly, it goes through UNO
+# (css::script::provider::theMasterScriptProviderFactory) to obtain a
+# "com.sun.star.script.provider.ScriptProviderForJavaScript"-flavoured
+# XScriptProvider, which is only resolvable at RUN time if the jsprov UNO
+# component is actually dlopen()able next to the test.
+#
+# jsprov's own .component IS already registered into program_services_rdb by
+# construction (scripting/CMakeLists.txt's librestudio_add_component(jsprov
+# ...) call, LAYER OOO -- merged into services.rdb the same way every other
+# OOO-layer component is, by the time librestudio_finalize_components(
+# services) runs), so no COMPONENTS argument is needed here for the lookup
+# itself to succeed once program_services_rdb exists. What IS needed, and
+# would NOT happen automatically for a single-target incremental build
+# (`cmake --build build --target scripting_jsprov` builds only this
+# target's own dependency graph, not every other ALL target in the tree),
+# is the jsprov shared library actually being built and present on disk for
+# cppunittester to dlopen at run time -- so jsprov is added as an explicit
+# DEPENDS below (this port's own build-order-only dependency for "a file the
+# test needs to exist next to itself at run time, never linked against" --
+# see cmake/LibreStudioTest.cmake's own header comment on DEPENDS's exact
+# semantics). jsprov itself links jsuno (scripting/CMakeLists.txt's own
+# target_link_libraries(jsprov PRIVATE ... jsuno ...)), so building jsprov
+# transitively builds jsuno too; no separate DEPENDS on jsuno is needed.
+librestudio_add_cppunit_test(scripting_jsprov
+    SOURCES
+        scripting/qa/cppunit/jsprov/jsprovtest
+    LIBRARIES
+        cppu cppuhelper sal subsequenttest test_fixtures unotest utl tl
+        Boost::boost LibXml2::LibXml2
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+        program_services_rdb
+        jsprov
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
+    CONFIGURATION)
+
+# --- scripting_beanshell ---------------------------------------------------------
+#
+# CppunitTest_scripting_beanshell.mk, re-checked directly against the live
+# file: 1 source (scripting/qa/cppunit/beanshell/beanshelltest), use_libraries
+# cppu cppuhelper jvmfwk sal subsequenttest test unotest utl tl ("test" ->
+# test_fixtures, same rename as the three tests above), use_externals(
+# boost_headers libxml2) -> Boost::boost LibXml2::LibXml2, use_api(udkapi
+# offapi) (the normal variant), use_jars(ScriptProviderForBeanShell) -- a
+# compile-classpath-shaped call that means nothing to a C++ CppunitTest
+# binary; modeled as a plain DEPENDS on ScriptProviderForBeanShell_component
+# below, the same build-order-only treatment this port already gives
+# reportdesign_basic_test's own gb_CppunitTest_use_jars(sdbc_hsqldb) (see
+# reportdesign/CppunitTest_deferred.cmake) -- use_ure + use_vcl (plain) -> 3
+# protector pairs, use_rdbs(services scriptproviderforbeanshell) -> RDBS (2
+# registries, not the single-registry DEPENDS-only shape the 3 tests above
+# use), use_configuration -> CONFIGURATION.
+#
+# Gated on LIBRESTUDIO_ENABLE_JAVA, unlike the three tests above: this is the
+# only one of scripting's 4 CppunitTest_*.mk files whose own dependencies
+# (ScriptProviderForBeanShell's jar+component, the java_uno bridge) exist
+# only under that flag -- registering it unconditionally would reference
+# targets that plain `if (ENABLE_SCRIPTING)` alone (LIBRESTUDIO_ENABLE_JAVA
+# defaults OFF) does not guarantee exist.
+#
+# beanshelltest.cxx (read in full): does not load any document or resource
+# (no PACKAGES needed) and writes no configuration of its own beyond the
+# plain CONFIGURATION setup (its setUp() only registers a stock
+# com.sun.star.ucb.ExpandContentProvider instance, a runtime UNO call, not a
+# registry write). Its real substance: calls createInstanceWithArguments
+# AndContext("com.sun.star.script.provider.ScriptProviderForBeanShell", ...)
+# then createNode/renameNode/getChildNodes/getName/getPropertyValue on the
+# result, across 2 test cases -- each call crossing the JNI/java_uno bridge
+# for real, the first actual exerciser of that bridge anywhere in this tree.
+#
+# RDBS "services": services_RDB/services_rdb are set synchronously at a
+# fixed point in the plain, un-deferred pass over the root CMakeLists.txt
+# (librestudio_finalize_components(services)), well before this file's own
+# deferred include() ever fires -- so this reference is always safe by the
+# time it is evaluated, same reasoning already relied on above for
+# program_services_rdb. RDBS "scriptproviderforbeanshell": scriptprovider
+# forbeanshell_RDB/_rdb are set synchronously inside scripting/CMakeLists.
+# txt's own librestudio_finalize_components(scriptproviderforbeanshell) call
+# (this module's own add_subdirectory() position, likewise well before this
+# deferred file fires).
+#
+# DEPENDS additionally lists java_uno and java_uno_jar directly (bridges/
+# CMakeLists.txt's own "--- java_uno ---" section already flags this as
+# needed by any future consumer -- neither the native library, dlopened by
+# UNO environment name at run time, nor the jar's own compiled classes are
+# a dependency ninja can otherwise infer), and ScriptProviderForBeanShell_
+# component (which itself already depends, via scripting/CMakeLists.txt's
+# own add_dependencies() call, on ScriptProviderForBeanShell_packagefiles --
+# so template.bsh being packed into the jar is covered transitively, no
+# separate DEPENDS entry needed for it).
+if (LIBRESTUDIO_ENABLE_JAVA)
+    librestudio_add_cppunit_test(scripting_beanshell
+        SOURCES
+            scripting/qa/cppunit/beanshell/beanshelltest
+        LIBRARIES
+            cppu cppuhelper jvmfwk sal subsequenttest test_fixtures unotest
+            utl tl Boost::boost LibXml2::LibXml2
+        INCLUDE
+            "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+            "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        DEPENDS
+            udkapi_normal_headers offapi_normal_headers
+            java_uno java_uno_jar
+            ScriptProviderForBeanShell_component
+        PROTECTORS
+            unobootstrapprotector unobootstrapprotector
+            unoexceptionprotector unoexceptionprotector
+            vclbootstrapprotector vclbootstrapprotector
+        RDBS
+            services
+            scriptproviderforbeanshell
+        CONFIGURATION)
+endif ()

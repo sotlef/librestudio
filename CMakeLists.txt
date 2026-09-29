@@ -46,6 +46,7 @@ include(LibreStudioTarballs)
 include(LibreStudioUnoApi)
 include(LibreStudioJavaJar)
 include(LibreStudioComponent)
+include(LibreStudioPackage)
 include(LibreStudioTest)
 include(LibreStudioZip)
 include(LibreStudioUnorc)
@@ -114,7 +115,11 @@ librestudio_fetch_tarball(argon2 phc-winner-argon2-20190702.tar.gz
 librestudio_fetch_tarball(quickjs quickjs-0.17.0-amalgam.zip
     866bad1e2f148b6f8144a4a3d4c3f8a0754495a6920fe56a7dd698cf0ad27f65)
 
-find_package(ZLIB REQUIRED)
+# zlib itself: resolved lazily by whichever real consumer needs it first
+# (comphelper/hwpfilter/package/sal/tools/shell/writerperfect/sdext, each
+# calling librestudio_find_package(NAME ZLIB ...) -- cmake/
+# LibreStudioTarballs.cmake) into LIBRESTUDIO_ZLIB_TARGET -- no dedicated
+# entry point here anymore.
 
 # package2 compresses zip entries with zstd as well as with zlib.  On this
 # distribution libzstd ships no pkg-config file, so its two halves are found
@@ -139,39 +144,40 @@ find_package(PkgConfig REQUIRED)
 # add_subdirectory for the Java-only modules above is itself wrapped in
 # `if (LIBRESTUDIO_ENABLE_JAVA)` further down, so this is the only place JNI
 # and the JDK need to be looked up.
-if (LIBRESTUDIO_ENABLE_JAVA)
-    find_package(JNI REQUIRED)
-    find_package(Java REQUIRED COMPONENTS Development)
-endif ()
-
-# --- java_websocket -------------------------------------------------------
+#
+# --- java_websocket ---------------------------------------------------------
 #
 # The one Java dependency in the real UNO bridge that is not just a JDK
 # feature: ridljar's libreoffice.jar links java_websocket.jar for the
 # WebSocket URP transport (com/sun/star/lib/connections/websocket/*,
 # gb_Jar_use_externals,libreoffice,java_websocket in Jar_libreoffice.mk).
 # Upstream never looks for a system copy -- external/java_websocket always
-# vendors and ant-builds it -- so this does the same: fetch the tarball named
-# in download.lst, apply the patches UnpackedTarball_java_websocket.mk lists
-# (in its order, all at the default patch level 1 -- that file has no
-# gb_UnpackedTarball_set_patchlevel call), then run the "jar" ant target that
-# ant-build.patch's build.xml adds (javac's src/main/java into build/classes,
-# then jars it as dist/java_websocket.jar). ExternalProject_java_websocket.mk's
-# -Dant.build.javac.source/-target and -Dbuild.label flags are skipped: the
-# patched build.xml (see ant-build.patch above) never references those
-# properties, so passing them would be a no-op; -Dant.tstamp.now (reproducible
-# builds) and ICECREAM_RUN are likewise skipped as build-environment-specific
-# knobs this port does not otherwise implement (same reasoning as skipping
-# JVM_ONE_PATH_CHECK in jvmfwk/CMakeLists.txt).
+# vendors it -- so this does the same: fetch the tarball named in
+# download.lst, apply the patches UnpackedTarball_java_websocket.mk lists (in
+# order, all at the default patch level 1).
+#
+# 2026-09-27: built with librestudio_add_uno_jar() (cmake/LibreStudioJavaJar.
+# cmake) instead of upstream's own ant invocation. Verified directly (fetched
+# and read the real, patched build.xml -- see ant-build.patch below): that
+# build.xml is not upstream's own, it is LibreOffice's OWN fabrication (the
+# upstream project ships no build.xml of its own at all), and its entire
+# content is exactly `javac src/main/java -> build/classes` (excluding one
+# file) then `jar` -- precisely what librestudio_add_uno_jar() already does
+# natively, no ant needed. This also means `ant` was, in effect, never a real
+# requirement for java_websocket at all -- only hsqldb (below) still is.
 if (LIBRESTUDIO_ENABLE_JAVA)
-    find_program(ANT_EXECUTABLE ant REQUIRED)
+    find_package(JNI REQUIRED)
+    find_package(Java REQUIRED COMPONENTS Development)
     find_package(Patch REQUIRED)
 
     set(JAVA_WEBSOCKET_SHA256 f3ce29efde338707241d47ab4784b19a1e3658bfa0564b5bc5f80c27e5118728)
     librestudio_fetch_tarball(java_websocket Java-WebSocket-1.6.0.tar.gz "${JAVA_WEBSOCKET_SHA256}")
 
+    # ant-build.patch itself (LibreOffice's own fabricated build.xml) is
+    # skipped from this list -- there is nothing left for it to patch now
+    # that this port never invokes ant/reads build.xml at all; every other
+    # patch here is a real upstream source fix, still needed.
     set(JAVA_WEBSOCKET_PATCHES
-        ant-build.patch
         no-slf4j.patch
         0001-cid-1546192-SIC-Inner-class-could-be-made-static.patch
         0001-cid-1545614-UR-Uninitialized-read-of-field-in-constr.patch
@@ -182,8 +188,10 @@ if (LIBRESTUDIO_ENABLE_JAVA)
         0001-cid-1546264-Dm-Dubious-method-used.patch
         0001-cid-1546341-Resource-leak-on-an-exceptional-path.patch
         0001-cid-1545249-Bad-bit-shift-operation.patch
-        0001-cid-1546344-Dm-Dubious-method-used.patch
-        java-websocket-jar-timestamps.patch.1)
+        0001-cid-1546344-Dm-Dubious-method-used.patch)
+    # java-websocket-jar-timestamps.patch.1 (a reproducible-build timestamp
+    # tweak to the now-unused build.xml itself) is dropped for the same
+    # reason ant-build.patch is.
 
     # Applied once, at configure time, right where librestudio_fetch_tarball
     # unpacks -- mirrors that function's own .unpacked-<sha> stamp so a cached,
@@ -216,28 +224,597 @@ if (LIBRESTUDIO_ENABLE_JAVA)
         file(TOUCH "${JAVA_WEBSOCKET_PATCHED_STAMP}")
     endif ()
 
-    # JAVA_HOME=$(JAVA_HOME_FOR_BUILD) in the upstream CustomTarget, minus
-    # cross-compiling (not supported by this port): strip bin/javac twice to
-    # get the JDK home find_package(Java) resolved above.
-    get_filename_component(JAVA_WEBSOCKET_JAVA_HOME "${Java_JAVAC_EXECUTABLE}" DIRECTORY)
-    get_filename_component(JAVA_WEBSOCKET_JAVA_HOME "${JAVA_WEBSOCKET_JAVA_HOME}" DIRECTORY)
+    # PerMessageDeflateExtension.java is ant-build.patch's own <exclude> --
+    # reproduced directly rather than inherited from the now-unused build.xml.
+    file(GLOB_RECURSE JAVA_WEBSOCKET_SOURCES "${java_websocket_SOURCE_DIR}/src/main/java/*.java")
+    list(FILTER JAVA_WEBSOCKET_SOURCES EXCLUDE REGEX "PerMessageDeflateExtension\\.java$")
 
-    include(ExternalProject)
-    ExternalProject_Add(java_websocket_ext
-        SOURCE_DIR "${java_websocket_SOURCE_DIR}"
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND "${CMAKE_COMMAND}" -E env "JAVA_HOME=${JAVA_WEBSOCKET_JAVA_HOME}"
-                "${ANT_EXECUTABLE}" -q -f build.xml jar
-        BUILD_IN_SOURCE TRUE
-        INSTALL_COMMAND ""
-        BUILD_BYPRODUCTS "${java_websocket_SOURCE_DIR}/dist/java_websocket.jar")
-
-    set(JAVA_WEBSOCKET_JAR "${java_websocket_SOURCE_DIR}/dist/java_websocket.jar")
+    librestudio_add_uno_jar(java_websocket
+        PACKAGEROOT org
+        SOURCES ${JAVA_WEBSOCKET_SOURCES})
 
     # ExternalPackage_java_websocket.mk installs dist/java_websocket.jar to
     # $(LIBO_SHARE_JAVA_FOLDER)/java_websocket.jar -- "program/classes" on
     # this (non-MACOSX/non-WNT) Linux port (configure.ac's else branch).
-    install(FILES "${JAVA_WEBSOCKET_JAR}" DESTINATION program/classes)
+    install(FILES "${java_websocket_JAR}" DESTINATION program/classes)
+
+    # --- hsqldb -----------------------------------------------------------
+    #
+    # connectivity/Jar_sdbc_hsqldb.mk's own external/qa dependency: the
+    # bundled HSQLDB 1.8.0 database engine, java-side JDBC driver for
+    # connectivity's embedded-database "HSQLDB" driver (needed by
+    # reportdesign_basic_test). Not tracked as a system-package alternative
+    # in this port (matches upstream's own !SYSTEM_HSQLDB default). external/
+    # hsqldb's own 4 .mk files, re-checked directly: UnpackedTarball_hsqldb.mk
+    # fetches $(HSQLDB_TARBALL) (download.lst), fixes CRLF line endings on 3
+    # files the patches below touch, then applies 13 patches at patchlevel 2
+    # (a purely-numeric filename suffix, e.g. applet.patch.0, overrides that
+    # per-patch -- solenv/gbuild/UnpackedTarball.mk's own `case` logic,
+    # re-derived directly against a real download+patch run: a blanket -p2
+    # made applet.patch.0 fail before this was found); ExternalPackage_
+    # hsqldb.mk installs the resulting lib/hsqldb.jar to program/classes.
+    #
+    # 2026-09-27: unlike java_websocket, hsqldb's OWN upstream build.xml (not
+    # a LibreOffice fabrication this time -- a real, large, 1180-line ant
+    # project fetched and read directly) does genuine work ant alone was
+    # doing: `ant jar` depends on target "hsqldb" -> "classes14,util,swing" ->
+    # ... -> "switchtojdk16" -> "switchtojdk14" -> "switches" -> "codeswitcher",
+    # which compiles and RUNS org/hsqldb/util/CodeSwitcher.java, a tool that
+    # MUTATES specific .java sources in place, toggling comment-delimited
+    # +LABEL/-LABEL code blocks to select JDK-version-specific code paths
+    # (this 2008-era codebase's own portability mechanism, predating the
+    # "one .class per javac -source/-target" approach). Re-derived from the
+    # live build.xml which switchtojdk* branches actually fire on any modern
+    # JDK: javaversion6's `<available classname="java.net.IDN"/>` probe
+    # (IDN exists since Java 6) is satisfied unconditionally today, setting
+    # ant.java.iscjava16=true and -- via each javaversionN target's own
+    # `unless="ant.java.iscjava<N+2>"` guard -- permanently skipping the
+    # iscjava12/iscjava14 probes and their switchtojdk13/switchtojdk14
+    # branches (their own bodies additionally gated `if="ant.java.iscjava..`
+    # on a property that consequently never gets set). Net effect,
+    # independent of which specific modern JDK builds this port: exactly two
+    # CodeSwitcher invocations ever run -- "switchtojdk11" (unconditional
+    # upstream) then "switchtojdk16" -- reproduced as exactly two java
+    # invocations in cmake/hsqldb-build.sh.in below, with every intermediate,
+    # unreachable-on-a-modern-JDK branch simply omitted rather than ported.
+    #
+    # The remaining store/lib/classes/classes14/util(/swing) compile stages
+    # are various narrow <include>/<exclude> filesets over the SAME org/
+    # hsqldb source tree, compiled into one shared classdir -- rather than
+    # mirror each narrow fileset exactly (classes14's own reachability is
+    # genuinely ambiguous the same way: `if="ant.java.iscjava14"`, a property
+    # this session's own analysis above shows is never set on a modern JDK
+    # either, so upstream's *own* ant build may or may not still compile
+    # those 6 files today -- not a question this port's CMake needs to
+    # answer identically to resolve it correctly), this port instead compiles
+    # the whole org/hsqldb source tree in one javac invocation (file(GLOB_
+    # RECURSE) below, discovered fresh after the patch step, since the
+    # tarball is fetched/patched at configure time and the files already
+    # exist on disk by this point) -- a safe superset of whatever the various
+    # staged filesets would produce between them, since nothing in this tree
+    # depends on any file NOT being compiled. Excluded for real, specific
+    # reasons (not narrowed arbitrarily): org/hsqldb/test/** (needs junit.jar,
+    # never vendored, and confirmed -- grepped -- referenced by nothing
+    # outside itself); org/hsqldb/sample/** (demo/example code, excluded from
+    # every real packaging target in the live build.xml); and the Swing-based
+    # util classes (*Swing.java, TableSorter.java -- this port's own
+    # equivalent of upstream's own -Dnoswing=true flag, already passed by the
+    # ant invocation this replaces).
+    #
+    # download.lst's own HSQLDB_TARBALL/HSQLDB_SHA256SUM values, verified
+    # directly (`grep -n hsqldb download.lst`).
+    set(HSQLDB_TARBALL "17410483b5b5f267aa18b7e00b65e6e0-hsqldb_1_8_0.zip")
+    set(HSQLDB_SHA256SUM "d30b13f4ba2e3b6a2d4f020c0dee0a9fb9fc6fbcc2d561f36b78da4bf3802370")
+    librestudio_fetch_tarball(hsqldb "${HSQLDB_TARBALL}" "${HSQLDB_SHA256SUM}")
+
+    set(HSQLDB_EOL_FIX_FILES
+        build/build.xml
+        src/org/hsqldb/Library.java
+        src/org/hsqldb/persist/HsqlDatabaseProperties.java)
+    foreach (_eol_file IN LISTS HSQLDB_EOL_FIX_FILES)
+        set(_eol_path "${hsqldb_SOURCE_DIR}/${_eol_file}")
+        if (EXISTS "${_eol_path}")
+            file(READ "${_eol_path}" _eol_content)
+            string(REPLACE "\r\n" "\n" _eol_content "${_eol_content}")
+            file(WRITE "${_eol_path}" "${_eol_content}")
+        endif ()
+        unset(_eol_path)
+        unset(_eol_content)
+    endforeach ()
+
+    set(HSQLDB_PATCHES
+        i96823.patch
+        i97032.patch
+        i103528.patch
+        i104901.patch
+        fdo36824.patch
+        limit_as_table_alias.patch
+        hsqldb-runFinalizersOnExit.patch
+        jdbc-4.1.patch
+        multipleResultSets.patch
+        disable-dump-script.patch
+        abstract.patch
+        applet.patch.0
+        hsqldb-jar-timestamps.patch.1)
+
+    set(HSQLDB_PATCHED_STAMP "${hsqldb_SOURCE_DIR}/.patched")
+    if (NOT EXISTS "${HSQLDB_PATCHED_STAMP}")
+        foreach (_patch IN LISTS HSQLDB_PATCHES)
+            # solenv/gbuild/UnpackedTarball.mk's own patch-application loop
+            # (`s=$${p##*.}; case "$$s" in [0-9]) pl="$$s"; ;; esac`): a
+            # purely-numeric filename SUFFIX overrides the module's default
+            # patch level (2, gb_UnpackedTarball_set_patchlevel(hsqldb,2))
+            # for that one patch -- applet.patch.0 (level 0) and hsqldb-
+            # jar-timestamps.patch.1 (level 1) both need this; discovered
+            # directly when a blanket -p2 made applet.patch.0 fail to find
+            # its own target file. Every other patch here keeps a plain
+            # ".patch" extension (non-numeric), so falls through to the
+            # default level 2.
+            get_filename_component(_patch_suffix "${_patch}" LAST_EXT)
+            string(REPLACE "." "" _patch_suffix "${_patch_suffix}")
+            if (_patch_suffix MATCHES "^[0-9]+$")
+                set(_patch_level "${_patch_suffix}")
+            else ()
+                set(_patch_level "2")
+            endif ()
+            execute_process(
+                COMMAND "${Patch_EXECUTABLE}" -f -s "-p${_patch_level}" --fuzz=0 -i
+                        "${CMAKE_SOURCE_DIR}/external/hsqldb/patches/${_patch}"
+                WORKING_DIRECTORY "${hsqldb_SOURCE_DIR}"
+                RESULT_VARIABLE _patch_result)
+            unset(_patch_suffix)
+            unset(_patch_level)
+            if (NOT _patch_result EQUAL 0)
+                # Same reasoning as java_websocket's identical guard above:
+                # wipe the whole extraction root so the next configure
+                # re-extracts cleanly (from the already-cached tarball, no
+                # re-download) instead of restarting this loop against an
+                # already-half-patched tree.
+                file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/_deps/hsqldb")
+                message(FATAL_ERROR
+                    "Failed to apply ${_patch} to hsqldb; source tree reset, re-run cmake to retry")
+            endif ()
+        endforeach ()
+        file(TOUCH "${HSQLDB_PATCHED_STAMP}")
+    endif ()
+
+    set(HSQLDB_SRC_DIR "${hsqldb_SOURCE_DIR}/src")
+    set(HSQLDB_CLASSDIR "${CMAKE_BINARY_DIR}/hsqldb-classes")
+    set(HSQLDB_CODESWITCHER_CLASSDIR "${CMAKE_BINARY_DIR}/hsqldb-codeswitcher-classes")
+    set(HSQLDB_CODESWITCHER_SRC "${HSQLDB_SRC_DIR}/org/hsqldb/util/CodeSwitcher.java")
+    set(HSQLDB_SWITCHED_STAMP "${hsqldb_SOURCE_DIR}/.switched")
+    set(HSQLDB_SERVLET_JAR "${hsqldb_SOURCE_DIR}/lib/servlet.jar")
+    set(HSQLDB_JAR_DIR "${hsqldb_SOURCE_DIR}/lib")
+    set(HSQLDB_JAR "${HSQLDB_JAR_DIR}/hsqldb.jar")
+
+    file(GLOB_RECURSE HSQLDB_MAIN_SOURCES "${HSQLDB_SRC_DIR}/org/hsqldb/*.java")
+    list(FILTER HSQLDB_MAIN_SOURCES EXCLUDE REGEX "/org/hsqldb/test/")
+    list(FILTER HSQLDB_MAIN_SOURCES EXCLUDE REGEX "/org/hsqldb/sample/")
+    list(FILTER HSQLDB_MAIN_SOURCES EXCLUDE REGEX "/org/hsqldb/util/[A-Za-z]*Swing\\.java$")
+    list(FILTER HSQLDB_MAIN_SOURCES EXCLUDE REGEX "/org/hsqldb/util/TableSorter\\.java$")
+
+    # A response file, not a bare command-line argument list: 240+ absolute
+    # paths risk exceeding a real exec argv/shell line-length limit, the same
+    # reason solenv/gbuild/JavaClassSet.mk's own gb_JavaClassSet__command
+    # always routes its own (potentially huge) per-target source list through
+    # a RESPONSEFILE rather than the command line directly.
+    set(HSQLDB_MAIN_SOURCES_RSP "${CMAKE_BINARY_DIR}/hsqldb-main-sources.rsp")
+    set(_hsqldb_rsp_content "")
+    foreach (_src IN LISTS HSQLDB_MAIN_SOURCES)
+        string(APPEND _hsqldb_rsp_content "\"${_src}\"\n")
+    endforeach ()
+    file(GENERATE OUTPUT "${HSQLDB_MAIN_SOURCES_RSP}" CONTENT "${_hsqldb_rsp_content}")
+    unset(_hsqldb_rsp_content)
+
+    # The exact file lists from build.xml's own "switchtojdk11"/"switchtojdk16"
+    # targets (org/hsqldb/-relative paths there, expanded to absolute paths
+    # here); duplicate entries within switchtojdk16's own upstream list
+    # (RowInputTextLog.java and SimpleLog.java each appear twice there) are
+    # kept as-is -- CodeSwitcher re-processing the same already-switched file
+    # a second time in the same invocation is a harmless no-op, and this
+    # keeps the list a literal transcription rather than a silently "cleaned
+    # up" one.
+    set(HSQLDB_SWITCH11_FILES
+        lib/java/JavaSystem.java lib/HsqlTimer.java jdbc/jdbcStatement.java
+        persist/LockFile.java persist/Logger.java util/DatabaseManager.java
+        util/ConnectionDialogCommon.java)
+    set(HSQLDB_SWITCH16_FILES
+        lib/java/JavaSystem.java lib/HsqlTimer.java jdbc/jdbcBlob.java
+        jdbc/jdbcDatabaseMetaData.java jdbc/jdbcDataSource.java
+        jdbc/jdbcCallableStatement.java jdbc/jdbcClob.java jdbc/jdbcConnection.java
+        jdbc/jdbcParameterMetaData.java jdbc/jdbcPreparedStatement.java
+        jdbc/jdbcResultSet.java jdbc/jdbcResultSetMetaData.java
+        jdbc/jdbcStatement.java persist/LockFile.java persist/Logger.java
+        persist/ScaledRAFile.java rowio/RowInputTextLog.java
+        util/DatabaseManager.java util/ConnectionDialogCommon.java
+        lib/SimpleLog.java rowio/RowInputTextLog.java lib/SimpleLog.java
+        rowio/RowInputTextLog.java HsqlDateTime.java)
+
+    set(HSQLDB_SWITCH11_ARGS "")
+    foreach (_f IN LISTS HSQLDB_SWITCH11_FILES)
+        string(APPEND HSQLDB_SWITCH11_ARGS "\"${HSQLDB_SRC_DIR}/org/hsqldb/${_f}\" ")
+    endforeach ()
+    set(HSQLDB_SWITCH16_ARGS "")
+    foreach (_f IN LISTS HSQLDB_SWITCH16_FILES)
+        string(APPEND HSQLDB_SWITCH16_ARGS "\"${HSQLDB_SRC_DIR}/org/hsqldb/${_f}\" ")
+    endforeach ()
+
+    # Resource files build.xml's own "classes"/"util" <copy> steps put into
+    # the classdir alongside the compiled .class files (see this section's
+    # own header comment, point 4) -- discovered now, at configure time,
+    # since the hsqldb source tree already exists on disk by this point
+    # (fetched+patched above in this same configure run), same timing
+    # BEANSHELL_MAIN_SOURCES et al. below already rely on.
+    file(GLOB_RECURSE HSQLDB_RESOURCE_FILES
+        RELATIVE "${HSQLDB_SRC_DIR}"
+        "${HSQLDB_SRC_DIR}/org/hsqldb/*.properties"
+        "${HSQLDB_SRC_DIR}/org/hsqldb/*.text")
+    file(GLOB HSQLDB_UTIL_ICON_FILES
+        "${HSQLDB_SRC_DIR}/org/hsqldb/util/*.gif"
+        "${HSQLDB_SRC_DIR}/org/hsqldb/util/*.png")
+
+    librestudio_cmake_quote(_q_javac "${Java_JAVAC_EXECUTABLE}")
+    librestudio_cmake_quote(_q_java "${Java_JAVA_EXECUTABLE}")
+    librestudio_cmake_quote(_q_jar "${Java_JAR_EXECUTABLE}")
+    librestudio_cmake_quote(_q_codeswitcher_classdir "${HSQLDB_CODESWITCHER_CLASSDIR}")
+    librestudio_cmake_quote(_q_codeswitcher_src "${HSQLDB_CODESWITCHER_SRC}")
+    librestudio_cmake_quote(_q_src_dir "${HSQLDB_SRC_DIR}")
+    librestudio_cmake_quote(_q_switched_stamp "${HSQLDB_SWITCHED_STAMP}")
+    librestudio_cmake_quote(_q_classdir "${HSQLDB_CLASSDIR}")
+    librestudio_cmake_quote(_q_servlet_jar "${HSQLDB_SERVLET_JAR}")
+    librestudio_cmake_quote(_q_rsp "@${HSQLDB_MAIN_SOURCES_RSP}")
+    librestudio_cmake_quote(_q_jar_dir "${HSQLDB_JAR_DIR}")
+    librestudio_cmake_quote(_q_hsqldb_jar "${HSQLDB_JAR}")
+
+    set(_hsqldb_switch11_quoted "")
+    foreach (_f IN LISTS HSQLDB_SWITCH11_FILES)
+        librestudio_cmake_quote(_q_f "${HSQLDB_SRC_DIR}/org/hsqldb/${_f}")
+        string(APPEND _hsqldb_switch11_quoted " ${_q_f}")
+    endforeach ()
+    set(_hsqldb_switch16_quoted "")
+    foreach (_f IN LISTS HSQLDB_SWITCH16_FILES)
+        librestudio_cmake_quote(_q_f "${HSQLDB_SRC_DIR}/org/hsqldb/${_f}")
+        string(APPEND _hsqldb_switch16_quoted " ${_q_f}")
+    endforeach ()
+
+    set(_hsqldb_script "# Auto-generated CMake replacement for hsqldb's own ant build.xml \"jar\"
+# target -- do not edit (see this section's own header comment in root
+# CMakeLists.txt for the full derivation of every step here against the
+# real build.xml). A CMake script (invoked via \${CMAKE_COMMAND} -P), not a
+# POSIX shell script, so this build step needs no `sh` (no MSYS/Git-Bash/WSL
+# assumption on Windows) -- CMake itself is already this build's one
+# unconditional dependency.
+
+# 1. Bootstrap: compile just enough to run CodeSwitcher.
+file(MAKE_DIRECTORY ${_q_codeswitcher_classdir})
+execute_process(
+    COMMAND ${_q_javac} -encoding utf8 -d ${_q_codeswitcher_classdir}
+            -sourcepath ${_q_src_dir} ${_q_codeswitcher_src}
+    RESULT_VARIABLE _r)
+if (NOT _r EQUAL 0)
+    message(FATAL_ERROR \"hsqldb: javac (CodeSwitcher bootstrap) failed\")
+endif ()
+
+# 2. Run CodeSwitcher -- mutates the .java sources in place, so only once
+#    ever per extracted+patched source tree (see the stamp file below).
+if (NOT EXISTS ${_q_switched_stamp})
+    execute_process(
+        COMMAND ${_q_java} -cp ${_q_codeswitcher_classdir} org.hsqldb.util.CodeSwitcher
+                ${_hsqldb_switch11_quoted} +JAVA2 -JAVA2FULL -JAVA4
+        RESULT_VARIABLE _r)
+    if (NOT _r EQUAL 0)
+        message(FATAL_ERROR \"hsqldb: CodeSwitcher (switchtojdk11) failed\")
+    endif ()
+    execute_process(
+        COMMAND ${_q_java} -cp ${_q_codeswitcher_classdir} org.hsqldb.util.CodeSwitcher
+                ${_hsqldb_switch16_quoted} +JAVA2 +JAVA2FULL +JAVA4 +JAVA6
+        RESULT_VARIABLE _r)
+    if (NOT _r EQUAL 0)
+        message(FATAL_ERROR \"hsqldb: CodeSwitcher (switchtojdk16) failed\")
+    endif ()
+    file(TOUCH ${_q_switched_stamp})
+endif ()
+
+# 3. Main compile.
+file(MAKE_DIRECTORY ${_q_classdir})
+execute_process(
+    COMMAND ${_q_javac} -encoding utf8 -d ${_q_classdir}
+            -classpath ${_q_servlet_jar} -sourcepath ${_q_src_dir} ${_q_rsp}
+    RESULT_VARIABLE _r)
+if (NOT _r EQUAL 0)
+    message(FATAL_ERROR \"hsqldb: javac (main compile) failed\")
+endif ()
+
+# 4. Resources.
+")
+
+    foreach (_res IN LISTS HSQLDB_RESOURCE_FILES)
+        librestudio_cmake_quote(_q_res_src "${HSQLDB_SRC_DIR}/${_res}")
+        get_filename_component(_res_dir "${_res}" DIRECTORY)
+        librestudio_cmake_quote(_q_res_destdir "${HSQLDB_CLASSDIR}/${_res_dir}")
+        string(APPEND _hsqldb_script "file(MAKE_DIRECTORY ${_q_res_destdir})\nfile(COPY ${_q_res_src} DESTINATION ${_q_res_destdir})\n")
+    endforeach ()
+    unset(_res_dir)
+
+    if (HSQLDB_UTIL_ICON_FILES)
+        librestudio_cmake_quote(_q_util_destdir "${HSQLDB_CLASSDIR}/org/hsqldb/util")
+        string(APPEND _hsqldb_script "file(MAKE_DIRECTORY ${_q_util_destdir})\n")
+        foreach (_icon IN LISTS HSQLDB_UTIL_ICON_FILES)
+            librestudio_cmake_quote(_q_icon "${_icon}")
+            string(APPEND _hsqldb_script "file(COPY ${_q_icon} DESTINATION ${_q_util_destdir})\n")
+        endforeach ()
+    endif ()
+
+    string(APPEND _hsqldb_script "
+# 5. Jar it up.
+file(MAKE_DIRECTORY ${_q_jar_dir})
+execute_process(
+    COMMAND ${_q_jar} -c -f ${_q_hsqldb_jar} org
+    WORKING_DIRECTORY ${_q_classdir}
+    RESULT_VARIABLE _r)
+if (NOT _r EQUAL 0)
+    message(FATAL_ERROR \"hsqldb: jar failed\")
+endif ()
+")
+
+    set(_hsqldb_build_script "${CMAKE_BINARY_DIR}/hsqldb-build.cmake")
+    file(GENERATE OUTPUT "${_hsqldb_build_script}" CONTENT "${_hsqldb_script}")
+
+    add_custom_command(
+        OUTPUT "${HSQLDB_JAR}"
+        COMMAND ${CMAKE_COMMAND} -P "${_hsqldb_build_script}"
+        DEPENDS ${HSQLDB_MAIN_SOURCES} "${HSQLDB_MAIN_SOURCES_RSP}"
+                "${_hsqldb_build_script}"
+        COMMENT "Building hsqldb.jar"
+        VERBATIM)
+    add_custom_target(hsqldb_ext ALL DEPENDS "${HSQLDB_JAR}")
+
+    install(FILES "${HSQLDB_JAR}" DESTINATION program/classes)
+
+    # --- beanshell (needed by scripting_beanshell + scripting's own optional
+    # Jar_ScriptProviderForBeanShell.mk) -------------------------------------
+    #
+    # external/beanshell's own 4 .mk files, re-checked directly:
+    # UnpackedTarball_beanshell.mk fetches $(BSH_TARBALL) (download.lst,
+    # confirmed tracked there: BSH_TARBALL=bsh-2.1.1-src.zip, real first-
+    # party tarball, unlike raptor2/rasqal/redland below), fixes CRLF line
+    # endings on engine/src/bsh/TestBshScriptEngine.java (needed before
+    # beanshell-invoke.patch applies cleanly -- re-verified empirically: the
+    # patch fails 3/3 hunks against the unfixed CRLF file, succeeds against
+    # the LF-normalized one), then applies 5 patches at patchlevel 2 (a
+    # purely-numeric filename suffix overrides that default per-patch, same
+    # solenv/gbuild/UnpackedTarball.mk convention hsqldb's own patch loop
+    # above already reproduces -- java9.patch.0/applet.patch.0 need level 0,
+    # beanshell-jar-timestamps.patch.1 needs level 1). ExternalPackage_
+    # beanshell.mk installs the result to $(LIBO_SHARE_JAVA_FOLDER)/bsh.jar
+    # (i.e. program/classes/bsh.jar on this platform).
+    #
+    # Like java_websocket above (and unlike hsqldb): re-verified directly
+    # that BeanShell's own real upstream build.xml's "jarall" target (the
+    # default target ExternalProject_beanshell.mk's own `ant -f build.xml`
+    # invocation runs) does no source-mutating work comparable to hsqldb's
+    # CodeSwitcher -- it is a plain javac compile (excluding a handful of
+    # named files/packages) plus a few resource copies plus `jar`. The one
+    # real wrinkle: BeanShell's parser is normally generated from bsh.jjt via
+    # jjtree+javacc (bundled in lib/javacc.jar) -- but this port does NOT run
+    # jjtree/javacc at all: manually verified that (a) bsh.jj and every
+    # javacc-generated .java file (Parser.java, ParserTokenManager.java,
+    # etc.) are already checked into this release tarball (a working,
+    # ready-to-build state, the exact same reason autotools projects ship a
+    # pre-built ./configure -- so downstream packagers need not install
+    # jjtree/javacc themselves either), and (b) none of the 5 patches above
+    # touches bsh.jjt or bsh.jj, so the checked-in generated files remain
+    # fully consistent with the grammar -- regenerating them would produce
+    # byte-identical output to what is already there, exactly what ant's own
+    # `<uptodate>` checks (checkjjt/checkjj targets) would themselves skip
+    # regenerating given unrelated, non-grammar patches. Also unlike
+    # hsqldb: no external jar (lib/*.jar, all bundled in the tarball itself)
+    # is needed on javac's own classpath at all -- manually verified end-to-
+    # end (compiled with zero -classpath entries, zero errors) -- because
+    # every source file this port actually compiles only needs javax.script,
+    # part of the JDK itself since Java 6, not BeanShell's own bundled
+    # javaxscript.jar shim for pre-6 JDKs.
+    #
+    # Excludes (build.xml's own composed ${excludes} property, the parts not
+    # commented out there -- re-verified directly, none of the commented-out
+    # ones apply): exclude-bsf (bsh/util/BeanShellBSFEngine.java,
+    # TestBshBSF.java -- the latter actually lives under bsf/src/, not
+    # src/bsh/util/, confirmed by find), exclude-servlet (bsh/servlet/*),
+    # excludes-legacy (bsh/JThis.java), plus 4 hardcoded AWT applet demo
+    # classes never packed into jarall either. test-src-dir (BeanShell's own
+    # internal test suite, needs junit/hamcrest, never part of any real
+    # packaging target) is skipped entirely rather than compiled-then-
+    # excluded, since nothing packages it either way.
+    #
+    # Prefer a system bsh.jar first, matching upstream's own --with-system-
+    # beanshell option (configure.ac: default path /usr/share/java/bsh.jar) --
+    # same "prefer system, fall back to a real vendored build" shape as
+    # every other external in this file, with an explicit force-vendor
+    # override for consistency (even though, unlike a shared library, a
+    # missing/mismatched system bsh.jar cannot silently break ABI the way a
+    # too-old system .so could -- there is no version floor to enforce here,
+    # any bsh.jar exposing the plain bsh.Interpreter API upstream's own
+    # ScriptProviderForBeanShell.java uses will do).
+    option(LIBRESTUDIO_FORCE_VENDOR_BEANSHELL
+        "Always build BeanShell from its own upstream source, even if a system bsh.jar exists"
+        OFF)
+
+    set(_beanshell_use_system FALSE)
+    if (NOT LIBRESTUDIO_FORCE_VENDOR_BEANSHELL)
+        find_file(BEANSHELL_SYSTEM_JAR NAMES bsh.jar PATHS /usr/share/java)
+        if (BEANSHELL_SYSTEM_JAR)
+            set(_beanshell_use_system TRUE)
+        endif ()
+    endif ()
+
+    if (_beanshell_use_system)
+        message(STATUS "beanshell: using system bsh.jar (${BEANSHELL_SYSTEM_JAR})")
+        set(BEANSHELL_JAR "${BEANSHELL_SYSTEM_JAR}")
+    else ()
+        message(STATUS "beanshell: no system bsh.jar found (or vendoring forced) -- building BeanShell 2.1.1 from source")
+
+        set(BSH_SHA256SUM "2248387ceaa319840434a3547a8b2fec12f95a8418ee039ce5ff5726053a139c")
+        librestudio_fetch_tarball(beanshell "bsh-2.1.1-src.zip" "${BSH_SHA256SUM}")
+
+        set(_beanshell_eol_path "${beanshell_SOURCE_DIR}/engine/src/bsh/TestBshScriptEngine.java")
+        if (EXISTS "${_beanshell_eol_path}")
+            file(READ "${_beanshell_eol_path}" _beanshell_eol_content)
+            string(REPLACE "\r\n" "\n" _beanshell_eol_content "${_beanshell_eol_content}")
+            file(WRITE "${_beanshell_eol_path}" "${_beanshell_eol_content}")
+        endif ()
+        unset(_beanshell_eol_path)
+        unset(_beanshell_eol_content)
+
+        set(BEANSHELL_PATCHES
+            bsh-2.0b1-src.patch
+            beanshell-invoke.patch
+            java9.patch.0
+            applet.patch.0
+            beanshell-jar-timestamps.patch.1)
+
+        set(BEANSHELL_PATCHED_STAMP "${beanshell_SOURCE_DIR}/.patched")
+        if (NOT EXISTS "${BEANSHELL_PATCHED_STAMP}")
+            foreach (_patch IN LISTS BEANSHELL_PATCHES)
+                get_filename_component(_patch_suffix "${_patch}" LAST_EXT)
+                string(REPLACE "." "" _patch_suffix "${_patch_suffix}")
+                if (_patch_suffix MATCHES "^[0-9]+$")
+                    set(_patch_level "${_patch_suffix}")
+                else ()
+                    set(_patch_level "2")
+                endif ()
+                execute_process(
+                    COMMAND "${Patch_EXECUTABLE}" -f -s "-p${_patch_level}" --fuzz=0 -i
+                            "${CMAKE_SOURCE_DIR}/external/beanshell/${_patch}"
+                    WORKING_DIRECTORY "${beanshell_SOURCE_DIR}"
+                    RESULT_VARIABLE _patch_result)
+                unset(_patch_suffix)
+                unset(_patch_level)
+                if (NOT _patch_result EQUAL 0)
+                    file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/_deps/beanshell")
+                    message(FATAL_ERROR
+                        "Failed to apply ${_patch} to beanshell; source tree reset, re-run cmake to retry")
+                endif ()
+            endforeach ()
+            file(TOUCH "${BEANSHELL_PATCHED_STAMP}")
+        endif ()
+
+        set(BEANSHELL_SRC_DIR "${beanshell_SOURCE_DIR}/src")
+        set(BEANSHELL_CLASSDIR "${CMAKE_BINARY_DIR}/beanshell-classes")
+        set(BEANSHELL_JAR_DIR "${beanshell_SOURCE_DIR}/dist")
+        set(BEANSHELL_JAR "${BEANSHELL_JAR_DIR}/bsh-2.1.1.jar")
+        set(BEANSHELL_LIB_CLASSPATH "")
+        set(BEANSHELL_ENGINE_CONFIG "${beanshell_SOURCE_DIR}/engine/config/javax.script.ScriptEngineFactory")
+
+        file(GLOB_RECURSE BEANSHELL_MAIN_SOURCES
+            "${beanshell_SOURCE_DIR}/src/*.java"
+            "${beanshell_SOURCE_DIR}/bsf/src/*.java"
+            "${beanshell_SOURCE_DIR}/engine/src/*.java")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/servlet/")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/TestBshBSF\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/BeanShellBSFEngine\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/JThis\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/util/AWTDemoApplet\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/util/AWTRemoteApplet\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/util/JDemoApplet\\.java$")
+        list(FILTER BEANSHELL_MAIN_SOURCES EXCLUDE REGEX "/bsh/util/JRemoteApplet\\.java$")
+
+        set(BEANSHELL_MAIN_SOURCES_RSP "${CMAKE_BINARY_DIR}/beanshell-main-sources.rsp")
+        set(_beanshell_rsp_content "")
+        foreach (_src IN LISTS BEANSHELL_MAIN_SOURCES)
+            string(APPEND _beanshell_rsp_content "\"${_src}\"\n")
+        endforeach ()
+        file(GENERATE OUTPUT "${BEANSHELL_MAIN_SOURCES_RSP}" CONTENT "${_beanshell_rsp_content}")
+        unset(_beanshell_rsp_content)
+
+        # bsh/commands/*.bsh + bsh/util/lib/* -- the resource files
+        # build.xml's own "classes" target <copy>s alongside the compiled
+        # .class files (see this section's own header comment, point 2/3).
+        # Discovered now, at configure time, same timing HSQLDB_RESOURCE_FILES
+        # above already relies on (the source tree already exists on disk by
+        # this point, fetched+patched above in this same configure run).
+        file(GLOB BEANSHELL_COMMANDS_FILES "${BEANSHELL_SRC_DIR}/bsh/commands/*.bsh")
+        file(GLOB BEANSHELL_UTIL_LIB_FILES "${BEANSHELL_SRC_DIR}/bsh/util/lib/*")
+
+        librestudio_cmake_quote(_q_beanshell_javac "${Java_JAVAC_EXECUTABLE}")
+        librestudio_cmake_quote(_q_beanshell_jar "${Java_JAR_EXECUTABLE}")
+        librestudio_cmake_quote(_q_beanshell_classdir "${BEANSHELL_CLASSDIR}")
+        librestudio_cmake_quote(_q_beanshell_cp "${BEANSHELL_LIB_CLASSPATH}")
+        librestudio_cmake_quote(_q_beanshell_rsp "@${BEANSHELL_MAIN_SOURCES_RSP}")
+        librestudio_cmake_quote(_q_beanshell_commands_destdir "${BEANSHELL_CLASSDIR}/bsh/commands")
+        librestudio_cmake_quote(_q_beanshell_util_lib_destdir "${BEANSHELL_CLASSDIR}/bsh/util/lib")
+        librestudio_cmake_quote(_q_beanshell_services_destdir "${BEANSHELL_CLASSDIR}/META-INF/services")
+        librestudio_cmake_quote(_q_beanshell_engine_config "${BEANSHELL_ENGINE_CONFIG}")
+        librestudio_cmake_quote(_q_beanshell_manifest_tmp "${BEANSHELL_CLASSDIR}/MANIFEST.MF.tmp")
+        librestudio_cmake_quote(_q_beanshell_jar_dir "${BEANSHELL_JAR_DIR}")
+        librestudio_cmake_quote(_q_beanshell_jar_file "${BEANSHELL_JAR}")
+
+        set(_beanshell_script "# Auto-generated CMake replacement for BeanShell's own upstream
+# build.xml \"jarall\" target -- do not edit (see this section's own header
+# comment in root CMakeLists.txt for the full derivation of every step
+# here against the real build.xml). A CMake script (invoked via
+# \${CMAKE_COMMAND} -P), not a POSIX shell script, so this build step needs
+# no `sh` (no MSYS/Git-Bash/WSL assumption on Windows) -- CMake itself is
+# already this build's one unconditional dependency.
+
+# 1. Main compile.
+file(MAKE_DIRECTORY ${_q_beanshell_classdir})
+execute_process(
+    COMMAND ${_q_beanshell_javac} -encoding utf8 -d ${_q_beanshell_classdir}
+            -classpath ${_q_beanshell_cp} ${_q_beanshell_rsp}
+    RESULT_VARIABLE _r)
+if (NOT _r EQUAL 0)
+    message(FATAL_ERROR \"beanshell: javac (main compile) failed\")
+endif ()
+
+# 2. Resources: bsh/commands/*.bsh + bsh/util/lib/*.
+file(MAKE_DIRECTORY ${_q_beanshell_commands_destdir})
+")
+
+        foreach (_f IN LISTS BEANSHELL_COMMANDS_FILES)
+            librestudio_cmake_quote(_q_bf "${_f}")
+            string(APPEND _beanshell_script "file(COPY ${_q_bf} DESTINATION ${_q_beanshell_commands_destdir})\n")
+        endforeach ()
+
+        string(APPEND _beanshell_script "file(MAKE_DIRECTORY ${_q_beanshell_util_lib_destdir})\n")
+        foreach (_f IN LISTS BEANSHELL_UTIL_LIB_FILES)
+            librestudio_cmake_quote(_q_bf "${_f}")
+            string(APPEND _beanshell_script "file(COPY ${_q_bf} DESTINATION ${_q_beanshell_util_lib_destdir})\n")
+        endforeach ()
+        unset(_q_bf)
+
+        string(APPEND _beanshell_script "
+# 3. The javax.script (JSR 223) engine factory registration.
+file(MAKE_DIRECTORY ${_q_beanshell_services_destdir})
+file(COPY ${_q_beanshell_engine_config} DESTINATION ${_q_beanshell_services_destdir})
+
+# 4. Jar it up.
+file(MAKE_DIRECTORY ${_q_beanshell_jar_dir})
+file(WRITE ${_q_beanshell_manifest_tmp} \"Manifest-Version: 1.0
+\")
+execute_process(
+    COMMAND ${_q_beanshell_jar} -c -f ${_q_beanshell_jar_file} -m MANIFEST.MF.tmp bsh
+    WORKING_DIRECTORY ${_q_beanshell_classdir}
+    RESULT_VARIABLE _r)
+if (NOT _r EQUAL 0)
+    message(FATAL_ERROR \"beanshell: jar failed\")
+endif ()
+")
+
+        set(_beanshell_build_script "${CMAKE_BINARY_DIR}/beanshell-build.cmake")
+        file(GENERATE OUTPUT "${_beanshell_build_script}" CONTENT "${_beanshell_script}")
+
+        add_custom_command(
+            OUTPUT "${BEANSHELL_JAR}"
+            COMMAND ${CMAKE_COMMAND} -P "${_beanshell_build_script}"
+            DEPENDS ${BEANSHELL_MAIN_SOURCES} "${BEANSHELL_MAIN_SOURCES_RSP}"
+                    ${BEANSHELL_COMMANDS_FILES} ${BEANSHELL_UTIL_LIB_FILES}
+                    "${BEANSHELL_ENGINE_CONFIG}" "${_beanshell_build_script}"
+            COMMENT "Building bsh-2.1.1.jar"
+            VERBATIM)
+        add_custom_target(beanshell_ext ALL DEPENDS "${BEANSHELL_JAR}")
+    endif ()
+
+    install(FILES "${BEANSHELL_JAR}" DESTINATION program/classes RENAME bsh.jar)
 endif ()
 
 # liblangtag is used directly by i18nlangtag; it pulls libxml2 in through its
@@ -256,91 +833,23 @@ find_package(CURL REQUIRED)
 # helpcompiler transforms help XHP through XSLT (libxslt) and builds/searches
 # the full-text help index with CLucene (libclucene-core).
 pkg_check_modules(LIBXSLT REQUIRED IMPORTED_TARGET libxslt)
-pkg_check_modules(LIBCLUCENE_CORE REQUIRED IMPORTED_TARGET libclucene-core)
+
+# clucene (2026-09-29, system-or-vendor refactor): resolved via
+# librestudio_pkgconfig() into LIBRESTUDIO_CLUCENE_TARGET -- real vendoring
+# fallback in external/clucene/clucene.cmake (a single combined library,
+# core+shared+contribs-lib, unlike a real system install's 2-.so split --
+# see that driver's own header comment and helpcompiler/CMakeLists.txt's
+# own FOUND-branch handling of the "contribs-lib" split). DRIVER given
+# explicitly: "libclucene-core" contains a hyphen, so it never qualifies
+# for this router's own single-module auto-detect candidate rule.
+librestudio_pkgconfig(NAME CLUCENE MODULES libclucene-core DRIVER clucene
+    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_CLUCENE)
 
 # slideshow's box2d-based physics transitions. box2d ships a CMake
 # package-config (no pkg-config .pc file), and exports an imported target
 # rather than variables, so this is find_package rather than
 # pkg_check_modules like everything else in this section.
 find_package(box2d REQUIRED)
-
-# --- harfbuzz -----------------------------------------------------------------
-#
-# vcl is the first module that needs harfbuzz, and it needs a recent one:
-# hb_ot_fetch_bits() and the HB_OT_BITS_TAG_* constants that vcl/source/font/*
-# uses to read the OS/2 and head table bits do not exist before 14.3, and the
-# calls are not guarded.  configure.ac names the same floor
-# (harfbuzz_required_version=14.3.0) and falls back to bundling the tarball.
-#
-# The system here is 12.1.0, so this build bundles.  Harfbuzz is a meson
-# project, so meson builds it even though CMake is building everything else —
-# which is also what upstream does.  Two static libraries come out of it, and
-# they are handed to the rest of the build as imported targets, so that the
-# consumers say `harfbuzz` and do not have to know how it was made.
-
-find_program(MESON_EXECUTABLE meson REQUIRED)
-
-# Prefer a system harfbuzz that is new enough, the way configure.ac does; the
-# tarball is the fallback, not the rule.
-pkg_check_modules(HARFBUZZ_SYSTEM harfbuzz>=14.3.0 harfbuzz-subset>=14.3.0)
-if (HARFBUZZ_SYSTEM_FOUND)
-    set(LIBRESTUDIO_HARFBUZZ_TARGETS PkgConfig::HARFBUZZ_SYSTEM)
-else ()
-    librestudio_fetch_tarball(harfbuzz harfbuzz-14.5.0.tar.xz
-        b7132e148358a45185c9feafd049dbaf243649d3c44414b3534d9c95d18592b9)
-
-    set(HARFBUZZ_SRC "${harfbuzz_SOURCE_DIR}/src")
-    set(HARFBUZZ_BUILD "${CMAKE_BINARY_DIR}/harfbuzz-build")
-
-    include(ExternalProject)
-    # The options are upstream's: static, subset enabled, ICU built in, and
-    # graphite2 from the system; tests and utilities are left out, and
-    # auto_features=disabled keeps meson from switching on anything else it
-    # happens to find.  -fPIC because these objects end up inside a shared
-    # library; PYTHONWARNINGS= because a warning from the interpreter prints as
-    # a meson error.
-    ExternalProject_Add(harfbuzz_ext
-        SOURCE_DIR "${harfbuzz_SOURCE_DIR}"
-        BINARY_DIR "${HARFBUZZ_BUILD}"
-        CONFIGURE_COMMAND
-            "${CMAKE_COMMAND}" -E env "PYTHONWARNINGS="
-            "${MESON_EXECUTABLE}" setup --wrap-mode nofallback
-                --buildtype release
-                -Ddefault_library=static
-                -Dauto_features=disabled
-                -Dcpp_std=c++20
-                -Dtests=disabled
-                -Dutilities=disabled
-                -Dsubset=enabled
-                -Draster=disabled
-                -Dvector=disabled
-                -Dicu=enabled
-                -Dicu_builtin=true
-                -Dgraphite2=enabled
-                "-Dc_args=-fPIC"
-                "-Dcpp_args=-fPIC"
-                "${harfbuzz_SOURCE_DIR}"
-        BUILD_COMMAND "${MESON_EXECUTABLE}" compile -C "${HARFBUZZ_BUILD}" libs
-        INSTALL_COMMAND ""
-        BUILD_BYPRODUCTS
-            "${HARFBUZZ_BUILD}/src/libharfbuzz.a"
-            "${HARFBUZZ_BUILD}/src/libharfbuzz-subset.a"
-        COMMENT "Building harfbuzz")
-
-    set(LIBRESTUDIO_HARFBUZZ_TARGETS harfbuzz harfbuzz_subset)
-    foreach (_hb harfbuzz harfbuzz-subset)
-        string(REPLACE "-" "_" _target "${_hb}")
-        add_library(${_target} STATIC IMPORTED GLOBAL)
-        set_target_properties(${_target} PROPERTIES
-            IMPORTED_LOCATION "${HARFBUZZ_BUILD}/src/lib${_hb}.a"
-            # The headers are in the unpacked tarball, so they exist as soon as
-            # the fetch above has run; only the archives wait for meson.
-            INTERFACE_INCLUDE_DIRECTORIES "${HARFBUZZ_SRC}")
-        # add_dependencies on an imported target is allowed and does reach the
-        # consumers, which is what orders meson before the link.
-        add_dependencies(${_target} harfbuzz_ext)
-    endforeach ()
-endif ()
 
 # --- configuration headers ----------------------------------------------------
 #
@@ -349,6 +858,20 @@ endif ()
 # config_gio.h say whether libcups, libdbus and gio are there, and they are
 # what vcl/ switches its printing and session handling on.
 include(LibreStudioConfigHeaders)
+
+# external/ (zlib, libpng, md4c, graphite, harfbuzz, libixion, orcus,
+# raptor2, rasqal, redland, poppler, coinmp): the "prefer a sufficiently new
+# system package, fall back to a real vendored build" externals -- no
+# add_subdirectory() router here anymore. Each is resolved lazily and
+# memoized (librestudio_pkgconfig()/librestudio_find_package(), cmake/
+# LibreStudioTarballs.cmake) directly from whichever real consumer module
+# first needs it (vcl/sc/sdext/unoxml/comphelper/...); external/<name>/
+# directories still hold each one's own <name>.cmake driver, patches and
+# config files, just without a CMakeLists.txt or add_subdirectory()
+# registration of their own. ENABLE_COINMP/COINMP_DETECT_FOUND (read by
+# sc/CMakeLists.txt's own CoinMP resolution) still need
+# LibreStudioConfigHeaders included first, which is why this comment (and
+# every consumer module below) still comes after it.
 
 # --- modules -----------------------------------------------------------------
 #
@@ -369,6 +892,18 @@ add_subdirectory(store)
 add_subdirectory(registry)
 add_subdirectory(unoidl)
 add_subdirectory(codemaker)
+
+# unodevtools (Executable_uno-skeletonmaker) needs only sal/salhelper/unoidl
+# plus codemaker's static libraries, all declared immediately above; inert by
+# default (ENABLE_ODK is OFF), same gate as unoidl-read above.
+add_subdirectory(unodevtools)
+
+# rust_uno declares a self-contained ENABLE_RUST_UNO option and defines no
+# targets at all yet (see its own CMakeLists.txt) -- no ordering constraint,
+# placed here purely to stay near its sibling experimental-language-binding
+# module net_ure (added further below, after cppuhelper).
+add_subdirectory(rust_uno)
+
 add_subdirectory(udkapi)
 add_subdirectory(cppu)
 add_subdirectory(offapi)
@@ -381,6 +916,26 @@ add_subdirectory(offapi)
 # udkapi_normal/offapi_normal headers targets (gb_CppunitTest_use_sdk_api) --
 # both already defined above by this point -- so this add_subdirectory has to
 # sit after sal and offapi, not before them.
+# --- verified-empty-on-this-platform / no-router-needed modules --------------
+#
+# android, ios, static: each module's own Module_*.mk gates every one of its
+# real targets behind a platform/BUILD_TYPE check this port's own
+# configuration never satisfies (OS=ANDROID, OS=iOS, EMSCRIPTEN respectively)
+# -- verified directly against each live .mk, not assumed out of scope; see
+# each module's own CMakeLists.txt comment for the full reasoning. uitest:
+# UITest_* targets only, the same already-established "no runner exists" gap
+# as JunitTest/PythonTest elsewhere. No dependencies either way (only
+# CMAKE_SYSTEM_NAME checks or nothing at all), so these four can sit
+# anywhere; grouped here, right before o3tl, as this port's own "genuinely
+# no-op right now" cluster. (external/ used to belong in this list too --
+# not anymore: it is a real system-or-vendor router now, add_subdirectory()'d
+# once, earlier, right after include(LibreStudioConfigHeaders) above, see
+# that call site's own comment.)
+add_subdirectory(android)
+add_subdirectory(ios)
+add_subdirectory(static)
+add_subdirectory(uitest)
+
 add_subdirectory(o3tl)
 
 # oovbaapi (VBA-compatibility types) only needs udkapi/offapi's .rdb files,
@@ -402,64 +957,76 @@ add_subdirectory(i18npool)
 add_subdirectory(bridges)
 add_subdirectory(cppuhelper)
 
-# jvmfwk (JRE discovery/bootstrap) and jvmaccess (the JNI attach/AttachGuard
-# wrapper built on top of it) are the two lowest-level pieces of the real
-# Java/UNO bridge -- both need only cppu, cppuhelper, sal, salhelper (all
-# already declared above), and everything further up the Java stack (stoc's
-# javaloader/javavm, jurt, javaunohelper, bean) links one or both of them.
-# Gated the same way as every other Java-only module in this port.
+# net_ure (net_bootstrap needs cppu/cppuhelper/sal/salhelper, all declared
+# above) -- inert by default (ENABLE_ODK is OFF; ENABLE_DOTNET auto-detects
+# but the module's own gate needs both).
+add_subdirectory(net_ure)
+
+# The whole Java/UNO bridge, one add_subdirectory() per module in real
+# dependency order (each comment explains why THAT module sits after the
+# previous one, not why the LIBRESTUDIO_ENABLE_JAVA gate is repeated --
+# nothing unconditional ever ran between these six blocks, so they are one
+# if() now instead of six identical ones):
+#
+#   jvmfwk (JRE discovery/bootstrap) and jvmaccess (the JNI attach/
+#   AttachGuard wrapper built on top of it) are the two lowest-level pieces
+#   -- both need only cppu, cppuhelper, sal, salhelper (all already declared
+#   above), and everything further up the Java stack (stoc's javaloader/
+#   javavm, jurt, javaunohelper, bean) links one or both of them.
+#
+#   unoil generates the offapi Java stub sources (via javamaker, from
+#   codemaker above) that ridljar's libreoffice.jar packages directly -- it
+#   needs only offapi/udkapi's *_RDB variables (both already set by
+#   add_subdirectory(udkapi) and add_subdirectory(offapi) above) and the
+#   javamaker executable, not jvmfwk/jvmaccess.
+#
+#   ridljar builds the real UNO Java bridge classes (libreoffice.jar) plus
+#   the tiny unoloader.jar bootstrap jar. It needs its own javamaker
+#   customtarget (udkapi only) in addition to unoil's offapi one above, and
+#   the java_websocket.jar external fetched/built near the top of this file
+#   (JAVA_WEBSOCKET_JAR), so it must come after both.
+#
+#   jurt: jpipe, the native JNI pipe-transport library ridljar's
+#   PipeConnection.java loads via System.loadLibrary. Only needs sal + JNI,
+#   not anything above, but kept here to match this port's Java/UNO bridge
+#   module ordering.
+#
+#   javaunohelper: juh/juhx, the native JNI helper libraries that
+#   com.sun.star.comp.helper.Bootstrap/SharedLibraryLoader dlopen to
+#   bootstrap a UNO ComponentContext from Java. juhx needs jvmaccess (built
+#   above, alongside jvmfwk) and udkapi's comprehensive header variant
+#   (built above, in udkapi/CMakeLists.txt), not anything from jurt/ridljar.
+#
+#   bean: officebean.jar + libofficebean.so, the last module in this port's
+#   Java/UNO bridge. officebean.jar's compile classpath needs ridljar's
+#   libreoffice.jar (libreoffice_JAR/libreoffice_jar, set above); the native
+#   library needs only JNI/AWT, nothing from jurt/javaunohelper/jvmaccess.
+#   Module_bean.mk: ifneq ($(ENABLE_JAVA),) / ifneq ($(OS),MACOSX) / ifneq
+#   ($(OS),ANDROID) around gb_Module_add_targets(bean, Jar_officebean
+#   Library_officebean). The OS exclusions are not just build-system noise
+#   -- bean/native/ is a JNI/AWT peer bridge upstream never ports to macOS
+#   or Android, so this port must not attempt it there either -- hence its
+#   own nested condition, a real superset of the outer gate, not a
+#   duplicate of it.
 if (LIBRESTUDIO_ENABLE_JAVA)
     add_subdirectory(jvmfwk)
     add_subdirectory(jvmaccess)
-endif ()
-
-# unoil generates the offapi Java stub sources (via javamaker, from codemaker
-# above) that ridljar's libreoffice.jar packages directly -- it needs only
-# offapi/udkapi's *_RDB variables (both already set by add_subdirectory(udkapi)
-# and add_subdirectory(offapi) above) and the javamaker executable, not
-# jvmfwk/jvmaccess. Gated the same as the rest of the Java/UNO bridge.
-if (LIBRESTUDIO_ENABLE_JAVA)
     add_subdirectory(unoil)
-endif ()
-
-# ridljar builds the real UNO Java bridge classes (libreoffice.jar) plus the
-# tiny unoloader.jar bootstrap jar. It needs its own javamaker customtarget
-# (udkapi only) in addition to unoil's offapi one above, and the
-# java_websocket.jar external fetched/built near the top of this file
-# (JAVA_WEBSOCKET_JAR), so it must come after both.
-if (LIBRESTUDIO_ENABLE_JAVA)
     add_subdirectory(ridljar)
-endif ()
-
-# jurt: jpipe, the native JNI pipe-transport library ridljar's PipeConnection.java
-# loads via System.loadLibrary. Only needs sal + JNI, not anything above, but
-# kept here to match this port's Java/UNO bridge module ordering.
-if (LIBRESTUDIO_ENABLE_JAVA)
     add_subdirectory(jurt)
-endif ()
-
-# javaunohelper: juh/juhx, the native JNI helper libraries that
-# com.sun.star.comp.helper.Bootstrap/SharedLibraryLoader dlopen to bootstrap a
-# UNO ComponentContext from Java. juhx needs jvmaccess (built above, alongside
-# jvmfwk) and udkapi's comprehensive header variant (built above, in
-# udkapi/CMakeLists.txt), not anything from jurt/ridljar.
-if (LIBRESTUDIO_ENABLE_JAVA)
     add_subdirectory(javaunohelper)
+    if ((NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") AND (NOT CMAKE_SYSTEM_NAME STREQUAL "Android"))
+        add_subdirectory(bean)
+    endif ()
 endif ()
 
-# bean: officebean.jar + libofficebean.so, the last module in this port's
-# Java/UNO bridge. officebean.jar's compile classpath needs ridljar's
-# libreoffice.jar (libreoffice_JAR/libreoffice_jar, set above); the native
-# library needs only JNI/AWT, nothing from jurt/javaunohelper/jvmaccess.
-#
-# Module_bean.mk: ifneq ($(ENABLE_JAVA),) / ifneq ($(OS),MACOSX) / ifneq
-# ($(OS),ANDROID) around gb_Module_add_targets(bean, Jar_officebean
-# Library_officebean). The OS exclusions are not just build-system noise --
-# bean/native/ is a JNI/AWT peer bridge upstream never ports to macOS or
-# Android, so this port must not attempt it there either.
-if (LIBRESTUDIO_ENABLE_JAVA AND (NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") AND (NOT CMAKE_SYSTEM_NAME STREQUAL "Android"))
-    add_subdirectory(bean)
-endif ()
+# qadevOOo/nlpsolver both self-gate their real (LIBRESTUDIO_ENABLE_JAVA +
+# librestudio_add_uno_jar()) targets internally; librestudio_add_uno_jar()
+# itself is defined by cmake/LibreStudioJavaJar.cmake, include()'d near the
+# top of this file, so no add_subdirectory() ordering constraint from it.
+# Placed here to stay with the rest of this port's Java/UNO bridge cluster.
+add_subdirectory(qadevOOo)
+add_subdirectory(nlpsolver)
 
 add_subdirectory(basegfx)
 add_subdirectory(tools)
@@ -600,34 +1167,6 @@ add_subdirectory(jsuno)
 add_subdirectory(scripting)
 add_subdirectory(ucb)
 
-# Deferred CppunitTest registrations, continued: drawinglayer_processors and
-# drawinglayer_border (both CppunitTest_drawinglayer_*.mk) need use_components
-# on ucb's ucb1/ucpfile1 (both tests) and framework's fwk (drawinglayer_
-# processors only) -- both add_subdirectory()'d only just above/well before
-# here (framework at line 517, ucb right above) -- on top of configmgr's and
-# i18npool's components, already available at drawinglayer's own position
-# (line 501, well before framework/ucb). ucb is the later-binding constraint
-# of the two tests' dependencies, so both are registered here, right after
-# it, rather than splitting drawinglayer_border off earlier (its own
-# dependencies would already be satisfied right after framework, but keeping
-# both of drawinglayer's deferred tests in one file with one include() call
-# site is simpler, and registering drawinglayer_border a little later than
-# strictly necessary costs nothing here) -- same reasoning svl/
-# CppunitTest_deferred.cmake's own include() site already applies to
-# svl_urihelper/svl_qa_cppunit. See drawinglayer/CppunitTest_deferred.cmake
-# for the full per-test detail, including the canvas::vclcanvas/
-# canvas::Factory components drawinglayer_processors needs but this port has
-# not ported yet, and the pointer comment at the end of drawinglayer/
-# CMakeLists.txt for the short version.
-include("${CMAKE_SOURCE_DIR}/drawinglayer/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: package2_test (CppunitTest_package2_
-# test.mk) needs use_components on ucb's ucb1/ucpfile1, just add_subdirectory
-# ()'d right above -- configmgr/sax/package's own components are already
-# available at package's own position (line 493), well before this point.
-# See package/CppunitTest_deferred.cmake for the full per-test detail.
-include("${CMAKE_SOURCE_DIR}/package/CppunitTest_deferred.cmake")
-
 add_subdirectory(dbaccess)
 
 # vbahelper (vbahelper/msforms) needs msfilter (filter), sb (basic), sfx2,
@@ -656,6 +1195,12 @@ add_subdirectory(reportdesign)
 # cppuhelper/cppu/sal/salhelper, sot, officecfg (all declared above) plus
 # CURL::libcurl for updchk.
 add_subdirectory(extensions)
+
+# librelogo is pure data (a Python macro + one .properties file, install()
+# rules gated on ENABLE_SCRIPTING) -- no target dependency on anything else in
+# the tree, placed here purely to stay near its fellow Basic/scripting-slice
+# modules.
+add_subdirectory(librelogo)
 
 # oox (OOXML import/export helper library used by writerfilter/sc/sd/sw and,
 # below, by starmath) needs basegfx, comphelper, cppu, cppuhelper, docmodel,
@@ -709,37 +1254,25 @@ add_subdirectory(lotuswordpro)
 add_subdirectory(remotebridges)
 add_subdirectory(uui)
 
-# Deferred CppunitTest registrations: librestudio_add_cppunit_test()'s
-# COMPONENTS parameter (cmake/LibreStudioTest.cmake) resolves each name
-# through a GLOBAL property that a component's owning module's own
-# librestudio_add_component() call sets (cmake/LibreStudioComponent.cmake) --
-# read eagerly via get_property(GLOBAL ...), so it only sees whatever has
-# been set by the exact point it runs. comphelper_test needs i18npool's
-# component, and i18npool is add_subdirectory()'d AFTER comphelper above
-# (i18npool links comphelper, so the natural producer-before-consumer order
-# runs comphelper first); sax_parser/sax_xmlimport need configmgr's,
-# framework's, i18npool's, sfx2's, ucb's, and uui's components, all of which
-# are add_subdirectory()'d AFTER sax above, for the same reason (sax is
-# linked by many modules that need to be available early); configmgr_unit
-# needs unoxml's and ucb's components (both add_subdirectory()'d AFTER
-# configmgr above, for the same "linked by many earlier modules" reason) plus
-# test_fixtures/its protector plug-ins (add_subdirectory(test), also after).
-# Defining these tests at comphelper's/sax's/configmgr's own natural position
-# would hit those properties before they are set and abort configure with
-# librestudio_add_cppunit_test()'s own FATAL_ERROR -- reordering comphelper's/
-# sax's/configmgr's own add_subdirectory() instead would be the much larger,
-# riskier change, given how much of the tree already depends on each being
-# available early. include()'ing each test's registration here, once every
-# module it references has already run, is the smaller, safer fix; see
-# comphelper/CppunitTest_deferred.cmake, sax/CppunitTest_deferred.cmake and
-# configmgr/CppunitTest_deferred.cmake themselves for the per-test detail.
-# (scaddins_analysis and xmlscript_cppunit need the same kind of deferral for
-# an additional reason -- the production services.rdb, use_rdb(services) --
-# so they are include()'d much further down, right after program_services_rdb
-# is defined; see that include() call site instead of here.)
-include("${CMAKE_SOURCE_DIR}/comphelper/CppunitTest_deferred.cmake")
-include("${CMAKE_SOURCE_DIR}/sax/CppunitTest_deferred.cmake")
-include("${CMAKE_SOURCE_DIR}/configmgr/CppunitTest_deferred.cmake")
+# Deferred CppunitTest registrations (2026-09-27, superseding the old "find
+# the latest-binding module and hand-place include() after it here" scheme):
+# librestudio_add_cppunit_test()'s COMPONENTS parameter resolves each name
+# through a GLOBAL property (cmake/LibreStudioTest.cmake), read eagerly via
+# get_property(GLOBAL ...) at CMake *script*-processing time -- CMake's
+# target/build graph resolves dependencies regardless of declaration order,
+# but this is plain sequential script execution, so a get_property() genuinely
+# only sees whatever has been set() by the exact point it runs. A module whose
+# CppunitTest needs a component (or CONFIGURATION's LIBRESTUDIO_TEST_UNITTEST_
+# DIR, or program_services_rdb) from a module add_subdirectory()'d LATER than
+# itself keeps that one librestudio_add_cppunit_test() call in its own
+# <module>/CppunitTest_deferred.cmake, and its own <module>/CMakeLists.txt
+# schedules that file with cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
+# CALL include ...) -- which CMake runs only after every add_subdirectory() in
+# the whole tree has completed, regardless of which one is actually the
+# latest-binding dependency. No per-module include() bookkeeping lives here
+# anymore; see each module's own CppunitTest_deferred.cmake for its specific
+# ordering constraint, and cmake/LibreStudioTest.cmake's header comment for
+# the DEFER mechanism itself.
 
 # group 2, wave 2 (2026-09-26): the five modules wave 1 left blocked on
 # missing -devel packages (libxslt/clucene, hunspell/mythes/libexttextcat/
@@ -751,36 +1284,6 @@ add_subdirectory(lingucomponent)
 add_subdirectory(slideshow)
 add_subdirectory(writerperfect)
 add_subdirectory(xmlsecurity)
-
-# Deferred CppunitTest registrations, continued: svl_urihelper and
-# svl_qa_cppunit (both CppunitTest_svl_*.mk) need use_components on ucb's
-# ucb1/ucpfile1 (svl_urihelper) and configmgr's/framework's/lingucomponent's
-# own components (svl_qa_cppunit), plus both need use_ure's protector
-# plug-ins from unotest -- all add_subdirectory()'d after svl's own, above.
-# lingucomponent (just add_subdirectory()'d above) is the later-binding
-# constraint of the two tests' dependencies, so both are registered together
-# here, right after it, rather than splitting svl_urihelper off to the
-# earlier comphelper/sax/configmgr deferral point above (its own
-# dependencies would already be satisfied there, but keeping both of svl's
-# deferred tests in one file with one include() call site is simpler, and
-# registering svl_urihelper a little later than strictly necessary costs
-# nothing here). See svl/CppunitTest_deferred.cmake for the full per-test
-# detail, and the pointer comment in svl/CMakeLists.txt for the short
-# version.
-include("${CMAKE_SOURCE_DIR}/svl/CppunitTest_deferred.cmake")
-
-# toolkit/CppunitTest_deferred.cmake's include() used to sit here (right
-# after svl's own, above): toolkit_toolkit (CppunitTest_toolkit.mk) needs
-# use_components on framework's fwk (517), sfx2's sfx (527) and ucb's
-# ucb1/ucpfile1 (592) -- all add_subdirectory()'d after toolkit's own natural
-# position (491) -- plus use_configuration's dependency on test (682), also
-# after toolkit, and none of that needs program_services_rdb. But that file
-# now also registers toolkit_a11y (CppunitTest_toolkit_a11y.mk), whose
-# use_rdb(services) does need program_services_rdb -- so the whole include()
-# moved down to right after that target is defined (see below, alongside
-# scaddins_analysis/xmlscript_cppunit), rather than splitting the two
-# toolkit tests across two files. See toolkit/CppunitTest_deferred.cmake's
-# own header comment for the full detail.
 
 # sdext: only PresentationMinimizer and pdfimport are ported. xpdfimport (the
 # separate poppler-based helper executable pdfimport pipes to) is deferred —
@@ -844,6 +1347,21 @@ add_subdirectory(desktop)
 # sofficeapp installs to, not because anything here links it.
 add_subdirectory(libreofficekit)
 
+# apple_remote/cli_ure/embedserv/winaccessibility/setup_native are all
+# platform-gated to a toolchain this Linux dev machine doesn't have (macOS,
+# or Windows+MSVC) -- every real target inside each is wrapped in its own
+# if (APPLE ...)/if (WIN32 ...) guard and is therefore inert here, but
+# embedserv/winaccessibility do call librestudio_add_component() on the
+# platforms where they're real, so -- to stay correct for a future
+# cross-compiled Windows build, not just this Linux one -- they are placed
+# before librestudio_finalize_components(services) below, same as every
+# other component-registering module.
+add_subdirectory(apple_remote)
+add_subdirectory(cli_ure)
+add_subdirectory(embedserv)
+add_subdirectory(winaccessibility)
+add_subdirectory(setup_native)
+
 # --- service registry and bootstrap configuration ----------------------------
 
 # Every module has now declared its .component files, so they can be packed.
@@ -861,165 +1379,6 @@ add_custom_command(
     VERBATIM)
 add_custom_target(program_services_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/services.rdb")
-
-# Deferred CppunitTest registration: officecfg_accelerator_key_checker_test
-# (CppunitTest_officecfg_accelerator_key_checker_test.mk) calls
-# gb_CppunitTest_use_rdb(name,services) -- see scaddins/CppunitTest_
-# deferred.cmake's header comment for what this port makes of that (no
-# COMPONENTS, a DEPENDS on the program_services_rdb target just defined
-# above, and cppunittester's UNO bootstrap falling back to unorc's own ini
-# default for UNO_SERVICES) -- so it cannot be registered before this exact
-# point, the first place program_services_rdb exists as a real target. Its
-# other dependencies (officecfg itself, subsequenttest/test_fixtures/the
-# protector plug-ins via test, unotest) are all add_subdirectory()'d long
-# before this point already, so program_services_rdb is the binding
-# constraint, not those. See officecfg/CppunitTest_deferred.cmake for the
-# full per-test detail, including why this could not simply be registered at
-# officecfg/CMakeLists.txt's own position (390) instead.
-include("${CMAKE_SOURCE_DIR}/officecfg/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registrations, continued: scaddins_analysis
-# (CppunitTest_scaddins_analysis.mk) and xmlscript_cppunit
-# (CppunitTest_xmlscript_cppunit.mk) both call gb_CppunitTest_use_rdb(name,
-# services) -- see scaddins/CppunitTest_deferred.cmake's header comment for
-# what this port makes of that (no COMPONENTS, a DEPENDS on the
-# program_services_rdb target just defined above, and cppunittester's UNO
-# bootstrap falling back to unorc's own ini default for UNO_SERVICES) -- so
-# neither can be registered before this exact point, the first place
-# program_services_rdb exists as a real target. Both also need framework/
-# test (xmlscript_cppunit) or test alone (scaddins_analysis), add_subdirectory
-# ()'d long before this point already, so program_services_rdb is the binding
-# constraint for both, not those.
-include("${CMAKE_SOURCE_DIR}/scaddins/CppunitTest_deferred.cmake")
-include("${CMAKE_SOURCE_DIR}/xmlscript/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: toolkit_toolkit (CppunitTest_toolkit.mk)
-# and toolkit_a11y (CppunitTest_toolkit_a11y.mk), toolkit/CppunitTest_
-# deferred.cmake's combined include() call site. toolkit_toolkit itself does
-# not need program_services_rdb (it uses explicit COMPONENTS instead of
-# use_rdb -- see that file's own comment on it) and could have been
-# registered as early as right after svl's own deferred include above (its
-# framework/sfx2/ucb/test dependencies are all satisfied there already), but
-# toolkit_a11y -- now wired into the same file -- does call
-# gb_CppunitTest_use_rdb(toolkit_a11y,services), which needs the
-# program_services_rdb target just defined above. Since both tests share one
-# file and one include() call site, the whole include() sits here, at the
-# later-binding test's constraint, rather than splitting the file in two;
-# see toolkit/CppunitTest_deferred.cmake's own header comment for the full
-# detail.
-include("${CMAKE_SOURCE_DIR}/toolkit/CppunitTest_deferred.cmake")
-
-# vcl_app_test, vcl_bitmapfilter_test, vcl_bitmap_test, vcl_filter_igif,
-# vcl_graphic_test, vcl_idle_task, vcl_map, vcl_type_serializer_test: the
-# first sub-wave of vcl's CppunitTest_*.mk files that need use_ure. All eight
-# call gb_CppunitTest_use_rdb(name, services) same as scaddins_analysis/
-# xmlscript_cppunit just above, so they need the same program_services_rdb
-# ordering and are include()'d from the same point; see vcl/
-# CppunitTest_deferred.cmake's own header comment for the per-test detail,
-# including why they could not be registered at vcl's own add_subdirectory()
-# position either. vcl_localize_digits/vcl_unit_conversion (no use_ure at
-# all) and vcl_pdfium_library_test (deliberately not wired -- see that same
-# file) are not part of this include().
-include("${CMAKE_SOURCE_DIR}/vcl/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: svtools_graphic (CppunitTest_svtools_
-# graphic.mk) calls use_rdb(services) same as scaddins_analysis/xmlscript_
-# cppunit/vcl's own eight tests above, so it needs the same program_
-# services_rdb ordering, plus its use_libraries(...,sw,...) needs sw's own
-# add_subdirectory() (line 809, already satisfied well before this point) to
-# have run for that link to resolve as a real target dependency rather than a
-# bare linker flag. See svtools/CppunitTest_deferred.cmake for the full
-# per-test detail, including why svtools_dialogs_test (a screenshot target)
-# is not wired at all, and svtools/CMakeLists.txt's own comment for the
-# pointer to CppunitTest_svtools_html (wired directly there, no deferral
-# needed).
-include("${CMAKE_SOURCE_DIR}/svtools/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registrations: svx_unit, svx_gallery_test and svx_core
-# (all three of CppunitTest_svx_unit.mk/CppunitTest_svx_gallery_test.mk/
-# CppunitTest_svx_core.mk) call use_rdb(services) same as scaddins_analysis/
-# xmlscript_cppunit/vcl's/svtools_graphic's own tests above, so they need the
-# same program_services_rdb ordering, plus unotest/test_fixtures/
-# subsequenttest (test (688) and unotest (687) are both add_subdirectory()'d
-# after svx's own position (560), but program_services_rdb is the later-
-# binding constraint for all three anyway). See svx/CppunitTest_deferred.cmake
-# for the full per-test detail, including why svx_dialogs_test (a screenshot
-# target) is not wired at all -- and why UIConfig_svx now existing does not
-# change that verdict.
-include("${CMAKE_SOURCE_DIR}/svx/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registrations: sfx2_misc, sfx2_classification,
-# sfx2_doc and sfx2_autoredaction (CppunitTest_sfx2_misc.mk/CppunitTest_
-# sfx2_classification.mk/CppunitTest_sfx2_doc.mk/CppunitTest_sfx2_
-# autoredaction.mk) all call use_rdb(services) same as svx_unit/svx_
-# gallery_test/svx_core just above, so they need the same program_
-# services_rdb ordering, plus unotest/test_fixtures/subsequenttest (test,
-# unotest -- both add_subdirectory()'d after sfx2's own position, but
-# program_services_rdb is the later-binding constraint for all four
-# anyway) and, via CONFIGURATION, test/CMakeLists.txt's own LIBRESTUDIO_
-# TEST_UNITTEST_DIR. See sfx2/CppunitTest_deferred.cmake for the full
-# per-test detail, including why sfx2_view is not wired at all (a second,
-# independent blocker beyond subsequenttest: use_executable(xpdfimport),
-# which this port has never ported) and the sfx2_classification/
-# sfx2_classification_package target-name-collision fix it documents.
-include("${CMAKE_SOURCE_DIR}/sfx2/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: all 5 of framework's CppunitTest_*.mk
-# files (framework_dispatch, framework_loadenv, framework_CheckXTitle,
-# framework_accelerators, framework_services) call use_rdb(services) same as
-# scaddins_analysis/xmlscript_cppunit/vcl's own eight tests above, so they
-# need the same program_services_rdb ordering, plus use_configuration's own
-# LIBRESTUDIO_TEST_UNITTEST_DIR (test/CMakeLists.txt, add_subdirectory()'d
-# well before this point too). See framework/CppunitTest_deferred.cmake for
-# the full per-test detail, including framework_services' if (NOT APPLE)
-# guard (Module_framework.mk's own ifneq($(OS),MACOSX), "Not sure why this is
-# not stable on macOS").
-include("${CMAKE_SOURCE_DIR}/framework/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: linguistic_restprotocol (CppunitTest_
-# linguistic_restprotocol.mk) calls use_rdb(services) same as scaddins_
-# analysis/xmlscript_cppunit/vcl's/framework's own tests above, so it needs
-# the same program_services_rdb ordering, plus use_configuration's own
-# LIBRESTUDIO_TEST_UNITTEST_DIR (test/CMakeLists.txt, add_subdirectory()'d
-# well before this point too). See linguistic/CppunitTest_deferred.cmake for
-# the full per-test detail, including the Module_linguistic.mk `ifeq
-# ($(OS),LINUX)` gate this test sits behind upstream.
-include("${CMAKE_SOURCE_DIR}/linguistic/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: forms_unit (CppunitTest_forms_unit.mk)
-# calls use_rdb(services) same as linguistic_restprotocol just above, so it
-# needs the same program_services_rdb ordering, plus use_configuration's own
-# LIBRESTUDIO_TEST_UNITTEST_DIR. See forms/CppunitTest_deferred.cmake for the
-# full per-test detail.
-include("${CMAKE_SOURCE_DIR}/forms/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: reportdesign_dialogs_test
-# (CppunitTest_reportdesign_dialogs_test.mk, a screenshot target) calls
-# use_rdb(services) + use_vcl_non_headless_with_windows + use_uiconfigs same
-# as basctl_dialogs_test/svtools_dialogs_test/svx_dialogs_test/vcl_
-# dialogs_test's own NONHEADLESS+UICONFIG wiring, so it needs the same
-# program_services_rdb ordering plus use_configuration's own LIBRESTUDIO_
-# TEST_UNITTEST_DIR. See reportdesign/CppunitTest_deferred.cmake for the full
-# per-test detail, including why reportdesign_basic_test (the module's other
-# CppunitTest) is not wired at all.
-include("${CMAKE_SOURCE_DIR}/reportdesign/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registrations: extensions_bibliography
-# (CppunitTest_extensions_bibliography.mk) and extensions_test_update
-# (CppunitTest_extensions_test_update.mk, gated on ENABLE_ONLINE_UPDATE) both
-# call use_rdb(services)/need program_services_rdb the same way, plus
-# extensions_test_update's use_configuration needs LIBRESTUDIO_TEST_
-# UNITTEST_DIR too. See extensions/CppunitTest_deferred.cmake for the full
-# per-test detail, including extensions_test_update's use_library_objects
-# (updchk) handling.
-include("${CMAKE_SOURCE_DIR}/extensions/CppunitTest_deferred.cmake")
-
-# Deferred CppunitTest registration: basctl_dialogs_test (CppunitTest_basctl_
-# dialogs_test.mk, a screenshot target) -- same NONHEADLESS+UICONFIG
-# treatment as reportdesign_dialogs_test just above, needing the same
-# program_services_rdb + LIBRESTUDIO_TEST_UNITTEST_DIR ordering. See basctl/
-# CppunitTest_deferred.cmake for the full per-test detail.
-include("${CMAKE_SOURCE_DIR}/basctl/CppunitTest_deferred.cmake")
 
 # types.rdb holds the UDK types and stays a copy of udkapi's registry; the
 # office API types live beside it in types/offapi.rdb, and unorc names both.
@@ -1068,9 +1427,45 @@ add_custom_target(program_oovbaapi_rdb ALL
 # build just produced — not the stale copy from a previous one.  That makes the
 # locale data depend on the installed registry and on libsaxlo itself, neither
 # of which the executable links against.
+#
+# 2026-09-29: this add_dependencies() call alone is NOT sufficient -- kept
+# here for the aggregate i18npool_localedata phony target's own ordering, but
+# it does not reach the per-file add_custom_command() edges that are that
+# target's own DEPENDS (separate ninja build edges, no edge between them and
+# whatever the phony node itself additionally depends on). Confirmed via a
+# real remote build: most locales' saxparser invocations raced ahead of
+# program_oovbaapi_rdb and failed. The real fix -- the same targets (plus
+# program_types_rdb/program_offapi_rdb, also read via unorc's UNO_TYPES) --
+# is now on each individual add_custom_command() in i18npool/CMakeLists.txt's
+# own per-locale loop; see that file's header comment on the DEPENDS line.
 add_dependencies(i18npool_localedata program_services_rdb sax)
 
 librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/unorc")
+
+# --- remaining leaf modules (no ordering constraint on anything above) -------
+#
+# swext needs ridljar's libreoffice/libreoffice_jar target (declared far
+# above, well before this point). odk needs cppuhelper's findsofficepath
+# static lib (also declared far above). Every other module here is either
+# pure install()/data (extras, readlicense_oo, sysui, ure, postprocess,
+# wizards) or a documentation-only stub with zero real targets on this
+# platform/config (reportbuilder, scp2, solenv, soltools, instsetoo_native) --
+# none of them are linked against by, or link against, anything else in this
+# tree, so they are grouped here rather than threaded individually through
+# the dependency-ordered graph above.
+add_subdirectory(swext)
+add_subdirectory(odk)
+add_subdirectory(extras)
+add_subdirectory(readlicense_oo)
+add_subdirectory(sysui)
+add_subdirectory(ure)
+add_subdirectory(postprocess)
+add_subdirectory(wizards)
+add_subdirectory(reportbuilder)
+add_subdirectory(scp2)
+add_subdirectory(solenv)
+add_subdirectory(soltools)
+add_subdirectory(instsetoo_native)
 
 # --- smoke test --------------------------------------------------------------
 

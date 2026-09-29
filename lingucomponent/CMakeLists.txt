@@ -26,12 +26,14 @@
 # gb_Library_use_system_darwin_frameworks) and is not ported, same as every
 # other Windows/macOS-only target in this port.
 #
-# IMPORTED_TARGET results from pkg_check_modules are directory-scoped, so
-# hunspell/mythes/libexttextcat/libnumbertext are each (re-)declared here
-# even though no other module in this tree has wired them yet (grepped: no
-# hunspell/mythes/libexttextcat/libnumbertext pkg_check_modules calls exist
-# anywhere else in the tree). HUNSPELL is declared once, below, and reused
-# by ulingu/hyphen/lnth/spell.
+# hunspell/mythes/libexttextcat/libnumbertext are each resolved here via
+# librestudio_pkgconfig() (cmake/LibreStudioTarballs.cmake, system-or-vendor
+# router with a real vendoring fallback in external/<name>/<name>.cmake for
+# all four -- 2026-09-29) -- no other module in this tree needs any of them
+# (grepped: no other librestudio_pkgconfig(NAME HUNSPELL/MYTHES/
+# LIBEXTTEXTCAT/LIBNUMBERTEXT ...) calls exist anywhere else in the tree).
+# HUNSPELL is resolved once, below, into LIBRESTUDIO_HUNSPELL_TARGET, and
+# reused by ulingu/hyphen/lnth/spell.
 
 # --- ulingu (StaticLibrary_ulingu.mk) -----------------------------------------
 #
@@ -40,7 +42,7 @@
 # reference it), so the whole `ifneq ($(SYSTEM_DICTS),)` defs block resolves
 # to "off" and is omitted entirely.
 
-pkg_check_modules(HUNSPELL REQUIRED IMPORTED_TARGET hunspell)
+librestudio_pkgconfig(NAME HUNSPELL MODULES hunspell)
 
 set(ULINGU_SOURCES
     lingucomponent/source/lingutil/lingutil
@@ -56,7 +58,7 @@ add_dependencies(ulingu udkapi_normal_headers offapi_normal_headers)
 
 target_link_libraries(ulingu PRIVATE
     Boost::boost
-    PkgConfig::HUNSPELL)
+    ${LIBRESTUDIO_HUNSPELL_TARGET})
 
 # Linked into shared libraries (hyphen, lnth, spell, LanguageTool below);
 # needs PIC objects, same reasoning as shell/CMakeLists.txt's shell_xmlparser
@@ -65,12 +67,16 @@ set_target_properties(ulingu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- guesslang (Library_guesslang.mk) -----------------------------------------
 #
-# SYSTEM_LIBEXTTEXTCAT is required: guesslang.cxx does
-# `#ifdef SYSTEM_LIBEXTTEXTCAT / #include <libexttextcat/textcat.h> / #else
-# / #include <textcat.h>` -- without the define it looks for a nonexistent
-# bundled header.
+# guesslang.cxx/guess.cxx/simpleguesser.cxx each do `#ifdef
+# SYSTEM_LIBEXTTEXTCAT / #include <libexttextcat/textcat.h> / #else /
+# #include <textcat.h>` -- the define must be set ONLY on the real-system
+# branch (a system package installs headers one directory deeper, under
+# libexttextcat/); the vendored branch's own flat src/ layout (external/
+# libexttextcat/libexttextcat.cmake) has no such subdirectory, so defining
+# it there would look for a header that does not exist. See that driver's
+# own header comment.
 
-pkg_check_modules(LIBEXTTEXTCAT REQUIRED IMPORTED_TARGET libexttextcat)
+librestudio_pkgconfig(NAME LIBEXTTEXTCAT MODULES libexttextcat VERSION 3.4.1)
 
 set(GUESSLANG_SOURCES
     lingucomponent/source/languageguessing/guess
@@ -87,12 +93,14 @@ target_include_directories(guesslang PRIVATE
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
 add_dependencies(guesslang officecfg_headers udkapi_normal_headers offapi_normal_headers)
 
-target_compile_definitions(guesslang PRIVATE SYSTEM_LIBEXTTEXTCAT)
+if (LIBRESTUDIO_LIBEXTTEXTCAT_FOUND)
+    target_compile_definitions(guesslang PRIVATE SYSTEM_LIBEXTTEXTCAT)
+endif ()
 
 target_link_libraries(guesslang PRIVATE
     cppu cppuhelper sal tl utl
     Boost::boost
-    PkgConfig::LIBEXTTEXTCAT)
+    ${LIBRESTUDIO_LIBEXTTEXTCAT_TARGET})
 
 librestudio_add_component(guesslang
     COMPONENT "${CMAKE_SOURCE_DIR}/lingucomponent/source/languageguessing/guesslang.component"
@@ -134,7 +142,7 @@ target_link_libraries(hyphen PRIVATE
     comphelper cppu cppuhelper i18nlangtag lng sal tl utl
     ulingu
     Boost::boost
-    PkgConfig::HUNSPELL
+    ${LIBRESTUDIO_HUNSPELL_TARGET}
     "${HYPHEN_LIBRARY}")
 
 librestudio_add_component(hyphen
@@ -148,7 +156,7 @@ install(TARGETS hyphen LIBRARY DESTINATION program)
 
 # --- lnth (Library_lnth.mk) ---------------------------------------------------
 
-pkg_check_modules(MYTHES REQUIRED IMPORTED_TARGET mythes)
+librestudio_pkgconfig(NAME MYTHES MODULES mythes)
 
 set(LNTH_SOURCES
     lingucomponent/source/thesaurus/libnth/nthesdta
@@ -169,8 +177,8 @@ target_link_libraries(lnth PRIVATE
     comphelper cppu cppuhelper i18nlangtag lng sal tl utl
     ulingu
     Boost::boost
-    PkgConfig::HUNSPELL
-    PkgConfig::MYTHES)
+    ${LIBRESTUDIO_HUNSPELL_TARGET}
+    ${LIBRESTUDIO_MYTHES_TARGET})
 
 librestudio_add_component(lnth
     COMPONENT "${CMAKE_SOURCE_DIR}/lingucomponent/source/thesaurus/libnth/lnth.component"
@@ -201,7 +209,7 @@ target_link_libraries(spell PRIVATE
     comphelper cppu cppuhelper i18nlangtag lng sal tl utl
     ulingu
     Boost::boost
-    PkgConfig::HUNSPELL
+    ${LIBRESTUDIO_HUNSPELL_TARGET}
     ICU::uc)
 
 librestudio_add_component(spell
@@ -221,7 +229,7 @@ install(TARGETS spell LIBRARY DESTINATION program)
 # is added for fidelity with upstream's RepositoryExternal.mk external macro,
 # harmless even though numbertext.cxx does not itself branch on it.
 
-pkg_check_modules(LIBNUMBERTEXT REQUIRED IMPORTED_TARGET libnumbertext)
+librestudio_pkgconfig(NAME LIBNUMBERTEXT MODULES libnumbertext VERSION 1.0.6)
 
 set(NUMBERTEXT_SOURCES
     lingucomponent/source/numbertext/numbertext
@@ -240,7 +248,7 @@ target_compile_definitions(numbertext PRIVATE SYSTEM_LIBNUMBERTEXT)
 
 target_link_libraries(numbertext PRIVATE
     cppu cppuhelper i18nlangtag sal tl utl
-    PkgConfig::LIBNUMBERTEXT)
+    ${LIBRESTUDIO_LIBNUMBERTEXT_TARGET})
 
 librestudio_add_component(numbertext
     COMPONENT "${CMAKE_SOURCE_DIR}/lingucomponent/source/numbertext/numbertext.component"

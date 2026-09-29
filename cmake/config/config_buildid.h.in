@@ -1,0 +1,31 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Optional Build ID displayed in the about dialog.
+
+Fix (first real `cmake --build`, 2026-09-27): config_host/config_buildid.h.in's
+own "#undef EXTRA_BUILDID" is only autoheader's placeholder marker line, not
+what a real ./configure run actually emits -- configure.ac:15645 always
+calls AC_DEFINE_UNQUOTED([EXTRA_BUILDID], ["$EXTRA_BUILDID"]) unconditionally
+(defaulting to an empty string when neither --with-extra-buildid nor the
+EXTRA_BUILDID environment variable is set), so EXTRA_BUILDID is always a
+defined string macro in any real build, empty by default. Left truly
+undefined here (as the literal .h.in text suggests), cui/source/dialogs/
+about.cxx's own "EXTRA_BUILDID[0] != '\0'" fails to compile ("was not
+declared in this scope") -- same class of mistake as the HAVE_CPP_CONSTINIT_
+SORTED_VECTOR probe fix alongside this one: verify against configure.ac's
+actual AC_DEFINE call, not just the .h.in template's own marker text.
+*/
+
+#ifndef CONFIG_BUILDID_H
+#define CONFIG_BUILDID_H
+
+#define EXTRA_BUILDID ""
+
+#endif

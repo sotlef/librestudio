@@ -1,0 +1,24 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+Settings for poppler header file detection.
+
+Transcribed verbatim from config_host/config_poppler.h.in, which hardcodes
+this to 0 unconditionally upstream too (not an autoconf @VAR@ substitution)
+-- this ENABLE_PDFIMPORT macro is dead code upstream itself, unrelated to
+whether sdext/Executable_xpdfimport.mk's xpdfimport binary is built (see
+sdext/CMakeLists.txt's own ENABLE_POPPLER gate for that).
+*/
+
+#ifndef CONFIG_POPPLER_H
+#define CONFIG_POPPLER_H
+
+#define ENABLE_PDFIMPORT 0
+
+#endif

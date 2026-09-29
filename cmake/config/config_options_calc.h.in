@@ -1,0 +1,22 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/*
+General configuration settings for various options specific to Calc.
+
+Transcribed from config_host/config_options_calc.h.in, which hardcodes this
+to 0 unconditionally upstream too (not an autoconf @VAR@ substitution) -- the
+formula logger this gates is a developer diagnostic tool, out of scope here.
+*/
+
+#ifndef CONFIG_OPTIONS_CALC_H
+#define CONFIG_OPTIONS_CALC_H
+
+#define ENABLE_FORMULA_LOGGER 0
+
+#endif

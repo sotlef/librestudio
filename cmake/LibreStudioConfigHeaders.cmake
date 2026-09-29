@@ -96,10 +96,34 @@ check_cxx_source_runs([=[
     }
 ]=] HAVE_CPP_CONSTEVAL)
 
+# Fix (first real `cmake --build`, 2026-09-27): this probe used to test a
+# default-constructed, EMPTY constinit std::vector -- trivially true on
+# virtually any compiler (an empty vector's default constructor allocates
+# nothing), so it always reported "yes" regardless of whether a *populated*
+# constinit vector (the real question sc/source/core/tool/token.cxx's own
+# "#if HAVE_CPP_CONSTINIT_SORTED_VECTOR" branch depends on, ScTokenArray::
+# CheckForThreading's 29-element aThreadedCalcDenyList) actually works.
+# GCC 13.2.1 accepted this port's old, too-lenient probe but rejected the
+# real usage with "'constinit' variable ... does not have a constant
+# initializer" -- same class of mistake this project's own notes already
+# record for HAVE_CPP_CONSTEVAL ("a probe costs nothing if you supplied the
+# variable yourself; check against configure.ac in full"). Replaced with
+# upstream's own real probe, transcribed verbatim from configure.ac
+# (~line 8430, "whether $CXX_BASE supports C++2a constinit sorted vectors"):
+# a templated wrapper actually populated via an initializer_list and sorted,
+# not an empty vector.
 check_cxx_source_compiles("
+    #include <algorithm>
+    #include <initializer_list>
     #include <vector>
-    constinit static std::vector<int> v;
-    int main() { return (int)v.size(); }
+    template<typename T> class S {
+    private:
+        std::vector<T> v_;
+    public:
+        constexpr S(std::initializer_list<T> i): v_(i) { std::sort(v_.begin(), v_.end()); }
+    };
+    constinit S<int> s{3, 2, 1};
+    int main() { return 0; }
 " HAVE_CPP_CONSTINIT_SORTED_VECTOR)
 
 check_cxx_source_compiles("
@@ -400,17 +424,29 @@ option(ENABLE_PCH
 # DBUS_GLIB_FOUND from the pkg_check_modules call earlier in this file rather
 # than probing dbus-glib-1 twice. ENABLE_SDREMOTE has no library to detect --
 # it is upstream's own on-by-default UI feature, present regardless of what
-# is installed -- so it is a plain default like ENABLE_GEN. ENABLE_COINMP
-# detects a solver back end this machine has no package for at all;
-# pkg_check_modules simply finds nothing, the same practical effect as a
-# hardcoded OFF but through the same detection code path as the others.
+# is installed -- so it is a plain default like ENABLE_GEN.
+#
+# ENABLE_COINMP is really libo_FUZZ_ARG_ENABLE(coinmp, --disable-coinmp,
+# ...) (configure.ac:1690) -- a "disable" switch, so the real default is ON
+# on a normal Linux desktop build regardless of what pkg-config finds (only
+# a handful of unrelated platform blocks -- Windows/aarch64, Haiku,
+# WASM-strip -- set enable_coinmp=no; none apply here). 2026-09-28: no
+# system `coinmp`+`coinutils` pair exists on this platform at all
+# (`apt-cache search coinmp` -- empty), but sc/CMakeLists.txt's own "solver"
+# section now vendors external/coinmp/'s download.lst tarball when
+# COINMP_DETECT_FOUND is false -- so TRUE unconditionally is the honest
+# default now, matching configure.ac, not the detected-package value.
+# COINMP_DETECT itself is still real and still read there, to choose system
+# vs. bundled -- fixed here to check coinmp AND coinutils together, matching
+# configure.ac's own combined PKG_CHECK_MODULES(COINMP, coinmp coinutils)
+# (configure.ac:12405) exactly, rather than coinmp alone as before.
 pkg_check_modules(AVAHI_DETECT avahi-client)
 set(ENABLE_AVAHI ${AVAHI_DETECT_FOUND} CACHE BOOL
     "configure.ac's ENABLE_AVAHI: build sd's Avahi remote-control discovery backend")
 
-pkg_check_modules(COINMP_DETECT coinmp)
-set(ENABLE_COINMP ${COINMP_DETECT_FOUND} CACHE BOOL
-    "configure.ac's --enable-coinmp: build sc solver's CoinMP-based solvers")
+pkg_check_modules(COINMP_DETECT coinmp coinutils)
+set(ENABLE_COINMP TRUE CACHE BOOL
+    "configure.ac's --enable-coinmp: build sc solver's CoinMP-based solvers, from system coinmp+coinutils if both present (COINMP_DETECT_FOUND), the download.lst tarball otherwise")
 
 set(ENABLE_SDREMOTE TRUE CACHE BOOL
     "configure.ac's ENABLE_SDREMOTE (on by default): build Impress's remote-control server")
@@ -422,6 +458,25 @@ else ()
 endif ()
 set(ENABLE_SDREMOTE_BLUETOOTH ${_enable_sdremote_bluetooth_default} CACHE BOOL
     "configure.ac's ENABLE_SDREMOTE_BLUETOOTH: build the Bluetooth transport for sd's remote control")
+
+# 2026-09-29, found via a real ctest run: configure.ac:2372-2373/5114-5125 --
+# unset unless --enable-embindtest-uno is passed explicitly, OR auto-on when
+# $_os = Emscripten AND ENABLE_DBGUTIL = TRUE (neither applies to this port's
+# bare-configure Linux baseline) -- so bare OFF here matches upstream's own
+# real default exactly, not a guess. Module_jsuno.mk itself only adds
+# CppunitTest_jsuno_testuno to its check targets `$(if $(ENABLE_EMBINDTEST_
+# UNO), ...)` -- so on a bare configure, upstream never even RUNS that test,
+# despite CppunitTest_jsuno_testuno.mk unconditionally use_components-ing
+# unotest/source/embindtest/embindtest. This was previously mis-scoped in
+# this port as "embindtest is Emscripten-only, so leave jsuno_testuno
+# registered anyway, expect it to fail" -- confirmed wrong by reading
+# Module_jsuno.mk directly: embindtest is a perfectly portable native Library
+# (Library_embindtest.mk: plain cppu/cppuhelper/sal/salhelper/tl/vcl, no
+# Emscripten-specific build machinery at all), just off by default like any
+# other opt-in feature -- and the test that needs it is équally gated.
+option(ENABLE_EMBINDTEST_UNO
+    "configure.ac's --enable-embindtest-uno (bare-configure default OFF unless $_os=Emscripten and ENABLE_DBGUTIL, neither true here): build unotest's embindtest UNO component and run jsuno_testuno, which needs it"
+    OFF)
 
 
 # The header values are worked out separately, and have to be 0 or 1 rather than
@@ -597,6 +652,12 @@ set(_config_headers
     config_collab
     config_folders
     config_options
+    config_options_calc
+    config_lgpl
+    config_buildid
+    config_buildconfig
+    config_python
+    config_poppler
     config_locales
     config_probes
     config_typesizes

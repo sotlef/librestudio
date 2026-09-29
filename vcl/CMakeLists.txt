@@ -835,28 +835,91 @@ endif ()
 # The four add_externals blocks of the .mk, in its order, each under the same
 # condition as there.  The gbuild names map onto pkg-config modules the way
 # RepositoryExternal.mk defines them — gio is gio-2.0, graphite is graphite2 —
-# except for jpeg, png and tiff, which come from CMake's own find modules.
+# except for jpeg and tiff, which come from CMake's own find modules. png and
+# graphite2 no longer do (system-or-vendor refactor): both now come from
+# librestudio_find_package()/librestudio_pkgconfig() (cmake/
+# LibreStudioTarballs.cmake), resolved right below into LIBRESTUDIO_PNG_
+# TARGET/LIBRESTUDIO_GRAPHITE2_TARGET -- vcl is their real consumer (along
+# with sdext/desktop/writerperfect for PNG) -- tiff stays plain system
+# find_package() for now, not yet ported the same way. jpeg (2026-09-29):
+# now goes through librestudio_find_package() too -- see external/
+# libjpeg-turbo/libjpeg-turbo.cmake's own header comment (NASM/SIMD is no
+# longer a reason to defer it; sdext/CMakeLists.txt and external/poppler/
+# poppler.cmake's own internal JPEG need were converted the same way).
 
 # Library_vcl.mk lines 92-108: no condition around any of these.
-find_package(PNG REQUIRED)
 find_package(TIFF REQUIRED)
-find_package(JPEG REQUIRED)
+librestudio_find_package(NAME JPEG DRIVER libjpeg-turbo
+    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_LIBJPEG_TURBO)
+
+# PACKAGE not given: defaults to NAME itself (PNG), the real CMake
+# Find-module name. DRIVER auto-detection tries external/png/ (does not
+# exist) then external/libpng/ (exists) -- no explicit DRIVER needed.
+librestudio_find_package(NAME PNG)
+
+# graphite2 must be resolved BEFORE harfbuzz below: harfbuzz's own meson
+# build does not link graphite2 as a CMake target (it finds it via
+# PKG_CONFIG_PATH internally, see external/harfbuzz/harfbuzz.cmake's own
+# CONFIGURE_COMMAND), so calling librestudio_pkgconfig(NAME HARFBUZZ ...)
+# alone would never trigger graphite2's own resolution (and, if vendored,
+# its .pc write) on its own -- the one place in this whole system-or-vendor
+# router where call order between two resolutions is still semantically
+# required. DRIVER explicit ("graphite"): MODULES graphite2 does not match
+# external/graphite2/ or external/libgraphite2/ (the real directory is
+# external/graphite/, a deliberate rename from this port's own earlier
+# LIBRESTUDIO_GRAPHITE_TARGET -- a port-invented identifier, free to rename).
+librestudio_pkgconfig(
+    NAME GRAPHITE2
+    MODULES graphite2
+    DRIVER graphite)
+
+# harfbuzz has to be 14.3 or newer and the system is older, so this bundles
+# it and hands the result over in LIBRESTUDIO_HARFBUZZ_TARGET. DRIVER
+# explicit ("harfbuzz"): MODULES has 2 elements (harfbuzz+harfbuzz-subset),
+# so no auto-detection candidate exists at all (even though harfbuzz's own
+# real directory happens to equal TOLOWER(NAME) -- deliberately not relied
+# on, same reasoning as ORCUS/POPPLER/COINMP below).
+find_program(MESON_EXECUTABLE meson REQUIRED)
+librestudio_pkgconfig(
+    NAME HARFBUZZ
+    MODULES harfbuzz harfbuzz-subset
+    VERSION 14.3.0
+    DRIVER harfbuzz)
 
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
-pkg_check_modules(GRAPHITE REQUIRED IMPORTED_TARGET graphite2)
-pkg_check_modules(LCMS2 REQUIRED IMPORTED_TARGET lcms2)
-pkg_check_modules(LIBEOT REQUIRED IMPORTED_TARGET libeot)
-pkg_check_modules(LIBWEBP REQUIRED IMPORTED_TARGET libwebp)
+
+# lcms2/libeot/libwebp (2026-09-29, system-or-vendor refactor): resolved
+# via librestudio_pkgconfig() into LIBRESTUDIO_LCMS2_TARGET/LIBRESTUDIO_
+# LIBEOT_TARGET/LIBRESTUDIO_LIBWEBP_TARGET -- real vendoring fallbacks in
+# external/lcms2/lcms2.cmake, external/libeot/libeot.cmake, external/
+# libwebp/libwebp.cmake (the last sets a 2-element target list: webp +
+# sharpyuv, see that driver's own header comment). VERSION 0.01 for
+# libeot matches configure.ac's own `libeot >= 0.01`; lcms2/libwebp have
+# no version floor in configure.ac (grepped: plain `libo_CHECK_SYSTEM_
+# MODULE`/no PKG_CHECK_MODULES version constraint for either).
+librestudio_pkgconfig(NAME LCMS2 MODULES lcms2)
+librestudio_pkgconfig(NAME LIBEOT MODULES libeot VERSION 0.01)
+librestudio_pkgconfig(NAME LIBWEBP MODULES libwebp)
 # libjxl is not optional and not guarded by an #if anywhere: the reader in
 # vcl/source/filter/jxl/reader.cxx includes it unconditionally.  It comes in two
 # halves, and the second is not optional either — JxlResizableParallelRunner and
 # its friends, which the reader decodes across threads with, are in
 # libjxl_threads rather than in libjxl.
-pkg_check_modules(JXL REQUIRED IMPORTED_TARGET libjxl)
-pkg_check_modules(JXL_THREADS REQUIRED IMPORTED_TARGET libjxl_threads)
-# harfbuzz is not here: it has to be 14.3 or newer and the system is older, so
-# the top-level CMakeLists.txt bundles it and hands the result over in
-# LIBRESTUDIO_HARFBUZZ_TARGETS — see the comment there.
+#
+# 2026-09-29, system-or-vendor refactor: ONE librestudio_pkgconfig() call,
+# not two -- configure.ac's own libo_CHECK_SYSTEM_MODULE([libjxl],[LIBJXL],
+# [libjxl libjxl_threads]) probes both pkg-config modules together into a
+# single LIBJXL_CFLAGS/LIBJXL_LIBS pair, and Library_vcl.mk's own
+# gb_Library_use_externals list has a single "libjxl" entry -- there never
+# was a separate "libjxl_threads" external upstream (grepped
+# RepositoryExternal.mk: no gb_LinkTarget__use_jxl_threads exists at all).
+# The vendoring fallback (external/libjxl/libjxl.cmake) compiles both
+# halves into one static archive too, matching StaticLibrary_libjxl.mk's
+# own single target. VERSION is not given: configure.ac has no version
+# floor for this pair either.
+librestudio_pkgconfig(NAME LIBJXL MODULES libjxl libjxl_threads
+    DRIVER libjxl
+    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_LIBJXL)
 
 if (USING_X11)
     # Lines 699-702.  valgrind is headers only: vcl/source/app/watchdog.cxx asks
@@ -940,10 +1003,10 @@ target_link_libraries(vcl PRIVATE
     Boost::boost
     EXPAT::EXPAT
     ICU::uc
-    JPEG::JPEG PNG::PNG TIFF::TIFF
-    ${LIBRESTUDIO_HARFBUZZ_TARGETS}
-    PkgConfig::GIO PkgConfig::GRAPHITE PkgConfig::LCMS2
-    PkgConfig::LIBEOT PkgConfig::LIBWEBP PkgConfig::JXL PkgConfig::JXL_THREADS
+    ${LIBRESTUDIO_JPEG_TARGET} ${LIBRESTUDIO_PNG_TARGET} TIFF::TIFF
+    ${LIBRESTUDIO_HARFBUZZ_TARGET}
+    PkgConfig::GIO ${LIBRESTUDIO_GRAPHITE2_TARGET} ${LIBRESTUDIO_LCMS2_TARGET}
+    ${LIBRESTUDIO_LIBEOT_TARGET} ${LIBRESTUDIO_LIBWEBP_TARGET} ${LIBRESTUDIO_LIBJXL_TARGET}
     m)
 
 if (LIBRESTUDIO_ENABLE_BREAKPAD)
@@ -954,7 +1017,26 @@ if (LIBRESTUDIO_ENABLE_JAVA)
     target_link_libraries(vcl PRIVATE jvmaccess)
 endif ()
 
-if ("OPENCL" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+# Fix (first real `cmake --build`, 2026-09-27): upstream's own gate here is
+# "$(if $(filter OPENCL,$(BUILD_TYPE)),opencl)" -- a literal BUILD_TYPE
+# membership test, because upstream's BUILD_TYPE is the single source of
+# truth that ALSO drives HAVE_FEATURE_OPENCL (config_features.h). This port
+# split that single upstream knob into two independent ones: ENABLE_OPENCL
+# (cmake/LibreStudioConfigHeaders.cmake, defaults ON, drives
+# HAVE_FEATURE_OPENCL) and LIBRESTUDIO_BUILD_TYPE (defaults to plain
+# "DESKTOP", no "OPENCL" entry) -- so with defaults, vcl/source/app/svmain.cxx
+# compiled in its "#if HAVE_FEATURE_OPENCL" call to OpenCLZone::hardDisable()
+# (opencl/source/OpenCLZone.cxx), but this IN_LIST check never linked the
+# opencl library that defines it: "undefined reference" at link time. sc's
+# own opencl-gated sources (sc/CMakeLists.txt, "if (ENABLE_OPENCL)") already
+# established ENABLE_OPENCL as this port's real equivalent of upstream's
+# BUILD_TYPE-for-OpenCL-purposes gate -- vcl's own check is changed to match
+# it here, rather than trying to keep two independent flags in sync (the same
+# class of gap already found and fixed for HAVE_FEATURE_DBCONNECTIVITY/
+# AVAHI/AVMEDIA/XMLHELP in earlier waves). add_subdirectory(opencl) itself is
+# unconditional (CMakeLists.txt), so the opencl target always exists to link
+# against once ENABLE_OPENCL is on, same as before.
+if (ENABLE_OPENCL)
     target_link_libraries(vcl PRIVATE opencl)
 endif ()
 
@@ -1162,9 +1244,12 @@ if (ENABLE_GEN)
     endif ()
 
     # Lines 53-68.  skia and fontconfig are alternatives there, not additions:
-    # the Skia back end does its own font handling.
+    # the Skia back end does its own font handling. graphite2 no longer
+    # gets its own independent probe here (2026-09-28) -- same module as
+    # the plain GRAPHITE one above, so the same LIBRESTUDIO_GRAPHITE2_TARGET
+    # is reused directly below instead of a second, redundant
+    # pkg_check_modules(...graphite2) call.
     pkg_check_modules(CAIRO_GEN REQUIRED IMPORTED_TARGET cairo)
-    pkg_check_modules(GRAPHITE_GEN REQUIRED IMPORTED_TARGET graphite2)
     pkg_check_modules(EPOXY_GEN REQUIRED IMPORTED_TARGET epoxy)
     pkg_check_modules(XRENDER REQUIRED IMPORTED_TARGET xrender)
     if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
@@ -1180,8 +1265,8 @@ if (ENABLE_GEN)
         Boost::boost
         EXPAT::EXPAT
         ICU::uc
-        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
-        PkgConfig::CAIRO_GEN PkgConfig::GRAPHITE_GEN PkgConfig::EPOXY_GEN
+        ${LIBRESTUDIO_HARFBUZZ_TARGET}
+        PkgConfig::CAIRO_GEN ${LIBRESTUDIO_GRAPHITE2_TARGET} PkgConfig::EPOXY_GEN
         PkgConfig::XRENDER PkgConfig::X11 PkgConfig::XEXT
         "${SM_LIBRARY}" "${ICE_LIBRARY}"
         m dl)
@@ -1307,8 +1392,8 @@ if (ENABLE_GTK3)
         cppu sal
         Boost::boost
         PkgConfig::GTK3
-        PkgConfig::EPOXY PkgConfig::DBUS PkgConfig::GRAPHITE
-        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
+        PkgConfig::EPOXY PkgConfig::DBUS ${LIBRESTUDIO_GRAPHITE2_TARGET}
+        ${LIBRESTUDIO_HARFBUZZ_TARGET}
         PkgConfig::X11 PkgConfig::XEXT
         "${SM_LIBRARY}" "${ICE_LIBRARY}"
         m dl)
@@ -1614,8 +1699,8 @@ if (ENABLE_QT6)
         cppu sal salhelper xmlreader
         Boost::boost
         ICU::uc
-        ${LIBRESTUDIO_HARFBUZZ_TARGETS}
-        PkgConfig::EPOXY PkgConfig::GRAPHITE
+        ${LIBRESTUDIO_HARFBUZZ_TARGET}
+        PkgConfig::EPOXY ${LIBRESTUDIO_GRAPHITE2_TARGET}
         PkgConfig::QT6
         m dl)
 
@@ -1790,7 +1875,7 @@ target_link_libraries(visualbackendtest PRIVATE
 
 # tl, sal, utl, vcl, cppu, cppuhelper, comphelper, and harfbuzz — the last
 # because it reads vcl/inc/font/TrueTypeFont.hxx, which includes hb.h and
-# hb-ot.h.  LIBRESTUDIO_HARFBUZZ_TARGETS rather than the target names, so that
+# hb-ot.h.  LIBRESTUDIO_HARFBUZZ_TARGET rather than the target names, so that
 # this keeps working whichever way the top level got harfbuzz.
 add_executable(fftester "${CMAKE_SOURCE_DIR}/vcl/workben/fftester.cxx")
 target_include_directories(fftester PRIVATE
@@ -1799,7 +1884,7 @@ target_include_directories(fftester PRIVATE
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
 add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(fftester PRIVATE
-    tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGETS})
+    tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGET})
 
 # tl, sal, vcl, cppu, cppuhelper, comphelper, i18nlangtag.  The last is not
 # decoration: the program asks MsLangId for the language of the system, and
@@ -1823,7 +1908,7 @@ target_include_directories(listglyphs PRIVATE
 add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 target_link_libraries(listglyphs PRIVATE
     tl sal vcl cppu cppuhelper comphelper i18nlangtag
-    ${LIBRESTUDIO_HARFBUZZ_TARGETS} PkgConfig::GRAPHITE)
+    ${LIBRESTUDIO_HARFBUZZ_TARGET} ${LIBRESTUDIO_GRAPHITE2_TARGET})
 
 # tl, sal, vcl, cppu, cppuhelper, comphelper; VCL_INTERNALS; and its own main().
 add_executable(svpclient "${CMAKE_SOURCE_DIR}/vcl/workben/svpclient.cxx")
@@ -1988,3 +2073,15 @@ librestudio_add_cppunit_test(vcl_unit_conversion
 # comment for why they cannot be registered at this point in the file.
 # vcl_pdfium_library_test, the eleventh test this wave's plan named, is not
 # registered anywhere at all -- see that same file's header comment for why.
+
+# vcl/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/vcl/CppunitTest_deferred.cmake")

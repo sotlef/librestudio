@@ -29,7 +29,7 @@
 # so the level has to be defined wherever a PCH is actually being compiled
 # or none of those blocks are seen at all.
 
-add_library(precompiled_system STATIC pch/system_empty.cxx)
+add_library(precompiled_system STATIC "${CMAKE_CURRENT_SOURCE_DIR}/system_empty.cxx")
 
 if (ENABLE_PCH)
     target_precompile_headers(precompiled_system PRIVATE

@@ -18,8 +18,21 @@
 #   - Jar_test.mk / Jar_test-tools.mk: the Java side (org.openoffice.test.*)
 #     used by subsequentcheck.  Needs OOO_JUNIT_JAR and an OOoRunner jar this
 #     port does not build; nothing here depends on it.
-#   - Library_embindtest.mk: an Emscripten/embind smoke-test component, not
-#     applicable to a native Linux build.
+#
+# Library_embindtest.mk -- NOW PORTED below (gated on ENABLE_EMBINDTEST_UNO,
+# cmake/LibreStudioConfigHeaders.cmake). This used to be listed here as out of
+# scope ("an Emscripten/embind smoke-test component, not applicable to a
+# native Linux build") -- wrong on inspection: Library_embindtest.mk itself is
+# a perfectly ordinary native gb_Library (cppu/cppuhelper/sal/salhelper/tl/
+# vcl, use_sdk_api, no Emscripten-specific build machinery at all); real
+# upstream just keeps it off by default everywhere except Emscripten+dbgutil
+# builds (configure.ac:2372-2373/5114-5125), the same way this port already
+# treats plenty of other bare-configure-default-off features. Found via a
+# real ctest run: jsuno_testuno (jsuno/CppunitTest_deferred.cmake) genuinely
+# needs this component's org.libreoffice.embindtest.Test service to pass --
+# see that file's own comment for the full story, including the matching gap
+# it had (jsuno_testuno registered unconditionally instead of gated the same
+# way upstream's own Module_jsuno.mk gates it).
 #
 # Library_unobootstrapprotector.mk / Library_unoexceptionprotector.mk -- NOW
 # PORTED below (unobootstrapprotector / unoexceptionprotector targets).  They
@@ -158,3 +171,42 @@ target_link_libraries(unoexceptionprotector PRIVATE
     PkgConfig::CPPUNIT
     Boost::boost)
 librestudio_set_library_output_name(unoexceptionprotector unoexceptionprotector PLAIN)
+
+# embindtest (Library_embindtest.mk) -- see this file's own header comment
+# for why this is ported despite being off by default (ENABLE_EMBINDTEST_UNO).
+# 5 sources, use_sdk_api, use_libraries cppu/cppuhelper/sal/salhelper/tl/vcl
+# ($(if $(filter -fsanitize=vptr,$(gb_CXX)),comphelper) is a sanitizer-only
+# branch, moot here -- this port has no vptr-sanitizer build variant).
+# set_componentfile registers unotest/source/embindtest/embindtest.component,
+# which declares 5 <implementation> entries (BridgeTest, Test, Constructors,
+# theSingleton, thePassthrough/theMethodToString) -- none marked <optional/>,
+# so no IMPLEMENTATION filtering is needed here, same shape as the majority
+# of this port's other multi-implementation components. Repository.mk
+# registers it under OOOLIBS (line ~420, `$(if $(ENABLE_EMBINDTEST_UNO),
+# embindtest)`), same LAYER as most other production libraries here.
+if (ENABLE_EMBINDTEST_UNO)
+    set(EMBINDTEST_SOURCES
+        unotest/source/embindtest/embindtest
+        unotest/source/embindtest/methodtostring
+        unotest/source/embindtest/passthrough
+        unotest/source/embindtest/serviceconstructors
+        unotest/source/embindtest/singleton
+    )
+    librestudio_expand_cxx(EMBINDTEST_SOURCES)
+    add_library(embindtest SHARED ${EMBINDTEST_SOURCES})
+    target_include_directories(embindtest PRIVATE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(embindtest udkapi_normal_headers offapi_normal_headers)
+    target_link_libraries(embindtest PRIVATE
+        cppu cppuhelper sal salhelper tl vcl
+        Boost::boost)
+
+    librestudio_add_component(embindtest
+        COMPONENT "${CMAKE_SOURCE_DIR}/unotest/source/embindtest/embindtest.component"
+        LIBRARY   embindtest
+        LAYER     OOO)
+    librestudio_set_library_output_name(embindtest embindtest OOO)
+
+    install(TARGETS embindtest LIBRARY DESTINATION program)
+endif ()

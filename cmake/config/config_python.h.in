@@ -1,0 +1,26 @@
+/*
+This file is part of the LibreStudio project.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+/* python stuff
+
+Transcribed from config_host/config_python.h.in. PYTHON_VERSION_STRING stays
+undefined here (same "#undef marker, autoheader fills it in when the feature
+is actually configured" idiom this port already carries over verbatim for
+config_buildid.h's EXTRA_BUILDID -- nothing in this port's pyuno/CMakeLists.txt
+needs it defined). ENABLE_LIBRELOGO stays 0 -- librelogo is one of this
+project's own "probably out of scope" modules (no CMakeLists.txt), matching
+upstream's own hardcoded default here. */
+
+#ifndef CONFIG_PYTHON_H
+#define CONFIG_PYTHON_H
+
+#undef PYTHON_VERSION_STRING
+
+#define ENABLE_LIBRELOGO 0
+
+#endif // CONFIG_PYTHON_H

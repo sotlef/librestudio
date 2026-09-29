@@ -1199,16 +1199,42 @@ install(PROGRAMS "${CMAKE_SOURCE_DIR}/svx/source/gengal/gengal.sh"
 # extra build cost with no functional benefit here. Modelled as a plain
 # LIBRARIES svxcore instead; flagged here rather than silently presented as
 # identical to sal_osl_file_details's heavier precedent.
+#
+# Fix (first real `cmake --build`, 2026-09-27): this LIBRARIES list was
+# missing basegfx/comphelper/cppu/cppuhelper/docmodel/drawinglayer/
+# drawinglayercore/editeng/fwk/i18nlangtag/i18nutil/sal/salhelper/sax/sb/
+# sfx/sot/svl/svt/tk/tl/ucbhelper/utl/vcl/xo -- the comment above claimed "a
+# full use_libraries list matching svxcore's own transitive deps" but the
+# code only ever had "svxcore" alone. svxcore links all of these PRIVATE
+# (svx/CMakeLists.txt), which does not propagate to a consumer that only
+# names the shared library itself -- svl's WhichRangesContainer (include/
+# svl/whichranges.hxx, the very type this test exercises) was consequently
+# "undefined reference" at link time despite being reachable at runtime
+# through svxcore's own dependency chain. Also adds avmedia/dbtools, the
+# .mk's own gb_Helper_optional(AVMEDIA,...)/gb_Helper_optional(
+# DBCONNECTIVITY,...) entries (both ENABLE_AVMEDIA and ENABLE_DBCONNECTIVITY
+# default ON in this port).
 librestudio_add_cppunit_test(svx_removewhichrange
     SOURCES
         svx/qa/unit/removewhichrange
-    LIBRARIES svxcore Boost::boost ICU::uc LibXml2::LibXml2
+    LIBRARIES
+        svxcore basegfx comphelper cppu cppuhelper docmodel drawinglayer
+        drawinglayercore editeng fwk i18nlangtag i18nutil sal salhelper sax
+        sb sfx sot svl svt tk tl ucbhelper utl vcl xo
+        Boost::boost ICU::uc LibXml2::LibXml2
     INCLUDE
         "${CMAKE_SOURCE_DIR}/svx/source/inc"
         "${CMAKE_SOURCE_DIR}/svx/inc"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
         "${offapi_normal_HEADERS_INCLUDE_DIR}"
     DEPENDS udkapi_normal_headers offapi_normal_headers)
+
+if (ENABLE_AVMEDIA)
+    target_link_libraries(svx_removewhichrange PRIVATE avmedia)
+endif ()
+if (ENABLE_DBCONNECTIVITY)
+    target_link_libraries(svx_removewhichrange PRIVATE dbtools)
+endif ()
 
 # ifeq ($(OS),MACOSX) gb_CppunitTest_use_system_darwin_frameworks(
 # svx_removewhichrange, Foundation) -- mirrors svxcore's own macOS branch
@@ -1238,3 +1264,15 @@ endif ()
 # NONHEADLESS and UICONFIG options close that gap, and UIConfig_svx above now
 # also defines a real build-time mirror (svx_uiconfig) for UICONFIG to depend
 # on, so this test is wired in svx/CppunitTest_deferred.cmake for real.
+
+# svx/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/svx/CppunitTest_deferred.cmake")

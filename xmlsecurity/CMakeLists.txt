@@ -64,9 +64,12 @@
 #   staying consistent means omitting the gpg sources outright rather than
 #   introducing a second unconsumed option here.
 # - WNT/MSCrypto sources (source/xmlsec/mscrypt/*): this is a Linux-only port.
-# - AllLangMoTarget_xsc (l10n .po -> .mo) and UIConfig_xmlsec (.ui packaging):
-#   out of scope, same precedent as uui/CMakeLists.txt and
-#   fpicker/CMakeLists.txt excluding their own equivalents.
+# - AllLangMoTarget_xsc (l10n .po -> .mo): out of scope, same precedent as
+#   uui/CMakeLists.txt and fpicker/CMakeLists.txt excluding their own
+#   equivalents. UIConfig_xmlsec (.ui packaging) is NO LONGER in this list --
+#   see the "--- UIConfig_xmlsec ---" block below, added once xmlsecurity_
+#   dialogs_test's own CppunitTest_deferred.cmake needed a real "xmlsec_
+#   uiconfig" build-time target for its UICONFIG option to depend on.
 # - Executable_pdfverify: a workben/ workbench-only CLI tool, not shipped;
 #   this port has not been porting workben/-style tools elsewhere. Deferred,
 #   not a hard blocker (add_executable() has plenty of precedent here, e.g.
@@ -138,6 +141,7 @@ endif ()
 # package used here.
 target_include_directories(xsec_xmlsec PRIVATE
     "${CMAKE_SOURCE_DIR}/xmlsecurity/inc"
+    "${CMAKE_SOURCE_DIR}/xmlsecurity/source/xmlsec"
     "${OFFICECFG_INCLUDE_DIR}"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}"
@@ -300,3 +304,116 @@ librestudio_add_component(xmlsecurity
 librestudio_set_library_output_name(xmlsecurity xmlsecurity OOO)
 
 install(TARGETS xmlsecurity LIBRARY DESTINATION program)
+
+# --- UIConfig_xmlsec ---------------------------------------------------------
+#
+# UIConfig_xmlsec.mk: 9 .ui files under xmlsecurity/uiconfig/ui packaged into
+# share/config/soffice.cfg/xmlsec/ui -- same gb_UIConfig_UIConfig destination
+# convention already established by UIConfig_vcl/UIConfig_svt/UIConfig_svx
+# (vcl/svtools/svx CMakeLists.txt; those files' own comments have the
+# gb_UIConfig_DIR_FOR derivation, not repeated here). The destination
+# directory name is the UIConfig's own registered name, "xmlsec" (from the
+# live UIConfig_xmlsec.mk's `$(eval $(call gb_UIConfig_UIConfig,xmlsec))`),
+# NOT the module name "xmlsecurity" -- matching gb_CppunitTest_use_uiconfigs
+# ,xmlsecurity_dialogs_test,xmlsec's own spelling in CppunitTest_xmlsecurity_
+# dialogs_test.mk.
+#
+# Module_xmlsecurity.mk itself only adds UIConfig_xmlsec conditionally,
+# `$(if $(ENABLE_NSS)$(ENABLE_OPENSSL),...)` -- this port's crypto backend
+# switch, LIBRESTUDIO_TLS_BACKEND, always resolves to exactly one of NSS or
+# OPENSSL (validated by the FATAL_ERROR near the top of this file), so this
+# condition is unconditionally true here, the same "always-true filter"
+# precedent this file's own header comment already applies to Module_
+# xmlsecurity.mk's `$(if $(filter DESKTOP,$(BUILD_TYPE))...)` gate -- no
+# variable guard is introduced for it.
+#
+# Previously listed as "out of scope" in this file's header comment -- that
+# verdict predates xmlsecurity_dialogs_test's own CppunitTest_deferred.cmake
+# (xmlsecurity/CppunitTest_deferred.cmake) needing use_uiconfigs(xmlsec)'s
+# CMake equivalent, UICONFIG xmlsec (cmake/LibreStudioTest.cmake), which
+# FATAL_ERRORs unless a real "xmlsec_uiconfig" build-time target already
+# exists -- the same reason UIConfig_svx gained its own build-time mirror
+# (svx/CMakeLists.txt's own "--- UIConfig_svx ---" comment). Added now with
+# real install(FILES ...) packaging too, not only the minimal mirror, to
+# match every other UIConfig_* block in this port.
+#
+# Verified against the live UIConfig_xmlsec.mk: exactly 9 add_uifiles
+# entries, and `find xmlsecurity/uiconfig/ui -name "*.ui" | wc -l` also
+# returns 9 -- every .ui file in the directory is listed, nothing extra
+# needs excluding (the same verification vcl/svx/svtools's own UIConfig_*
+# blocks already apply).
+set(XMLSECURITY_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/certpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/certdetails.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/certgeneral.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/digitalsignaturesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/securitylevelpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/securitytrustpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/selectcertificatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/macrosecuritydialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/viewcertdialog.ui"
+)
+
+install(FILES ${XMLSECURITY_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/xmlsec/ui)
+
+# Real build-time mirror of the install() rule above, alongside it (not
+# instead of it) -- see vcl/CMakeLists.txt's "--- UIConfig_vcl ---" block for
+# the full mechanism explanation (one add_custom_command(OUTPUT ...) per
+# file, each with its own make_directory before the copy, collected into one
+# add_custom_target(... ALL DEPENDS ...)). xmlsecurity_dialogs_test's own
+# UICONFIG xmlsec option (xmlsecurity/CppunitTest_deferred.cmake) depends on
+# the "xmlsec_uiconfig" target defined here.
+set(_xmlsec_uiconfig_outputs "")
+foreach (_xmlsec_uiconfig_src IN LISTS XMLSECURITY_UICONFIG_UI_FILES)
+    get_filename_component(_xmlsec_uiconfig_name "${_xmlsec_uiconfig_src}" NAME)
+    set(_xmlsec_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/xmlsec/ui/${_xmlsec_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_xmlsec_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/xmlsec/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_xmlsec_uiconfig_src}" "${_xmlsec_uiconfig_dest}"
+        DEPENDS "${_xmlsec_uiconfig_src}"
+        COMMENT "Copying ${_xmlsec_uiconfig_name} into build-tree soffice.cfg/xmlsec/ui"
+        VERBATIM)
+    list(APPEND _xmlsec_uiconfig_outputs "${_xmlsec_uiconfig_dest}")
+endforeach ()
+unset(_xmlsec_uiconfig_src)
+unset(_xmlsec_uiconfig_name)
+unset(_xmlsec_uiconfig_dest)
+
+add_custom_target(xmlsec_uiconfig ALL DEPENDS ${_xmlsec_uiconfig_outputs})
+unset(_xmlsec_uiconfig_outputs)
+
+# --- CppunitTest targets ------------------------------------------------------
+#
+# All 5 active CppunitTest_xmlsecurity_*.mk targets (pdfsigning, xmlsec,
+# signing, signing2, dialogs_test -- CppunitTest_qa_certext is excluded, see
+# below) call gb_CppunitTest_use_rdb(name, services), which needs
+# program_services_rdb -- a target only defined near the very end of the
+# root CMakeLists.txt, well after this module's own add_subdirectory(). So
+# none of them are registered here; they are all in xmlsecurity/CppunitTest_
+# deferred.cmake instead, include()'d from the root CMakeLists.txt once
+# program_services_rdb exists (same pattern as scaddins_analysis, svx_unit/
+# svx_gallery_test/svx_core, sfx2_misc and others -- see that file's own
+# header comment for the full per-test detail).
+#
+# CppunitTest_qa_certext (Module_xmlsecurity.mk) is not ported: the live .mk
+# marks it "# failing" and comments out its entire gb_Module_add_check_
+# targets call (the leading "#" on a backslash-continued multi-line $(eval
+# ...) comments out the whole logical line under GNU Make's line-splicing
+# rules, not just that one physical line) -- upstream itself never builds or
+# runs it either, on this tree or otherwise. Matching upstream's own choice,
+# not a gap introduced by this port.
+
+# xmlsecurity/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/xmlsecurity/CppunitTest_deferred.cmake")

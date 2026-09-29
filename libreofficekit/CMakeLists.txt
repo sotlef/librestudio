@@ -22,9 +22,13 @@
 # Library_libreofficekitgtk + Executable_gtktiledviewer; DISABLE_DYNLOADING
 # (not tracked by this port, so always off) would gate out
 # Executable_tilebench, which is otherwise unconditional.
-# CppunitTest_libreofficekit_checkapi, CppunitTest_libreofficekit_tiledrendering,
-# Package_selectionhandles and UIConfig_libreofficekit are excluded (tests
-# and packaging, this port's established policy).
+# Package_selectionhandles and UIConfig_libreofficekit remain excluded
+# (packaging, this port's established policy). CppunitTest_libreofficekit_
+# checkapi and CppunitTest_libreofficekit_tiledrendering -- previously listed
+# here too as excluded -- are now ported below (see the "--- CppunitTest
+# targets ---" block at the end of this file); that old blanket "tests
+# excluded" characterization is superseded for these two, following this
+# session's own investigation.
 
 if (ENABLE_GTK3)
 
@@ -166,3 +170,135 @@ target_link_libraries(tilebench PRIVATE
     m dl)
 
 install(TARGETS tilebench RUNTIME DESTINATION program)
+
+# --- CppunitTest targets -------------------------------------------------------
+#
+# Both need real investigation, not the old "tests excluded" blanket verdict
+# -- neither needs use_ure/use_vcl (no unotest/test protector plug-ins), and
+# libreofficekit itself is add_subdirectory()'d very late (~1182, well after
+# officecfg (719), test (1018) and desktop (1174)), so both can be wired
+# directly here, no deferred file needed.
+
+# --- CppunitTest_libreofficekit_checkapi --------------------------------------
+#
+# CppunitTest_libreofficekit_checkapi.mk, re-checked directly against the
+# live file: NO use_libraries/use_sdk_api/use_ure call at all -- this is a
+# pure compile-sanity target with no linked LibreOffice libraries and no
+# CppUnit test cases of its own (checkapi.cxx is just CPPUNIT_PLUGIN_
+# IMPLEMENT(), confirmed by reading it directly). Its whole purpose is
+# add_cobjects(compile_test) -- libreofficekit/qa/unit/compile_test.c, a
+# plain C translation unit whose only content is `LibreOfficeKit*
+# compile_test(void) { return lok_init("install/path"); }` -- proving the
+# public LOK C headers (LibreOfficeKit/LibreOfficeKit.h, .../
+# LibreOfficeKitInit.h, both under include/, already on every target's
+# include path via cmake/LibreStudioPlatform.cmake's global
+# include_directories()) compile from a plain C file, the way a real external
+# LOK consumer would use them. add_cxxflags($(gb_CXX03FLAGS)) applies only to
+# the .cxx exception object (checkapi.cxx) -- gb_CppunitTest_add_cobjects's
+# own C objects get no such flag upstream either. On this port's GCC (13.2.1,
+# not Clang), gb_CXX03FLAGS resolves (solenv/gbuild/platform/com_GCC_defs.mk:
+# 182-186) to "-std=gnu++98 -Wno-long-long -Wno-variadic-macros -Wno-
+# deprecated-declarations" -- verified directly compilable against this
+# system's cppunit headers with a standalone `g++ -std=gnu++98 -c` probe
+# before wiring it in, not assumed.
+#
+# set_external_code(libreofficekit_checkapi): re-verified against solenv/
+# gbuild/LinkTarget.mk (same lines cppu_any-external's own comment in cppu/
+# CMakeLists.txt already cites) -- EXTERNAL_CODE's real effect is replacing
+# this translation unit's -DLIBO_INTERNAL_ONLY with a plain -Wundef flag.
+# cmake/LibreStudioPlatform.cmake's add_compile_definitions(...
+# LIBO_INTERNAL_ONLY ...) is directory-scoped from the root CMakeLists.txt,
+# inherited here too -- undone below with the same target-level
+# "-ULIBO_INTERNAL_ONLY" compile-option technique cppu_any-external already
+# established, scoped to the CXX source only via a COMPILE_LANGUAGE generator
+# expression so it does not also get passed to the C compiler for compile_
+# test.c (GCC/Clang would just warn "valid for C++/ObjC++ but not for C" for
+# that one, but there is no reason to pass it there at all: checkapi.cxx is
+# the only source that actually contains the `#if defined LIBO_INTERNAL_ONLY
+# / #error` guard this substitution exists to defeat). -Wundef itself is a
+# plain diagnostic (no -Werror anywhere in this port, same finding cppu_any-
+# external's own comment already made), so it is not reproduced -- only the
+# LIBO_INTERNAL_ONLY substitution is load-bearing.
+#
+# On Linux: add_libs(-ldl) -- compile_test.c never calls dlopen() itself
+# (that is LibreOfficeKitInit.h's own lok_init(), inline in the header), but
+# reproduced anyway for fidelity with the .mk's own `ifeq ($(OS),LINUX)`
+# block.
+librestudio_add_cppunit_test(libreofficekit_checkapi
+    SOURCES
+        libreofficekit/qa/unit/checkapi
+        "${CMAKE_SOURCE_DIR}/libreofficekit/qa/unit/compile_test.c")
+
+target_compile_options(libreofficekit_checkapi PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-ULIBO_INTERNAL_ONLY -std=gnu++98 -Wno-long-long -Wno-variadic-macros -Wno-deprecated-declarations>)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(libreofficekit_checkapi PRIVATE dl)
+endif ()
+
+# --- CppunitTest_libreofficekit_tiledrendering --------------------------------
+#
+# CppunitTest_libreofficekit_tiledrendering.mk, re-checked directly against
+# the live file: 1 source (libreofficekit/qa/unit/tiledrendering), use_
+# external(boost_headers), use_libraries(sal) only, on Linux add_libs(-lm
+# -ldl), use_api(offapi) -- NOT use_sdk_api, so only offapi's normal headers
+# (no udkapi), use_configuration -> CONFIGURATION.
+#
+# tiledrendering.cxx's TiledRenderingTest constructor calls getenv("SRC_ROOT")/
+# getenv("INSTDIR") and runAllTests() calls getenv("WORKDIR_FOR_BUILD") --
+# all three are now set generically by librestudio_add_cppunit_test() itself
+# (cmake/LibreStudioTest.cmake's own header comment on its ENVIRONMENT
+# property has the full history of this gap; this call site is in fact the
+# one that originally discovered and documented it, before the fix moved
+# into the shared helper). Whether this is actually sufficient to make the
+# test PASS, rather than merely start up without an immediate getenv() crash,
+# is a much larger question this wiring does not resolve: runAllTests() then
+# dlopens the real libsofficeapp.so (via lok_cpp_init(), include/
+# LibreOfficeKit/LibreOfficeKitInit.h) and loads real .odt/.odp/.ods documents
+# from libreofficekit/qa/data/ through the complete filter/service registry --
+# genuinely exercising far more of this port's production stack (every
+# import filter, VCL, the full UNO service graph) than any other CppunitTest
+# ported this session. This is deliberately not pre-judged here one way or
+# the other -- see this session's own report for the real `ctest -R
+# libreofficekit_tiledrendering` outcome observed.
+librestudio_add_cppunit_test(libreofficekit_tiledrendering
+    SOURCES
+        libreofficekit/qa/unit/tiledrendering
+    LIBRARIES
+        sal Boost::boost
+    INCLUDE
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        offapi_normal_headers
+    CONFIGURATION)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(libreofficekit_tiledrendering PRIVATE m dl)
+endif ()
+
+# GENUINE BLOCKER, found only by actually compiling this (first time this
+# .cxx has ever been built in this port -- these two CppunitTests were never
+# wired before this session): tiledrendering.cxx's testPaintPartTile() calls
+# `pDocument->paintPartTile(aBuffer.data(), /*nPart=*/0, nCanvasWidth,
+# nCanvasHeight, /*nTilePosX=*/0, /*nTilePosY=*/0, /*nTileWidth=*/3840,
+# /*nTileHeight=*/3840)` -- 8 arguments -- but this tree's own include/
+# LibreOfficeKit/LibreOfficeKit.hxx declares `lok::Document::paintPartTile`
+# with 9 parameters (pBuffer, nPart, nMode, nCanvasWidth, nCanvasHeight,
+# nTilePosX, nTilePosY, nTileWidth, nTileHeight -- an "nMode" parameter sits
+# between nPart and nCanvasWidth that the qa source never passes), a real
+# `g++ -std=c++20` compile error ("no matching function ... candidate expects
+# 9 arguments, 8 provided"), not a CMake wiring problem. This is a genuine
+# content mismatch already present in the checked-out tree -- this fork's qa/
+# unit/tiledrendering.cxx predates LibreOfficeKit.hxx's own nMode parameter
+# being added -- and fixing test *source* logic (which value nMode should be,
+# whether the header or the test is the one that drifted) is a judgment call
+# outside this session's scope (porting the CMake build, not patching
+# upstream API-version drift in application/test code). Left EXCLUDE_FROM_ALL
+# below so this real, pre-existing bug does not regress the project's
+# from-scratch `cmake --build` (every other target here, including
+# libreofficekit_checkapi just above and every other CppunitTest ported this
+# session, builds and is part of the default ALL target) -- the target is
+# still fully registered and `cmake --build build --target
+# libreofficekit_tiledrendering` still reproduces the exact error above for
+# whoever picks this up.
+set_target_properties(libreofficekit_tiledrendering PROPERTIES EXCLUDE_FROM_ALL TRUE)

@@ -279,6 +279,27 @@ install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/startmodule/menubar/menubar.xml"
     DESTINATION share/config/soffice.cfg/modules/StartModule/menubar)
 
+# Build-tree mirror of the same file, for CONFIGURATION-driven CppunitTests
+# that read from LIBRESTUDIO_SHARE_DIR (${CMAKE_BINARY_DIR}/instdir/share)
+# rather than a real `cmake --install` -- the install(FILES ...) above alone
+# never reaches that tree. Same add_custom_command+add_custom_target(...
+# _uiconfig ALL DEPENDS ...) shape as every other UIConfig this port has
+# ported (simpress_uiconfig, sfx_uiconfig, uui_uiconfig, ...) -- 2026-09-28,
+# closing a gap where this section had the install() half but not this one.
+set(_startmodule_uiconfig_dest
+    "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/StartModule/menubar/menubar.xml")
+add_custom_command(
+    OUTPUT "${_startmodule_uiconfig_dest}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/modules/StartModule/menubar"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/startmodule/menubar/menubar.xml"
+            "${_startmodule_uiconfig_dest}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/startmodule/menubar/menubar.xml"
+    COMMENT "Copying menubar.xml into build-tree soffice.cfg/modules/StartModule/menubar")
+add_custom_target(startmodule_uiconfig ALL DEPENDS "${_startmodule_uiconfig_dest}")
+unset(_startmodule_uiconfig_dest)
+
 # --- CppunitTest targets -------------------------------------------------------
 #
 # All 5 of framework's CppunitTest_*.mk files (dispatch, loadenv, CheckXTitle,
@@ -300,3 +321,15 @@ install(FILES
 # tests; see that file for the per-test detail, including framework_services'
 # ifneq($(OS),MACOSX) exclusion (Module_framework.mk) preserved there as
 # if (NOT APPLE).
+
+# framework/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/framework/CppunitTest_deferred.cmake")

@@ -16,12 +16,35 @@
 #   HelpLinker  (host executable) — thin CLI wrapper around HelpCompiler /
 #               HelpLinker, links helplinker.
 #
-# helplinker must be built against the system CLucene, not LibreOffice's
-# bundled/patched one: HelpIndexer.cxx guards a call to the patched-only
-# IndexWriter::setSegmentInfoStartVersion() behind "#ifndef SYSTEM_CLUCENE",
-# so helplinker defines SYSTEM_CLUCENE to take the branch that matches the
-# plain system libclucene-core installed here. Neither executable's _main.cxx
+# HelpIndexer.cxx guards a call to the patched-only
+# IndexWriter::setSegmentInfoStartVersion() behind "#ifndef SYSTEM_CLUCENE"
+# -- that method only exists in LibreOffice's own patched/vendored CLucene
+# fork, not in a plain system libclucene-core install, so the define must
+# be present ONLY when actually linking a real system package (matching
+# RepositoryExternal.mk's own gb_LinkTarget__use_clucene, which adds
+# -DSYSTEM_CLUCENE only on its SYSTEM_CLUCENE branch, never on the
+# vendored one -- see external/clucene/clucene.cmake's own header comment).
+# This port originally hardcoded the define unconditionally (written before
+# clucene had any vendoring fallback at all); corrected here to mirror
+# LIBRESTUDIO_CLUCENE_FOUND, 2026-09-29. Neither executable's _main.cxx
 # includes CLucene.h itself, so the define is only needed on helplinker.
+#
+# Fix (first real `cmake --build`, 2026-09-27): HelpIndexer.cxx also
+# instantiates lucene::analysis::LanguageBasedAnalyzer
+# (CLucene/analysis/LanguageBasedAnalyzer.h) -- linking failed with
+# "undefined reference" for it despite PkgConfig::LIBCLUCENE_CORE being
+# linked, because that class is CLUCENE_CONTRIBS_EXPORT: it lives in the
+# separate libclucene-contribs-lib.so, not libclucene-core.so/
+# libclucene-shared.so (what the "libclucene-core" pkg-config module's own
+# Libs: line names). No .pc file exists for the contribs library on this
+# system (only CLuceneConfig.cmake, which carries just version numbers, no
+# importable target) -- linked by plain library name below instead, which
+# resolves via the linker's default search of /usr/lib64 (already a standard
+# system library directory). This split is a SYSTEM-only wrinkle: the
+# vendored clucene.cmake driver compiles core+shared+contribs-lib into ONE
+# archive (matching Library_clucene.mk's own single target), so the extra
+# "clucene-contribs-lib" link is only added when LIBRESTUDIO_CLUCENE_FOUND
+# is true.
 
 set(HELPLINKER_SOURCES
     helpcompiler/source/HelpCompiler
@@ -45,15 +68,20 @@ add_dependencies(helplinker udkapi_normal_headers offapi_normal_headers)
 
 target_compile_definitions(helplinker PRIVATE
     L10N_DLLIMPLEMENTATION
-    HELPLINKER_DLLIMPLEMENTATION
-    SYSTEM_CLUCENE)
+    HELPLINKER_DLLIMPLEMENTATION)
+if (LIBRESTUDIO_CLUCENE_FOUND)
+    target_compile_definitions(helplinker PRIVATE SYSTEM_CLUCENE)
+endif ()
 
 target_link_libraries(helplinker PRIVATE
     sal comphelper
     EXPAT::EXPAT
     "${LIBXML2_LIBRARIES}"
     PkgConfig::LIBXSLT
-    PkgConfig::LIBCLUCENE_CORE)
+    ${LIBRESTUDIO_CLUCENE_TARGET})
+if (LIBRESTUDIO_CLUCENE_FOUND)
+    target_link_libraries(helplinker PRIVATE clucene-contribs-lib)
+endif ()
 
 librestudio_set_library_output_name(helplinker helplinker OOO)
 
@@ -71,7 +99,7 @@ target_link_libraries(HelpIndexer PRIVATE
     sal helplinker
     EXPAT::EXPAT
     PkgConfig::LIBXSLT
-    PkgConfig::LIBCLUCENE_CORE)
+    ${LIBRESTUDIO_CLUCENE_TARGET})
 
 install(TARGETS HelpIndexer RUNTIME DESTINATION program)
 
@@ -92,6 +120,6 @@ target_link_libraries(HelpLinker PRIVATE
     EXPAT::EXPAT
     "${LIBXML2_LIBRARIES}"
     PkgConfig::LIBXSLT
-    PkgConfig::LIBCLUCENE_CORE)
+    ${LIBRESTUDIO_CLUCENE_TARGET})
 
 install(TARGETS HelpLinker RUNTIME DESTINATION program)

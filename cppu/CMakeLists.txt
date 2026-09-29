@@ -222,18 +222,41 @@ librestudio_uno_api_headers(cppu_qa_cppumaker_types_normal
 # prior-research summary) before wiring.
 
 # CppunitTest_cppu_any-external.mk: 1 source, use_libraries cppu sal,
-# use_udk_api -> plain udkapi. gb_CppunitTest_set_external_code is also
-# called, but this port sets no -Werror anywhere (grepped every CMakeLists.txt/
-# *.cmake file: no hits), so there is nothing for it to counteract here --
-# matching the "inert, not silently dropped" precedent this port already uses
-# for other gbuild calls with no live CMake effect (e.g. ENABLE_VALGRIND in
-# sal/CMakeLists.txt).
+# use_udk_api -> plain udkapi.
+#
+# Fix (first real `cmake --build`, 2026-09-27): the previous wave's own
+# comment here was wrong about gb_CppunitTest_set_external_code -- re-checked
+# directly against solenv/gbuild/LinkTarget.mk (lines 103/118/133/148/163)
+# and platform/com_GCC_class.mk: EXTERNAL_CODE's real, load-bearing effect is
+# "$(if $(EXTERNAL_CODE),$(gb_CXXFLAGS_Wundef),$(gb_DEFS_INTERNAL))" -- it
+# REPLACES this one translation unit's -DLIBO_INTERNAL_ONLY with a plain
+# -Wundef warning flag, not merely something -Werror-related (there being no
+# -Werror anywhere in this port was true but irrelevant -- the substitution
+# itself still needs modelling). any-external.cxx's own name says why: it
+# calls Any::get<Any>()/has<Any>()/operator>>=/<<=(Any,Any), all of which
+# include/com/sun/star/uno/Any.hxx deletes ONLY "#if defined
+# LIBO_INTERNAL_ONLY" (lines 216/309/620/681) -- this test exists precisely
+# to verify that an EXTERNAL consumer of the UNO API (never compiled with
+# LIBO_INTERNAL_ONLY, unlike every internal LibreOffice translation unit)
+# does not hit those deletions. cmake/LibreStudioPlatform.cmake's
+# add_compile_definitions(... LIBO_INTERNAL_ONLY ...) is directory-scoped
+# from the root CMakeLists.txt, inherited by every target including this
+# one -- undone here with a target-level "-ULIBO_INTERNAL_ONLY" compile
+# option, which GCC/Clang process left-to-right so it must, and does (CMake's
+# generated command line orders directory+target DEFINES before
+# directory+target FLAGS), land after the inherited -D on the actual compile
+# command. gb_CXXFLAGS_Wundef itself (a plain -Wundef diagnostic, no
+# -Werror to escalate it) is still skipped as genuinely inert, matching the
+# "no -Werror anywhere" finding the previous wave already made -- only the
+# LIBO_INTERNAL_ONLY substitution was the real, missed part.
 librestudio_add_cppunit_test(cppu_any-external
     SOURCES
         cppu/qa/any-external
     LIBRARIES cppu sal
     INCLUDE "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     DEPENDS udkapi_normal_headers)
+
+target_compile_options(cppu_any-external PRIVATE -ULIBO_INTERNAL_ONLY)
 
 # CppunitTest_cppu_qa_any.mk: 1 source, use_libraries cppu sal,
 # use_internal_comprehensive_api against cppu_qa_types and udkapi -- both

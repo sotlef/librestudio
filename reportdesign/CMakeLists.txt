@@ -307,20 +307,31 @@ unset(_dbreport_uiconfig_outputs)
 # CMakeLists.txt, desktop/CMakeLists.txt's own notes on their own module's
 # AllLangMoTarget).
 
-# --- CppunitTest_reportdesign_basic_test: documented gap, not an oversight --
+# --- CppunitTest_reportdesign_basic_test: now wired for real -----------------
 #
 # Module_reportdesign.mk gates this test behind "ifeq ($(ENABLE_JAVA),TRUE)"
-# -- unlike ENABLE_SCRIPTING/ENABLE_DBCONNECTIVITY/ENABLE_XMLHELP, this port's
-# own LIBRESTUDIO_ENABLE_JAVA option (root CMakeLists.txt) defaults OFF (it
-# "Requires a JDK", not assumed present), so a bare configure of this port
-# does not build this test either, matching upstream's own bare-configure
-# default (ENABLE_JAVA is not one of configure.ac's "yes unless disabled"
-# options). Even with LIBRESTUDIO_ENABLE_JAVA turned on, the test would still
-# not build here: CppunitTest_reportdesign_basic_test.mk calls gb_CppunitTest_
-# use_jars(reportdesign_basic_test, sdbc_hsqldb), and connectivity/
-# CMakeLists.txt's own header comment already documents Jar_sdbc_hsqldb (and
-# every other SDBC driver besides calc/dbase/flat) as out of scope for this
-# port -- there is no sdbc_hsqldb JAR target here to depend on. Left
-# unwired for both reasons, the same documented-gap posture as connectivity's
-# own Configuration_calc/dbase/flat notes and this module's own AllLangMoTarget_
-# rpt note just above.
+# -- this port's own LIBRESTUDIO_ENABLE_JAVA option (root CMakeLists.txt)
+# defaults OFF, matching upstream's own bare-configure default, so a plain
+# build still does not exercise this test. Its other former blocker --
+# CppunitTest_reportdesign_basic_test.mk's gb_CppunitTest_use_jars(sdbc_hsqldb)
+# -- is now closed: connectivity/CMakeLists.txt's own "--- sdbc_hsqldb ---"
+# section ports Jar_sdbc_hsqldb.mk for real (a small Java helper jar plus the
+# bundled HSQLDB 1.8.0 external, root CMakeLists.txt, next to java_websocket).
+# librestudio_add_cppunit_test() itself picked up a DEPENDS-only reference to
+# the jar's "sdbc_hsqldb_jar" build target (no JARS-specific parameter needed
+# -- DEPENDS already covers a build-order-only prerequisite). See reportdesign/
+# CppunitTest_deferred.cmake's own "reportdesign_basic_test" section for the
+# full per-parameter transcription, including a genuine, separately-documented
+# upstream oddity in its own use_uiconfigs(reportdesign) argument.
+
+# reportdesign/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/reportdesign/CppunitTest_deferred.cmake")

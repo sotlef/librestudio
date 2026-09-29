@@ -35,6 +35,13 @@
 #   * URE_INTERNAL_LIB_DIR is what the uri attributes in services.rdb expand
 #     $URE_INTERNAL_LIB_DIR against;
 #   * LO_LIB_DIR does the same for office-layer components such as comphelper;
+#   * LO_JAVA_DIR/URE_INTERNAL_JAVA_DIR do the same for Java-loaded (loader=
+#     "com.sun.star.loader.Java2") components' uri attributes -- e.g.
+#     scripting's own ScriptFramework/ScriptProviderForBeanShell.component
+#     (librestudio_add_java_component(), cmake/LibreStudioComponent.cmake) --
+#     both point at the same physical directory as URE_INTERNAL_JAVA_DIR on
+#     this single-layer port (matching how LO_LIB_DIR/URE_INTERNAL_LIB_DIR
+#     already collapse to the same ${ORIGIN} for native components above);
 #   * UNO_TYPES and UNO_SERVICES name the registries.
 #
 # UNO_TYPES is a list, and every entry is needed: the UNO core's own types are
@@ -66,6 +73,7 @@ function(librestudio_generate_unorc output_file)
 URE_INTERNAL_LIB_DIR=\${ORIGIN}
 URE_INTERNAL_JAVA_DIR=\${ORIGIN}/classes
 LO_LIB_DIR=\${ORIGIN}
+LO_JAVA_DIR=\${ORIGIN}/classes
 UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb \${ORIGIN}/types/oovbaapi.rdb
 UNO_SERVICES=\${ORIGIN}/services.rdb
 CONFIGURATION_LAYERS=xcsxcu:\${ORIGIN}/../share/registry

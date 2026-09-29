@@ -12,6 +12,9 @@
 # the GPGME support (disabled by default in gbuild too, via ENABLE_GPGMEPP),
 # and the precompiled header.
 
+# zlib, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+librestudio_find_package(NAME ZLIB)
+
 # The crypto backend is chosen by LIBRESTUDIO_TLS_BACKEND, mirroring the
 # TLS switch in the .mk: exactly one of these three files is compiled.
 if (LIBRESTUDIO_TLS_BACKEND STREQUAL "NSS")
@@ -153,7 +156,7 @@ target_compile_definitions(comphelper PRIVATE COMPHELPER_DLLIMPLEMENTATION)
 target_link_libraries(comphelper PRIVATE
     cppu cppuhelper sal salhelper ucbhelper i18nlangtag
     ICU::uc
-    ZLIB::ZLIB
+    ${LIBRESTUDIO_ZLIB_TARGET}
     Boost::boost)
 
 if (LIBRESTUDIO_TLS_BACKEND STREQUAL "NSS")
@@ -299,3 +302,15 @@ librestudio_add_cppunit_test(comphelper_weakbag
 # just this one test's registration to a deferred, later-included file is
 # the smaller, safer fix -- see comphelper/CppunitTest_deferred.cmake and its
 # include() call site in the root CMakeLists.txt for the rest.
+
+# comphelper/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/comphelper/CppunitTest_deferred.cmake")

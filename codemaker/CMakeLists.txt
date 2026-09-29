@@ -15,9 +15,16 @@
 # cppumaker always is; only the modules that actually invoke it to generate
 # Java stubs are gated behind LIBRESTUDIO_ENABLE_JAVA.
 #
-# netmaker, pythonmaker and rustmaker are for language bindings the core does
-# not need.  Their sources are left in place and can be added the same way as
-# cppumaker/javamaker.
+# netmaker and pythonmaker are for language bindings the core does not need.
+# Their sources are left in place and can be added the same way as cppumaker/
+# javamaker/rustmaker. rustmaker itself is ported below (2026-09-29) --
+# codemaker's own prerequisite for rust_uno/CMakeLists.txt's Rust UNO
+# language bindings (ENABLE_RUST_UNO, default OFF, experimental/opt-in same
+# as upstream) -- the external 'frozen' header library it needs is already
+# vendored (root CMakeLists.txt's own frozen/FROZEN_INCLUDE_DIR resolution,
+# used by filter/CMakeLists.txt's msfilter already); a stale comment in
+# rust_uno/CMakeLists.txt previously said frozen was not vendored anywhere in
+# this tree at all, which had become inaccurate since frozen was wired in.
 
 # The three shared object sets the generators are built from.  Upstream keeps
 # them static (StaticLibrary_codemaker.mk, StaticLibrary_codemaker_cpp.mk,
@@ -102,3 +109,44 @@ target_link_libraries(javamaker PRIVATE
     Boost::boost)
 
 install(TARGETS javamaker RUNTIME DESTINATION program)
+
+# --- rustmaker -----------------------------------------------------------------
+#
+# 2026-09-29: Executable_rustmaker.mk, read in full -- a real, notably
+# different shape from cppumaker/javamaker above: no gb_Executable_use_
+# external(boost_headers) call at all (it still gets Boost::boost
+# transitively, since "codemaker" itself already links it PUBLIC above);
+# only "codemaker" as its own static library, NOT codemaker_cpp/codemaker_
+# java (rustmaker's own 8 sources under codemaker/source/rustmaker/ are
+# self-contained); and one real external, "frozen" (a header-only library,
+# no library to link, just FROZEN_INCLUDE_DIR on the include path -- same
+# resolution this port's root CMakeLists.txt already performs for mdds/
+# glm's own header-only externals).
+#
+# This executable alone does not finish rust_uno: it is only step 1 of
+# rust_uno/CMakeLists.txt's own 4-step pipeline (CustomTarget_rustmaker's
+# actual codegen invocation, CustomTarget_cargo's real `cargo build
+# --release`, Library_rust_uno-cpp, Library_rust_uno-example/Extension_
+# rust_uno-example) -- none of which are ported yet; see that file's own
+# updated header comment.
+add_executable(rustmaker
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/rustmaker.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/rustoptions.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/rustproduce.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/rustfile.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/cpproduce.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/unoproduce.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/type_analyzer.cxx"
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker/cpp_include_manager.cxx")
+
+target_include_directories(rustmaker PRIVATE
+    "${CMAKE_SOURCE_DIR}/codemaker/source/rustmaker"
+    "${FROZEN_INCLUDE_DIR}")
+
+target_link_libraries(rustmaker PRIVATE
+    codemaker
+    unoidl
+    salhelper
+    sal)
+
+install(TARGETS rustmaker RUNTIME DESTINATION program)

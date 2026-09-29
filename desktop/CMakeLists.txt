@@ -41,20 +41,32 @@
 #   - CustomTarget_soffice: MACOSX-only. CustomTarget_soffice_bin-emscripten-
 #     exports: EMSCRIPTEN-only. Neither applies to this Linux port.
 #   - Package_branding, Package_branding_custom (CUSTOM_BRAND_DIR unset),
-#     Package_scripts, Package_soffice_sh, Package_{sbase,scalc,sdraw,
-#     simpress,smath,swriter}_sh, CustomTarget_desktop_unopackages_install,
-#     GeneratedPackage_desktop_unopackages_install: all pure file-copy/
-#     packaging targets (gb_Package_*/gb_CustomTarget_* mechanics), no
-#     compiled code -- this port never reproduces those, matching every
-#     other module (see e.g. xmlsecurity/CMakeLists.txt). Practical
-#     consequence: no soffice/scalc/sdraw/simpress/smath/swriter shell-
-#     wrapper scripts get installed, and no *_sh helper scripts land in
-#     program/. soffice.bin itself stays directly launchable regardless --
-#     like the vcl/workben programs, it gets its own bootstrap rc file (see
-#     the librestudio_generate_unorc() call below).
-#   - UIConfig_deployment, AllLangMoTarget_dkt: UI config / localization,
-#     out of scope (established port-wide policy, see e.g. xmlsecurity's
-#     equivalent exclusion note).
+#     CustomTarget_desktop_unopackages_install,
+#     GeneratedPackage_desktop_unopackages_install: pure file-copy/packaging
+#     targets (gb_Package_*/gb_CustomTarget_* mechanics), no compiled code --
+#     this port never reproduces those, matching every other module (see
+#     e.g. xmlsecurity/CMakeLists.txt).
+#   - Package_soffice_sh and Package_{sbase,scalc,sdraw,simpress,smath,
+#     swriter}_sh are, by contrast, real and now wired below: each is
+#     nothing but `gb_Package_add_file(desktop_<name>_sh,
+#     $(LIBO_BIN_FOLDER)/<name>, <name>.sh)` -- a single verbatim copy of
+#     desktop/scripts/<name>.sh to program/<name> (no .sh suffix on the
+#     installed name), the same gb_Package_add_file + plain
+#     install(PROGRAMS ... RENAME ...) convention cpputools/CMakeLists.txt
+#     already established for Package_uno_sh.mk's uno.sh. soffice.bin itself
+#     stays directly launchable regardless of these wrappers -- like the
+#     vcl/workben programs, it gets its own bootstrap rc file (see the
+#     librestudio_generate_unorc() call below) -- but these 7 wrapper
+#     scripts are upstream's own documented entry points and are cheap
+#     enough to install for real rather than leave undone.
+#   - UIConfig_deployment is now ported for real (2026-09-27) -- see this
+#     file's own "--- UIConfig_deployment ---" section near the end. The old
+#     "UI config = out of scope, established port-wide policy" note was
+#     accurate only before this session's UIConfig-porting precedent (vcl/
+#     svtools/svx/cui/basctl/reportdesign/xmlsecurity/filter/...) existed;
+#     needed for real by desktop_dialogs_test's own use_uiconfigs(desktop)
+#     call. AllLangMoTarget_dkt (localization .mo) remains out of scope,
+#     matching every other AllLangMoTarget_* in this port.
 #   - Pagein_* targets: $(if $(ENABLE_PAGEIN),...) guarded; ENABLE_PAGEIN is
 #     not tracked in this port.
 #   - Extension_test-active/-passive/-crashextension and their Jar_*/
@@ -349,11 +361,40 @@ target_link_libraries(sofficeapp PRIVATE
     ICU::uc ICU::i18n
     PkgConfig::DBUS)
 
+# Fix (first real `cmake --build`, 2026-09-27): Library_sofficeapp.mk links
+# both clew and opencl under "$(if $(filter OPENCL,$(BUILD_TYPE)),...)"
+# (lines 24, 70) -- missing here, the same "OPENCL BUILD_TYPE vs
+# ENABLE_OPENCL" mismatch already found and fixed for vcl and scui (see
+# vcl/CMakeLists.txt's own comment on this exact class of gap):
+# desktop/source/app/opencl.cxx includes <opencl/openclwrapper.hxx> (a
+# public, global header), which itself needs <clew/clew.h> -- "fatal error:
+# clew/clew.h: No such file" without this. clew's own
+# target_include_directories(clew PUBLIC ...) (external/clew/CMakeLists.txt)
+# propagates the include path automatically once linked directly (opencl
+# links clew PRIVATE, so linking opencl alone would not be enough -- both
+# are linked here, matching the real .mk's own list).
+if (ENABLE_OPENCL)
+    target_link_libraries(sofficeapp PRIVATE clew opencl)
+endif ()
+
 librestudio_add_component(sofficeapp
     COMPONENT "${CMAKE_SOURCE_DIR}/desktop/lokclipboard.component"
     LIBRARY   sofficeapp
     LAYER     OOO)
-librestudio_set_library_output_name(sofficeapp sofficeapp OOO)
+# 2026-09-29, found via a real ctest run: Repository.mk registers sofficeapp
+# under PLAINLIBS_OOO (line ~671), not OOOLIBS -- despite the "OOO" in that
+# list's own name, PLAINLIBS_OOO/PLAINLIBS_NONE are both "plain" filename
+# groups (no gb_Library_DLLPOSTFIX "lo" suffix), the same distinction
+# unotest/CMakeLists.txt's own header comment already worked out in detail
+# for unotest/unobootstrapprotector/unoexceptionprotector. OOO here wrongly
+# produced libsofficeapplo.so; LibreOfficeKitInit.h's lok_dlopen() hardcodes
+# the bare "libsofficeapp.so" name (falling back to libmergedlo.so, this
+# port's own --enable-mergedlibs equivalent, only ported), so every real LOK
+# consumer (libreofficekit_tiledrendering, desktop_lib) failed to find it --
+# confirmed live: "failed to open library '.../libmergedlo.so': ... No such
+# file", the exact fallback path lok_dlopen takes when libsofficeapp.so is
+# missing.
+librestudio_set_library_output_name(sofficeapp sofficeapp PLAIN)
 
 install(TARGETS sofficeapp LIBRARY DESTINATION program)
 
@@ -609,9 +650,184 @@ if (NOT DISABLE_GUI)
     pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
     target_link_libraries(oosplash PRIVATE PkgConfig::X11)
 
+    # png, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+    librestudio_find_package(NAME PNG)
+
     target_compile_definitions(oosplash PRIVATE ENABLE_QUICKSTART_LIBPNG)
-    find_package(PNG REQUIRED)
-    target_link_libraries(oosplash PRIVATE PNG::PNG)
+    target_link_libraries(oosplash PRIVATE ${LIBRESTUDIO_PNG_TARGET})
 endif ()
 
 install(TARGETS oosplash RUNTIME DESTINATION program)
+
+# --- Package_soffice_sh, Package_{sbase,scalc,sdraw,simpress,smath,swriter}_sh -
+#
+# See the module-level comment at the top of this file for the .mk citation.
+foreach (_sh_name soffice sbase scalc sdraw simpress smath swriter)
+    install(PROGRAMS "${CMAKE_SOURCE_DIR}/desktop/scripts/${_sh_name}.sh"
+        DESTINATION program RENAME ${_sh_name})
+endforeach ()
+
+# --- UIConfig_deployment (registers internally as "desktop") -----------------
+#
+# desktop/UIConfig_deployment.mk: gb_UIConfig_UIConfig(desktop) -- the .mk
+# FILENAME says "deployment", but the UIConfig it registers is named
+# "desktop" (verified directly: `gb_UIConfig_UIConfig,desktop`), matching
+# CppunitTest_desktop_dialogs_test.mk's own use_uiconfigs(desktop_dialogs_test,
+# desktop) argument. 9 .ui files under desktop/uiconfig/ui/, unconditional
+# (no ifeq/ifneq gates in the live .mk), all verified present on disk. Same
+# "<module>_uiconfig" build-time ALL target convention as every other
+# *_dialogs_test module.
+set(DESKTOP_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dependenciesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/extensionmanager.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/extensionmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/installforalldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/licensedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/showlicensedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/updatedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/updateinstalldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/updaterequireddialog.ui")
+
+install(FILES ${DESKTOP_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/desktop/ui)
+
+set(_desktop_uiconfig_outputs "")
+foreach (_desktop_uiconfig_src IN LISTS DESKTOP_UICONFIG_UI_FILES)
+    get_filename_component(_desktop_uiconfig_name "${_desktop_uiconfig_src}" NAME)
+    set(_desktop_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/desktop/ui/${_desktop_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_desktop_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_desktop_uiconfig_src}" "${_desktop_uiconfig_dest}"
+        DEPENDS "${_desktop_uiconfig_src}"
+        COMMENT "Copying ${_desktop_uiconfig_name} into build-tree soffice.cfg/desktop/ui")
+    list(APPEND _desktop_uiconfig_outputs "${_desktop_uiconfig_dest}")
+endforeach ()
+unset(_desktop_uiconfig_src)
+unset(_desktop_uiconfig_name)
+unset(_desktop_uiconfig_dest)
+
+add_custom_target(desktop_uiconfig ALL DEPENDS ${_desktop_uiconfig_outputs})
+unset(_desktop_uiconfig_outputs)
+
+# --- desktop_version (CppunitTest_desktop_version.mk) -------------------------
+#
+# Re-checked directly: 1 source (desktop/qa/deployment_misc/test_dp_version),
+# use_libraries deploymentmisc sal, use_udk_api (udkapi only, "normal"
+# variant). No use_ure/use_vcl/use_configuration/use_rdb at all in this .mk
+# -- confirmed by reading the whole file -- so no PROTECTORS, no
+# CONFIGURATION, and no program_services_rdb dependency: this test can be
+# registered right here, inline, no deferral needed (officecfg/test are not
+# even referenced).
+librestudio_add_cppunit_test(desktop_version
+    SOURCES
+        desktop/qa/deployment_misc/test_dp_version
+    LIBRARIES
+        deploymentmisc sal
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers)
+
+# --- desktop_app (CppunitTest_desktop_app.mk) ---------------------------------
+#
+# Re-checked directly: 1 source (desktop/qa/desktop_app/test_desktop_app),
+# use_externals (ENABLE_BREAKPAD-gated breakpad -> off/untracked, dbus,
+# icu_headers/icui18n/icuuc -> ICU::uc+ICU::i18n, ENABLE_ONLINE_UPDATE_MAR-
+# gated curl/orcus-parser/orcus -> this port has no ENABLE_ONLINE_UPDATE_MAR
+# switch, matching upstream's own bare-configure default of unset/off, so
+# that whole branch is empty here too), use_libraries comphelper cppu
+# cppuhelper (ENABLE_BREAKPAD-gated crashreport -> off) deploymentmisc
+# editeng fwk i18nlangtag (OPENCL BUILD_TYPE-gated opencl -> this port's own
+# ENABLE_OPENCL is a real, independent switch, default ON, so opencl IS
+# linked here) sal salhelper sb sfx svl svx svxcore svt tk tl ucbhelper utl
+# vcl, use_library_objects(sofficeapp) -- RECOMPILES sofficeapp's own
+# sources directly into this test rather than linking the sofficeapp
+# library (same technique already established for editeng_core), reusing
+# desktop/CMakeLists.txt's own SOFFICEAPP_SOURCES variable (set earlier in
+# this same file) rather than re-deriving the list, use_external(
+# boost_headers), use_sdk_api. No use_ure call anywhere in this .mk
+# (confirmed) -- no PROTECTORS. No use_configuration either -- no
+# CONFIGURATION, no program_services_rdb dependency: wireable right here,
+# inline.
+# PkgConfig::DBUS is created without GLOBAL by sofficeapp's own
+# pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1) above, scoped to
+# this directory + children -- not visible from CppunitTest_deferred.cmake's
+# own root-directory scope (same re-guard pattern already used throughout
+# this tree for PkgConfig::CPPUNIT and friends). Found missing via the real
+# remote build: officeipcthread.cxx (part of ${SOFFICEAPP_SOURCES}, recompiled
+# here) needs it directly -- "fatal error: dbus/dbus.h: No such file".
+if (NOT TARGET PkgConfig::DBUS)
+    pkg_check_modules(DBUS REQUIRED IMPORTED_TARGET dbus-1)
+endif ()
+
+librestudio_add_cppunit_test(desktop_app
+    SOURCES
+        desktop/qa/desktop_app/test_desktop_app
+        ${SOFFICEAPP_SOURCES}
+    LIBRARIES
+        comphelper cppu cppuhelper deploymentmisc editeng fwk i18nlangtag
+        sal salhelper sb sfx svl svx svxcore svt tk tl ucbhelper utl vcl
+        ICU::uc ICU::i18n Boost::boost PkgConfig::DBUS
+    INCLUDE
+        # 2026-09-29, found via the real remote build: use_library_objects(
+        # sofficeapp) recompiles sofficeapp's OWN sources here, so it needs
+        # sofficeapp's own PRIVATE include dirs too (target_include_
+        # directories(sofficeapp PRIVATE ...) just above), not only its
+        # linked LIBRARIES -- missed originally, causing real "fatal error:
+        # app.hxx/migration.hxx/dp_shared.hxx/officecfg/Setup.hxx: No such
+        # file or directory" (all 4 real headers these recompiled sources
+        # reach, confirmed by grepping each's real location).
+        "${CMAKE_SOURCE_DIR}/desktop/inc"
+        "${CMAKE_SOURCE_DIR}/desktop/source/inc"
+        "${CMAKE_SOURCE_DIR}/desktop/source/deployment/inc"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEFINITIONS
+        DESKTOP_DLLIMPLEMENTATION
+    DEPENDS
+        officecfg_headers udkapi_normal_headers offapi_normal_headers)
+if (ENABLE_OPENCL)
+    target_link_libraries(desktop_app PRIVATE clew opencl)
+endif ()
+
+# --- desktop_lok_init (CppunitTest_desktop_lokinit.mk) ------------------------
+#
+# Re-checked directly: 1 source (desktop/qa/unit/desktop-lok-init),
+# use_external(boost_headers), use_sdk_api, use_ure -> 2 protector pairs (no
+# use_vcl call in this .mk -- confirmed, so no vclbootstrapprotector),
+# set_include(-Idesktop/source/inc -Idesktop/inc), use_libraries comphelper
+# cppu sal sofficeapp vcl ($(gb_UWINAPI) is empty on this Linux port -- a
+# Windows-only linker-flag macro, confirmed by grepping solenv/gbuild for
+# its Linux-platform definition, which is blank), Linux-only add_libs(-lm
+# -ldl), use_configuration -> CONFIGURATION. CONFIGURATION needs officecfg_
+# registry (add_subdirectory()'d well before desktop's own position) and
+# LIBRESTUDIO_TEST_UNITTEST_DIR (test/CMakeLists.txt, also well before) --
+# both satisfied already, no program_services_rdb dependency (no use_rdb
+# call in this .mk), so no deferral needed here either.
+librestudio_add_cppunit_test(desktop_lok_init
+    SOURCES
+        desktop/qa/unit/desktop-lok-init
+    LIBRARIES
+        comphelper cppu sal sofficeapp vcl m dl Boost::boost
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/desktop/source/inc"
+        "${CMAKE_SOURCE_DIR}/desktop/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    CONFIGURATION)
+
+# desktop/CppunitTest_deferred.cmake needs data (program_services_rdb) from a
+# module add_subdirectory()'d later than this one -- scheduled here rather
+# than included directly, so it runs only once every add_subdirectory() in
+# the whole tree has completed. See that file's own header comment for the
+# specific constraint, and cmake/LibreStudioTest.cmake's header comment for
+# why CMAKE_SOURCE_DIR (not CMAKE_CURRENT_SOURCE_DIR) is required in the
+# path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/desktop/CppunitTest_deferred.cmake")

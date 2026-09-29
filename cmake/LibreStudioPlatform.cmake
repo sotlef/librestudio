@@ -47,9 +47,21 @@ if (NOT CMAKE_SYSTEM_NAME IN_LIST _librestudio_supported_system_names)
 endif ()
 unset(_librestudio_supported_system_names)
 
-if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(FATAL_ERROR "Only 64-bit targets are supported for now.")
-endif ()
+# 2026-09-28: this used to be a hard FATAL_ERROR on any non-64-bit target.
+# Lifted specifically so bridges/CMakeLists.txt's own CPUNAME-driven UNO
+# bridge selection (LIBRESTUDIO_CPUNAME below) can cover ALL of bridges/
+# Library_cpp_uno.mk's real CPU arms, including its 6 32-bit ones (INTEL/x86,
+# ARM 32-bit, HPPA, M68K, SPARC 32-bit, MIPS 32-bit) -- a real, explicit
+# scope decision the user made knowing it reaches beyond bridges alone (this
+# comment is not a claim that lifting one FATAL_ERROR makes the rest of this
+# port 32-bit-correct). Nothing else in this ~7-million-line tree has been
+# audited for 32-bit pointer/size assumptions -- a real attempt to configure
+# or build a 32-bit target is very likely to hit unrelated failures
+# elsewhere, honestly out of scope for this specific change. What IS true
+# after this: CMAKE_SYSTEM_PROCESSOR-based CPU detection (LIBRESTUDIO_
+# CPUNAME/LIBRESTUDIO_RTL_ARCH below) and bridges/CMakeLists.txt's own
+# per-arch source selection are structurally correct for every CPUNAME
+# Library_cpp_uno.mk itself defines, 32-bit included.
 
 # The UNO loader tag for this ABI, as recorded in .component files and used to
 # pick the C++ bridge library.  See solenv/gbuild/platform/com_GCC_defs.mk for
@@ -213,11 +225,139 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "GNU/kFreeBSD")
     set(LIBRESTUDIO_RTL_OS "kFreeBSD")
 endif ()
 
-# This build only supports 64-bit targets (checked above), and the literal
-# below was never actually derived from CMAKE_SYSTEM_NAME/CMAKE_SYSTEM_PROCESSOR
-# to begin with -- it is unchanged from before this file became
-# platform-aware, and applies the same way on every recognised platform.
-set(LIBRESTUDIO_RTL_ARCH "x86_64")
+# LIBRESTUDIO_CPUNAME/LIBRESTUDIO_RTL_ARCH: 2026-09-28, derived for real from
+# CMAKE_SYSTEM_PROCESSOR instead of the hardcoded "x86_64" literal this port
+# carried before (a real gap: the literal was "unchanged from before this
+# file became platform-aware", never actually keyed off CMAKE_SYSTEM_NAME/
+# CMAKE_SYSTEM_PROCESSOR at all). This is the CPU axis of the same platform
+# question the OS if/elseif chain above already answers -- needed so
+# bridges/CMakeLists.txt can select the right bridges/source/cpp_uno/<dir>/
+# variant (bridges/Library_cpp_uno.mk's own `ifeq ($(CPUNAME),...)` chain)
+# instead of hardcoding gcc3_linux_x86-64 unconditionally.
+#
+# Table transcribed directly from configure.ac's `linux-gnu*|linux-musl*`
+# host_cpu case arm (the CPUNAME assignment itself is identical across every
+# other OS's own host_cpu case in configure.ac -- only RTL_ARCH/PLATFORMID
+# occasionally differ in ways this port does not otherwise track, e.g.
+# ARM_EABI vs the Linux-only "arm*-linux" ARM_OABI sub-case -- so one
+# CMAKE_SYSTEM_PROCESSOR-keyed table, independent of OS, correctly reproduces
+# CPUNAME selection everywhere). CMAKE_SYSTEM_PROCESSOR values matched below
+# are the ordinary `uname -m`-style strings CMake reports on every platform
+# this file's own OS chain already recognises.
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set(LIBRESTUDIO_CPUNAME "X86_64")
+    set(LIBRESTUDIO_RTL_ARCH "X86_64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+    set(LIBRESTUDIO_CPUNAME "AARCH64")
+    set(LIBRESTUDIO_RTL_ARCH "AARCH64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm.*|ARM.*)$")
+    # configure.ac's own Linux arm: "arm*-linux" (OABI) vs plain "arm*" (EABI)
+    # -- this port only recognises EABI (the modern, universally-used ARM
+    # calling convention; OABI is a legacy Linux-only variant configure.ac
+    # itself only special-cases for that one host_cpu spelling).
+    set(LIBRESTUDIO_CPUNAME "ARM")
+    set(LIBRESTUDIO_RTL_ARCH "ARM_EABI")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86)$")
+    set(LIBRESTUDIO_CPUNAME "INTEL")
+    set(LIBRESTUDIO_RTL_ARCH "x86")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(powerpc64le|ppc64le)$")
+    set(LIBRESTUDIO_CPUNAME "POWERPC64")
+    set(LIBRESTUDIO_RTL_ARCH "PowerPC_64_LE")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(powerpc64|ppc64)$")
+    set(LIBRESTUDIO_CPUNAME "POWERPC64")
+    set(LIBRESTUDIO_RTL_ARCH "PowerPC_64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(powerpc|ppc)$")
+    set(LIBRESTUDIO_CPUNAME "POWERPC")
+    set(LIBRESTUDIO_RTL_ARCH "PowerPC")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^mips64el$")
+    set(LIBRESTUDIO_CPUNAME "MIPS64")
+    set(LIBRESTUDIO_RTL_ARCH "MIPS64_EL")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^mips64$")
+    set(LIBRESTUDIO_CPUNAME "MIPS64")
+    set(LIBRESTUDIO_RTL_ARCH "MIPS64_EB")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^mipsel$")
+    set(LIBRESTUDIO_CPUNAME "MIPS")
+    set(LIBRESTUDIO_RTL_ARCH "MIPS_EL")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^mips$")
+    set(LIBRESTUDIO_CPUNAME "MIPS")
+    set(LIBRESTUDIO_RTL_ARCH "MIPS_EB")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^riscv64$")
+    set(LIBRESTUDIO_CPUNAME "RISCV64")
+    set(LIBRESTUDIO_RTL_ARCH "RISCV64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^loongarch64$")
+    set(LIBRESTUDIO_CPUNAME "LOONGARCH64")
+    set(LIBRESTUDIO_RTL_ARCH "LOONGARCH64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^s390x$")
+    set(LIBRESTUDIO_CPUNAME "S390X")
+    set(LIBRESTUDIO_RTL_ARCH "S390x")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^sparc64$")
+    set(LIBRESTUDIO_CPUNAME "SPARC64")
+    set(LIBRESTUDIO_RTL_ARCH "SPARC64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^sparc$")
+    set(LIBRESTUDIO_CPUNAME "SPARC")
+    set(LIBRESTUDIO_RTL_ARCH "SPARC")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(ia64|IA64)$")
+    set(LIBRESTUDIO_CPUNAME "IA64")
+    set(LIBRESTUDIO_RTL_ARCH "IA64")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^alpha$")
+    set(LIBRESTUDIO_CPUNAME "AXP")
+    set(LIBRESTUDIO_RTL_ARCH "ALPHA")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(hppa|parisc64)$")
+    set(LIBRESTUDIO_CPUNAME "HPPA")
+    set(LIBRESTUDIO_RTL_ARCH "HPPA")
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^m68k$")
+    set(LIBRESTUDIO_CPUNAME "M68K")
+    set(LIBRESTUDIO_RTL_ARCH "M68K")
+else ()
+    message(FATAL_ERROR
+        "CMAKE_SYSTEM_PROCESSOR is '${CMAKE_SYSTEM_PROCESSOR}', which does "
+        "not match any host_cpu case arm this port's own CPUNAME/RTL_ARCH "
+        "table (derived from configure.ac) recognises. Add a new branch "
+        "above (and a matching one in bridges/Library_cpp_uno.mk's own "
+        "CPUNAME chain, mirrored in bridges/CMakeLists.txt) rather than "
+        "guessing a fallback.")
+endif ()
+
+# Real compiler/libc feature checks bridges/CMakeLists.txt's own AARCH64+
+# Clang and HAVE_POSIX_FALLOCATE branches need (bridges/Library_cpp_uno.mk's
+# own $(HAVE_GCC_STACK_CLASH_PROTECTION)/$(HAVE_GCC_AVX)/$(HAVE_POSIX_
+# FALLOCATE) upstream configure.ac checks) -- genuinely detected via standard
+# CMake modules, not hardcoded to "off": this port has never modelled any of
+# the three before, and guessing a fixed value would be indistinguishable
+# from silently dropping the branch that reads it.
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-mavx" LIBRESTUDIO_HAVE_GCC_AVX)
+check_cxx_compiler_flag("-fstack-clash-protection" LIBRESTUDIO_HAVE_GCC_STACK_CLASH_PROTECTION)
+include(CheckSymbolExists)
+check_symbol_exists(posix_fallocate "fcntl.h" LIBRESTUDIO_HAVE_POSIX_FALLOCATE)
+
+# CPUNAME's own bare compiler define -- found 2026-09-27 the hard way (a real
+# `#error unknown platform` build failure in jvmfwk/inc/vendorbase.hxx, the
+# first time this port ever actually compiled anything with
+# LIBRESTUDIO_ENABLE_JAVA=ON): solenv/gbuild/gbuild.mk's own
+# `gb_CPUDEFS += -D$(CPUNAME)` (line 211, config_host.mk.in's own
+# `export CPUNAME=@CPUNAME@`) is UNCONDITIONAL for every platform gbuild
+# supports, independent of and in addition to whatever a platform file's own
+# gb_CPUDEFS already set (LINUX_X86_64_GCC.mk itself sets none at all, unlike
+# e.g. LINUX_INTEL_GCC.mk's own "-DX86" for 32-bit) -- so a real upstream
+# Linux x86_64 build always gets a bare "-DX86_64" define this port had never
+# reproduced anywhere. Confirmed this is genuinely the ONLY thing standing
+# between vendorbase.hxx and its own "#error unknown platform": configure.ac's
+# own JAVA_ARCH macro (vendorbase.hxx's first, preferred check) is a real
+# upstream quirk that -- read directly -- only ever gets AC_DEFINE_UNQUOTED'd
+# for the arm*/powerpc64le host_cpu cases (each explicitly assigns the
+# JAVA_ARCH shell variable itself, not just the differently-named my_java_arch
+# local one the x86_64/i*86/etc. cases use for their own JAWTLIB path
+# construction) -- so a real upstream x86_64 build never defines JAVA_ARCH
+# either, and falls through to this same bare-CPUNAME check.
+#
+# 2026-09-28: now driven by LIBRESTUDIO_CPUNAME above instead of the
+# hardcoded "X86_64" literal this port carried before -- every CPUNAME value
+# this table can produce IS a valid bare compiler define on its own (X86_64,
+# AARCH64, ARM, INTEL, POWERPC64, POWERPC, MIPS64, MIPS, RISCV64,
+# LOONGARCH64, S390X, SPARC64, SPARC, IA64, AXP, HPPA, M68K), matching
+# gb_CPUDEFS's own unconditional "-D$(CPUNAME)" for every platform.
+add_compile_definitions(${LIBRESTUDIO_CPUNAME})
 
 # UNO libraries are versioned with the UDK major version; RTVERLIBS and
 # UNOVERLIBS in Repository.mk get this appended (libuno_sal.so.3).
@@ -279,6 +419,21 @@ add_compile_definitions(
     LIBO_INTERNAL_ONLY
     SRCDIR="${CMAKE_SOURCE_DIR}"
 )
+
+# gbuild's own gb_GLOBALDEFS (solenv/gbuild/gbuild.mk:213-219) is a second,
+# separate blanket define list, applied to EVERY gb_LinkTarget in the whole
+# tree (distinct from gb_OSDEFS above and gb_CPUDEFS, already added via
+# LIBRESTUDIO_CPUNAME below) -- this port's own port of it was missing
+# _REENTRANT entirely until a real `cmake --build` of the freshly vendored
+# external/clucene/clucene.cmake caught it: src/shared/CLucene/config/
+# threads.cpp has a hard `#error ACK! You need to compile with _REENTRANT
+# defined since this uses threads` when it is absent, which no other source
+# file ported so far happened to check for. -DOSL_DEBUG_LEVEL=$(dbglevel)
+# is gb_GLOBALDEFS' other member and is NOT added here -- unlike
+# _REENTRANT (always on, no variant behavior), its value depends on this
+# port's own (not yet modeled) debug-level/ENABLE_DBGUTIL equivalent; a
+# real, separate, honestly-surfaced gap, not silently rolled into this fix.
+add_compile_definitions(_REENTRANT)
 
 # gbuild's gb_OSDEFS is `-D$(OS)` plus platform extras (see
 # solenv/gbuild/platform/unxgcc.mk, macosx.mk and windows.mk): LINUX/MACOSX/WNT

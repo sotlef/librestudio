@@ -86,6 +86,7 @@ set(OOX_NAMESPACENAMES_INC "${OOX_GENERATED_DIR}/namespacenames.inc")
 set(OOX_NAMESPACES_STRICTNAMES_INC "${OOX_GENERATED_DIR}/namespaces-strictnames.inc")
 add_custom_command(
     OUTPUT "${OOX_NAMESPACES_HXX}" "${OOX_NAMESPACENAMES_INC}" "${OOX_NAMESPACES_STRICTNAMES_INC}"
+            "${OOX_GENERATED_DIR}/misc/namespaces.txt"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${OOX_GENERATED_DIR}/misc"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${OOX_GENERATED_DIR}/oox/token"
     COMMAND "${PYTHON3_EXECUTABLE}" "${OOX_TOKEN_SRC_DIR}/namespaces.py"
@@ -438,3 +439,98 @@ librestudio_add_component(oox
 librestudio_set_library_output_name(oox oox OOO)
 
 install(TARGETS oox LIBRARY DESTINATION program)
+
+# --- Package_customshapes ---------------------------------------------------
+#
+# oox/Package_customshapes.mk: gb_Package_Package(oox_customshapes,
+# $(SRCDIR)/oox) + gb_Package_add_files(oox_customshapes,$(LIBO_SHARE_FOLDER)/
+# filter, source/drawingml/customshapes/oox-drawingml-cs-presets) -- a single
+# real, checked-in data file (a preset-geometry table for OOXML custom
+# shapes, ~1.7MB of plain text, verified present) installed to share/filter.
+# Previously not installed anywhere in this port (confirmed by grep before
+# this change). CppunitTest_oox_drawingml.mk's own order-only dependency on
+# gb_Package_get_target(oox_customshapes) needs a real build-time ALL target
+# -- introduced here via librestudio_add_package_mirror() (cmake/
+# LibreStudioPackage.cmake), the same generic helper wizards'/scripting's/
+# extras' own PACKAGES targets already use.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/drawingml/customshapes/oox-drawingml-cs-presets"
+    DESTINATION share/filter)
+
+librestudio_add_package_mirror(oox_customshapes
+    PAIRS
+        "${CMAKE_CURRENT_SOURCE_DIR}/source/drawingml/customshapes/oox-drawingml-cs-presets:${LIBRESTUDIO_SHARE_DIR}/filter")
+
+# --- CppunitTests --------------------------------------------------------------
+#
+# oox has 13 CppunitTest_*.mk files, all re-checked directly. 3 need no
+# deferral at all (no use_configuration/use_rdb call in any of the three)
+# and are wired directly below: oox_tokenmap, oox_vba_compression, oox_vba_
+# encryption. The other 10 all call use_configuration -> CONFIGURATION,
+# which requires test/CMakeLists.txt (LIBRESTUDIO_TEST_UNITTEST_DIR) to have
+# already run -- test is add_subdirectory()'d at line ~1227 in the root
+# CMakeLists.txt, well after oox's own position (~1195) -- so all 10 are
+# deferred to oox/CppunitTest_deferred.cmake, all 10 wired for real there.
+# oox_drawingml (needs oox_customshapes, ported above, plus use_uiconfigs(
+# "modules/simpress", sfx, svt)) was, until 2026-09-28, blocked on
+# "modules/simpress" needing a UIConfig_simpress-equivalent target sd/
+# CMakeLists.txt did not have yet -- now ported for real (sd/CMakeLists.txt's
+# own new "simpress_uiconfig" ALL target), so oox_drawingml is wired too.
+#
+# CppunitTest_oox_tokenmap.mk, re-checked directly: 1 source (oox/qa/token/
+# tokenmap-test), use_custom_headers(oox/generated) -> INCLUDE OOX_GENERATED_
+# DIR (this file's own CACHE INTERNAL variable, set above where tokens.hxx is
+# generated -- CACHE variables are visible everywhere, unlike a plain
+# directory-scoped pkg_check_modules() IMPORTED_TARGET, so no re-creation
+# guard is needed the way PkgConfig::NSS/CAIRO/etc. need elsewhere in this
+# port), use_sdk_api, use_libraries (cppu oox sal). No use_ure/use_vcl/
+# use_rdb/use_configuration anywhere in this .mk.
+librestudio_add_cppunit_test(oox_tokenmap
+    SOURCES
+        oox/qa/token/tokenmap-test
+    LIBRARIES
+        cppu oox sal
+    INCLUDE
+        "${OOX_GENERATED_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_oox_vba_compression.mk, re-checked directly: 1 source (oox/qa/
+# unit/vba_compression), use_sdk_api, use_libraries (basegfx comphelper cppu
+# cppuhelper editeng drawinglayer msfilter sal i18nlangtag oox sax sfx svl
+# svt svx svxcore sot tl unotest utl vcl xo xmlscript). No use_externals/
+# use_ure/use_vcl/use_rdb/use_configuration anywhere in this .mk either --
+# the simplest possible shape, just a plain library link.
+librestudio_add_cppunit_test(oox_vba_compression
+    SOURCES
+        oox/qa/unit/vba_compression
+    LIBRARIES
+        basegfx comphelper cppu cppuhelper editeng drawinglayer msfilter sal
+        i18nlangtag oox sax sfx svl svt svx svxcore sot tl unotest utl vcl xo
+        xmlscript
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers)
+
+# CppunitTest_oox_vba_encryption.mk, re-checked directly: identical shape to
+# oox_vba_compression above (same use_sdk_api-only, no use_ure/vcl/rdb/
+# configuration), 1 source (oox/qa/unit/vba_encryption), same library set.
+librestudio_add_cppunit_test(oox_vba_encryption
+    SOURCES
+        oox/qa/unit/vba_encryption
+    LIBRARIES
+        basegfx comphelper cppu cppuhelper editeng drawinglayer msfilter sal
+        i18nlangtag oox sax sfx svl svt svx svxcore sot tl unotest utl vcl xo
+        xmlscript
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers)
+
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/oox/CppunitTest_deferred.cmake")

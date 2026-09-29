@@ -48,7 +48,7 @@ librestudio_add_uno_jar(libreoffice
         "${ridljar_javamaker_JAVA_OUTPUT_DIR}"
         "${unoil_JAVA_OUTPUT_DIR}"
         "${unoloader_JAR}"
-        "${JAVA_WEBSOCKET_JAR}"
+        "${java_websocket_JAR}"
     PACKAGEDIRS
         "${ridljar_javamaker_JAVA_OUTPUT_DIR}/com"
         "${unoil_JAVA_OUTPUT_DIR}/com"
@@ -56,7 +56,7 @@ librestudio_add_uno_jar(libreoffice
         ${ridljar_javamaker_JAVA_TARGET}
         ${unoil_JAVA_TARGET}
         unoloader_jar
-        java_websocket_ext
+        java_websocket_jar
     SOURCES
         ridljar/com/sun/star/comp/bridgefactory/BridgeFactory
         ridljar/com/sun/star/comp/connections/Acceptor

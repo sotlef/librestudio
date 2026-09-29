@@ -177,6 +177,20 @@ endif ()
 # cmake/LibreStudioTest.cmake's file header and cppu_typelib's own comment in
 # cppu/CMakeLists.txt for the same already-accepted gap) -- not implemented
 # here either, for the same reason.
+# 2026-09-29, the "already-accepted gap" above turned out fixable without
+# extending librestudio_add_cppunit_test() after all: EXTRA_ARGS already
+# exists as a raw-passthrough escape hatch (gb_CppunitTest_add_arguments's
+# own equivalent), and cppuhelper's bootstrap CLI -env: parsing overrides the
+# unorc ini default for the same key rather than merging with it -- so a
+# complete replacement UNO_TYPES value (the same 3 standard RDBs unorc itself
+# points at, plus this test's own cppu_qa_cppumaker_types RDB, exactly
+# mirroring what upstream's own `UNO_TYPES +=` line achieves) is enough.
+# Confirmed live: without this, dump_->dumpConstant("test.codemaker.
+# cppumaker.Constants", ...) raised a real "not a constants group:
+# test.codemaker.cppumaker.Constants" IllegalArgumentException -- the type
+# compiles fine (cppu_qa_cppumaker_types_normal_HEADERS_INCLUDE_DIR above),
+# but reflection couldn't find its RUNTIME type description without the RDB
+# itself being a registered UNO_TYPES entry.
 librestudio_add_cppunit_test(stoc_dump
     SOURCES
         stoc/test/dump
@@ -187,7 +201,9 @@ librestudio_add_cppunit_test(stoc_dump
     DEPENDS cppu_qa_cppumaker_types_normal_headers udkapi_normal_headers
     PROTECTORS
         unobootstrapprotector unobootstrapprotector
-        unoexceptionprotector unoexceptionprotector)
+        unoexceptionprotector unoexceptionprotector
+    EXTRA_ARGS
+        "-env:UNO_TYPES=file://${LIBRESTUDIO_PROGRAM_DIR}/types.rdb file://${LIBRESTUDIO_PROGRAM_DIR}/types/offapi.rdb file://${LIBRESTUDIO_PROGRAM_DIR}/types/oovbaapi.rdb file://${cppu_qa_cppumaker_types_RDB}")
 
 # CppunitTest_stoc_uriproc.mk: 1 source, use_libraries cppu cppuhelper sal,
 # use_udk_api -> plain udkapi, use_ure -> PROTECTORS. Also has a manual

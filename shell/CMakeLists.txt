@@ -46,7 +46,25 @@
 #    unconditionally (their sources are unconditional C++/C and every
 #    dependency they name is already ported in this tree).
 #  - AllLangMoTarget_shell: localization (.mo) install, not a build target.
-#  - CppunitTest_shell_zip: COM=MSC-only test, not applicable.
+#  - CppunitTest_shell_zip and its one real prerequisite,
+#    StaticLibrary_shlxthandler_common.mk: both sit inside the `ifeq
+#    ($(OS),WNT)` / `ifeq ($(COM),MSC)` block (Module_shell.mk lines 47-75),
+#    the same block as the excluded shlxthdl/propertyhdl/ooofilt/
+#    spsupp_x86_x64 cluster above -- genuinely Windows/MSVC-only upstream,
+#    not a porting gap. Unlike that cluster (whose own libraries this port
+#    still has no reason to transcribe, being pure ATL/shell-extension COM
+#    glue with no portable core), shlxthandler_common's 12 sources
+#    (shell/source/win32/{ooofilereader,shlxthandler,zipfile}/*) and
+#    shell_zip's own 2 test sources are real, self-contained C++ needing only
+#    expat/zlib (already available in this port) and shell_xmlparser (ported
+#    below, real on Linux too) -- so, following cpputools/CMakeLists.txt's
+#    own sp2bv precedent ("kept structurally present... per this port's
+#    policy of not silently dropping Windows-only gbuild targets"), both are
+#    transcribed for real at the end of this file, inside if (WIN32), rather
+#    than left undocumented. Inert on this Linux build.
+
+# zlib, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+librestudio_find_package(NAME ZLIB)
 
 # --- desktopbe1 --------------------------------------------------------------
 
@@ -233,3 +251,47 @@ librestudio_add_component(cmdmail
 librestudio_set_library_output_name(cmdmail cmdmail OOO)
 
 install(TARGETS cmdmail LIBRARY DESTINATION program)
+
+# --- shlxthandler_common (StaticLibrary_shlxthandler_common.mk) --------------
+# --- shell_zip (CppunitTest_shell_zip.mk) -------------------------------------
+#
+# Windows/MSVC-only (Module_shell.mk's own `ifeq ($(OS),WNT)`/`ifeq
+# ($(COM),MSC)` gates) -- see the module-level comment at the top of this
+# file. Real sources transcribed from both live .mk files; inert here.
+if (WIN32)
+    set(SHLXTHANDLER_COMMON_SOURCES
+        shell/source/win32/ooofilereader/autostyletag
+        shell/source/win32/ooofilereader/basereader
+        shell/source/win32/ooofilereader/contentreader
+        shell/source/win32/ooofilereader/keywordstag
+        shell/source/win32/ooofilereader/metainforeader
+        shell/source/win32/ooofilereader/simpletag
+        shell/source/win32/shlxthandler/ooofilt/stream_helper
+        shell/source/win32/shlxthandler/util/fileextensions
+        shell/source/win32/shlxthandler/util/iso8601_converter
+        shell/source/win32/shlxthandler/util/registry
+        shell/source/win32/shlxthandler/util/utilities
+        shell/source/win32/zipfile/zipexcptn
+        shell/source/win32/zipfile/zipfile
+    )
+    librestudio_expand_cxx(SHLXTHANDLER_COMMON_SOURCES)
+    add_library(shlxthandler_common STATIC ${SHLXTHANDLER_COMMON_SOURCES})
+    target_include_directories(shlxthandler_common PRIVATE
+        "${CMAKE_SOURCE_DIR}/shell/inc")
+    target_compile_definitions(shlxthandler_common PRIVATE
+        ISOLATION_AWARE_ENABLED WIN32_LEAN_AND_MEAN)
+    target_link_libraries(shlxthandler_common PRIVATE EXPAT::EXPAT ${LIBRESTUDIO_ZLIB_TARGET})
+    set_target_properties(shlxthandler_common PROPERTIES
+        POSITION_INDEPENDENT_CODE ON)
+
+    librestudio_add_cppunit_test(shell_zip
+        SOURCES
+            shell/qa/zip/testzipimpl
+            shell/qa/zip/ziptest
+        LIBRARIES
+            shell_xmlparser shlxthandler_common
+            EXPAT::EXPAT ${LIBRESTUDIO_ZLIB_TARGET}
+            ole32 kernel32 msvcprt
+        INCLUDE
+            "${CMAKE_SOURCE_DIR}/shell/inc")
+endif ()

@@ -18,6 +18,9 @@
 # sal_comtools/sal_retry_if_failed and cpputools/CMakeLists.txt's sp2bv for
 # the same pattern). Inert on this Linux build.
 
+# zlib, resolved via librestudio_find_package() (cmake/LibreStudioTarballs.cmake).
+librestudio_find_package(NAME ZLIB)
+
 set(HWP_SOURCES
     hwpfilter/source/attributes
     hwpfilter/source/cspline
@@ -59,7 +62,7 @@ add_dependencies(hwp udkapi_normal_headers offapi_normal_headers)
 
 target_link_libraries(hwp PRIVATE
     comphelper cppu cppuhelper sal utl tl
-    ZLIB::ZLIB
+    ${LIBRESTUDIO_ZLIB_TARGET}
     Boost::boost)
 
 # Library_hwp.mk: ifeq ($(OS),WNT) gb_Library_use_system_win32_libs,hwp,

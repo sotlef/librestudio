@@ -56,8 +56,14 @@ librestudio_add_cppunit_test(svl_urihelper
     PROTECTORS
         unobootstrapprotector unobootstrapprotector
         unoexceptionprotector unoexceptionprotector
+    # 2026-09-29, found via real ctest run: testNormalizedMakeRelative/
+    # testResolveIdnaHost need com.sun.star.uri.UriReferenceFactory, supplied
+    # by stoc's "stocservices" component (stoc/source/uriproc/
+    # UriReferenceFactory.cxx, registered as stoc_add_library(stocservices
+    # ...) in stoc/CMakeLists.txt) -- real "component context fails to supply
+    # service com.sun.star.uri.UriReferenceFactory" UNO exception without it.
     COMPONENTS
-        ucb1 ucpfile1 i18npool)
+        ucb1 ucpfile1 i18npool stocservices)
 
 # --- svl_qa_cppunit --------------------------------------------------------------
 #
@@ -136,4 +142,53 @@ librestudio_add_cppunit_test(svl_qa_cppunit
         unoexceptionprotector unoexceptionprotector
     COMPONENTS
         i18npool configmgr fwk numbertext
+    CONFIGURATION)
+
+# --- svl_lockfiles -------------------------------------------------------------
+#
+# Un-deferred 2026-09-27: svl/CMakeLists.txt's own "DEFERRED, not ported" note
+# on this test (left in place just above where the test used to sit) already
+# documents that its original justification -- "needs svt, sw, and vcl, none
+# of which are part of this port's currently-completed dependency chain" --
+# went stale once svt/vcl/sw were all actually ported, and that the only
+# remaining real issue is ordering (sw is add_subdirectory()'d hundreds of
+# lines after svl, and use_rdb(services) needs program_services_rdb, defined
+# near the very end of the root CMakeLists.txt) -- exactly what this file's
+# own cmake_language(DEFER) scheduling (see svl/CMakeLists.txt's tail) already
+# solves for svl_urihelper/svl_qa_cppunit above. Ported here, into the same
+# already-deferred file, rather than opening a fourth one.
+#
+# CppunitTest_svl_lockfiles.mk, re-checked directly against the live file: 1
+# source (svl/qa/unit/lockfiles/test_lockfiles), use_external(boost_headers),
+# use_sdk_api (normal udkapi+offapi) PLUS a separate use_api(udkapi offapi
+# oovbaapi) call -- the first two names are a redundant re-assertion of what
+# use_sdk_api already grants (harmless, same normal variant), but oovbaapi is
+# new here and needs its own normal headers (oovbaapi/CMakeLists.txt's own
+# librestudio_uno_api_headers(oovbaapi_normal ...) call -- same "oovbaapi_
+# normal_HEADERS_INCLUDE_DIR" / "oovbaapi_normal_headers" pattern already
+# used by reportdesign_basic_test this session), use_ure + use_vcl -> 3
+# protector pairs, use_libraries comphelper cppu cppuhelper tl sal svl svt sw
+# test unotest utl vcl ("test" -> test_fixtures), use_rdb(services) ->
+# DEPENDS program_services_rdb (no use_components in this .mk -- re-checked,
+# there really is none, so no COMPONENTS argument), use_custom_headers(
+# officecfg/registry) -> OFFICECFG_INCLUDE_DIR + DEPENDS officecfg_headers,
+# use_configuration -> CONFIGURATION.
+librestudio_add_cppunit_test(svl_lockfiles
+    SOURCES
+        svl/qa/unit/lockfiles/test_lockfiles
+    LIBRARIES
+        comphelper cppu cppuhelper tl sal svl svt sw test_fixtures unotest
+        utl vcl Boost::boost
+    INCLUDE
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        "${oovbaapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS
+        officecfg_headers udkapi_normal_headers offapi_normal_headers
+        oovbaapi_normal_headers program_services_rdb
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+        vclbootstrapprotector vclbootstrapprotector
     CONFIGURATION)

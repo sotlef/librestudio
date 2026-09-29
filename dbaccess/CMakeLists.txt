@@ -45,9 +45,12 @@
 # only place it would matter, dbaccess/source/ui/dlg/odbcconfig.cxx, guards
 # its real ODBC usage (`#include <connectivity/odbc.hxx>`) behind
 # HAVE_ODBC_SUPPORT, which config_features.h.in never defines in this port
-# (connectivity's own odbc driver is likewise out of scope for this port --
-# see connectivity/CMakeLists.txt), so that branch never compiles and no
-# ODBC headers are ever needed.
+# (connectivity's own Library_odbc is not built here either -- a real,
+# not-yet-attempted gap, not a scope decision, re-corrected 2026-09-28 in
+# connectivity/CMakeLists.txt's own header comment after an earlier version
+# mischaracterized it -- see [[feedback_gbuild_full_replacement_scope]]),
+# so that branch never compiles and no ODBC headers are ever needed here
+# either way.
 #
 # dbu's `ifeq ($(COM),MSC)` (-DADO_SUPPRESS_MESSAGE) and `ifeq ($(OS),WNT)`
 # (ole32/oleaut32/uuid, dbaccess/source/ui/dlg/adodatalinks) blocks are
@@ -570,5 +573,192 @@ librestudio_add_component(sdbt
 librestudio_set_library_output_name(sdbt sdbt OOO)
 
 install(TARGETS sdbt LIBRARY DESTINATION program)
+
+# --- UIConfig_dbaccess ------------------------------------------------------
+#
+# dbaccess/UIConfig_dbaccess.mk: gb_UIConfig_UIConfig(dbaccess) -- 82
+# uifiles, unconditional, single category (unlike most other UIConfig_* ports
+# in this tree, this one has no menubar/popupmenu/statusbar/toolbar files at
+# all -- re-checked directly, the .mk really only calls gb_UIConfig_add_uifiles)
+# -- packaged into share/config/soffice.cfg/dbaccess/ui, same install()+
+# build-tree-copy-loop+ALL-target pattern as writerperfect_uiconfig (also
+# single-category). All files verified present on disk. CppunitTest_dbaccess_
+# dialogs_test.mk's own use_uiconfigs(dbaccess_dialogs_test, dbaccess) needs a
+# real build-time ALL target for this -- introduced here as "dbaccess_
+# uiconfig" (this port's own <module>_uiconfig convention).
+set(DBACCESS_UICONFIG_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/admindialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/advancedsettingsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/appborderwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/appdetailwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/applycolpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/appswapwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/authentificationpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/autocharsetpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/choosedatasourcedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/colcontrolbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/collectionviewdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/colwidthdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/connectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/copytablepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbaseindexdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbasepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbtreelist.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbwizconnectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbwizmysqlintropage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbwizmysqlnativepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbwizspreadsheetpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/dbwiztextpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/deleteallrowsdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/designsavemodifieddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/detailwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/directsqldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/emptypage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fielddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fielddescpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fielddescpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/finalpagewizard.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/generalpagedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/generalpagewizard.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/generalspecialjdbcdetailspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/generatedvaluespage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/indexdesigndialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/jdbcconnectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/joindialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/jointablemenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/joinviewmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/keymenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/ldapconnectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/ldappage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/limitbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/mysqlnativepage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/mysqlnativesettings.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/namematchingpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/odbcpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/parametersdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/password.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querycolmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/queryfilterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/queryfuncmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/querypropertiesdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/queryview.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/relationdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/rowheightdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/saveindexdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/savedialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/savemodifieddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/specialjdbcconnectionpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/postgrespage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/specialsettingspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sortdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/sqlexception.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tableborderwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tabledesignrowmenu.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tabledesignsavemodifieddialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablelistbox.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablesfilterdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablesfilterpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tablesjoindialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tabletitle.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/taskwindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textconnectionsettings.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/textpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/titlewindow.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/typeselectpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/useradmindialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/useradminpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/userdetailspage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/migrwarndlg.ui"
+)
+
+install(FILES ${DBACCESS_UICONFIG_UI_FILES}
+    DESTINATION share/config/soffice.cfg/dbaccess/ui)
+
+set(_dba_uiconfig_outputs "")
+foreach (_dba_uiconfig_src IN LISTS DBACCESS_UICONFIG_UI_FILES)
+    get_filename_component(_dba_uiconfig_name "${_dba_uiconfig_src}" NAME)
+    set(_dba_uiconfig_dest
+        "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/dbaccess/ui/${_dba_uiconfig_name}")
+    add_custom_command(
+        OUTPUT "${_dba_uiconfig_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/dbaccess/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_dba_uiconfig_src}" "${_dba_uiconfig_dest}"
+        DEPENDS "${_dba_uiconfig_src}"
+        COMMENT "Copying ${_dba_uiconfig_name} into build-tree soffice.cfg/dbaccess/ui")
+    list(APPEND _dba_uiconfig_outputs "${_dba_uiconfig_dest}")
+endforeach ()
+unset(_dba_uiconfig_src)
+unset(_dba_uiconfig_name)
+unset(_dba_uiconfig_dest)
+
+add_custom_target(dbaccess_uiconfig ALL DEPENDS ${_dba_uiconfig_outputs})
+unset(_dba_uiconfig_outputs)
+
+# NOT ported here: UIConfig_dbapp/UIConfig_dbbrowser/UIConfig_dbquery/
+# UIConfig_dbrelation/UIConfig_dbtable/UIConfig_dbtdata -- Module_dbaccess.mk
+# lists 7 UIConfig_*.mk targets total, but no CppunitTest this port is wiring
+# needs any of the other 6 (only CppunitTest_dbaccess_dialogs_test's own
+# use_uiconfigs(dbaccess) call does, hence only UIConfig_dbaccess above is
+# ported in this pass) -- a real, separate packaging gap for dbaccess's own
+# running UI, left honestly unaddressed rather than silently implied done.
+
+# --- CppunitTests --------------------------------------------------------------
+#
+# dbaccess has 11 CppunitTest_*.mk files, all re-checked directly. 5 are
+# wireable and wired to dbaccess/CppunitTest_deferred.cmake: dbaccess_
+# dialogs_test (needs program_services_rdb), and dbaccess_dialog_save/
+# empty_stdlib_save/nolib_save/hsqlschema_import (needed only use_
+# configuration -- test/CMakeLists.txt's own LIBRESTUDIO_TEST_UNITTEST_DIR --
+# and, until 2026-09-28, "unoxml/source/rdf/unordf", which needed external
+# RDF libraries -- librdf/redland/raptor2/rasqal -- this port had never
+# vendored or detected; all three are now vendored for real, see unoxml/
+# CMakeLists.txt's own "--- Library_unordf ---" section and root
+# CMakeLists.txt's own "--- raptor2/rasqal/redland ---" sections). The other
+# 6 are NOT ported here, for two distinct, real, not-yet-attempted reasons:
+#   - dbaccess_hsqldb_test and dbaccess_RowSetClones both use_components
+#     "connectivity/source/drivers/hsqldb/hsqldb" and "connectivity/source/
+#     drivers/jdbc/jdbc" -- both gated `ifneq ($(ENABLE_JAVA),)` in Module_
+#     connectivity.mk. 2026-09-29: the components themselves (Library_
+#     hsqldb/Library_jdbc) are now real, ported components (connectivity/
+#     CMakeLists.txt's own dedicated blocks) -- the Java-UNO bridge itself
+#     (bridges/CMakeLists.txt's own java_uno) was never actually the gap
+#     either, it was already ported and build-verified earlier. What
+#     remains blocking both tests here is purely LIBRESTUDIO_ENABLE_JAVA
+#     being OFF in this build's own cache (a configuration choice left for
+#     the user, not a missing-code gap) plus, for dbaccess_hsqldb_test
+#     specifically, use_jars(sdbc_hsqldb) -- see the next bullet.
+#     dbaccess_migration (re-checked against Module_dbaccess.mk's own gating)
+#     is gated `ifeq ($(ENABLE_FIREBIRD_SDBC),TRUE)` AND `$(if $(ENABLE_JAVA),
+#     ...)` -- double-blocked, same firebird_sdbc gap as the bullet below,
+#     not primarily the Java bridge.
+#   - dbaccess_CRMDatabase_test needs use_jars(sdbc_hsqldb) --
+#     gb_CppunitTest_use_jars, a mechanism librestudio_add_cppunit_test()
+#     has no parameter for yet (distinct from PACKAGES/COMPONENTS -- it
+#     puts a jar on the test's own classpath). connectivity/CMakeLists.txt
+#     does build a real "sdbc_hsqldb_jar" target via librestudio_add_uno_jar(),
+#     but only under LIBRESTUDIO_ENABLE_JAVA (default OFF), so even a JARS
+#     parameter would need that flag on to have anything to point at.
+#   - dbaccess_embeddeddb_performancetest and dbaccess_firebird_test both
+#     use_libraries "firebird_sdbc" directly -- connectivity's own Firebird
+#     SDBC driver, gated `ifeq ($(ENABLE_FIREBIRD_SDBC),TRUE)` and not built
+#     in this port (see connectivity/CMakeLists.txt's own header comment).
+# None of the above forced through with an invented mechanism -- each a
+# real, addressable, not-yet-attempted gap, left honestly unwired.
+#
+# CppunitTest_dbaccess_dialogs_test.mk (a gb_CppunitTest_CppunitScreenShot
+# screenshot target), re-checked directly: 1 source (dbaccess/qa/unit/
+# dbaccess-dialogs-test), use_sdk_api (twice, no-op second time), set_include
+# (-Idbaccess/source/inc -Idbaccess/inc $$(INCLUDE)), use_libraries (basegfx
+# comphelper cppu cppuhelper drawinglayer editeng i18nlangtag i18nutil
+# msfilter oox sal salhelper sax sfx sot svl svt test tl tk ucbhelper unotest
+# utl vcl xo -- "test" -> test_fixtures), use_external(boost_headers),
+# use_ure + use_vcl_non_headless_with_windows -> 3 protector pairs +
+# NONHEADLESS, use_rdb(services) -> DEPENDS program_services_rdb (no
+# COMPONENTS), use_configuration -> CONFIGURATION, use_uiconfigs(dbaccess)
+# -> UICONFIG dbaccess (this file's own new "dbaccess_uiconfig" ALL target,
+# ported alongside this wiring).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/dbaccess/CppunitTest_deferred.cmake")
 
 endif (ENABLE_DBCONNECTIVITY)

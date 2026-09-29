@@ -91,6 +91,24 @@ list(APPEND SB_SOURCES
 
 librestudio_expand_cxx(SB_SOURCES)
 
+# CACHE INTERNAL (not a plain directory-scope variable) so this already-
+# expanded, already-absolute source list stays visible to
+# basic/CppunitTest_deferred.cmake, include()'d later from the root
+# CMakeLists.txt's own scope (a different scope than this add_subdirectory()
+# call's own, which a plain set()/list() would not cross) -- same visibility
+# need OFFICECFG_INCLUDE_DIR/LIBRESTUDIO_TEST_UNITTEST_DIR already have, for
+# the same reason (see officecfg/CMakeLists.txt and test/CMakeLists.txt's own
+# comments on those). basic_scanner needs it there for
+# gb_CppunitTest_use_library_objects(basic_scanner,sb) -- CppunitTest_
+# basic_scanner.mk recompiles sb's own already-expanded source list directly
+# into the test MODULE instead of linking libsb.so, the same technique
+# sal/CMakeLists.txt's CppunitTest_sal_osl_file_details and jvmfwk/
+# CMakeLists.txt's CppunitTest_jvmfwk_sunversion already use for the
+# identical "qa file reaches into an internal, non-exported header" reason
+# (see either file's own comment on its librestudio_add_cppunit_test call).
+set(SB_SOURCES "${SB_SOURCES}" CACHE INTERNAL
+    "expanded Library_sb.mk source list, reused by basic_scanner's use_library_objects(sb)")
+
 add_library(sb SHARED ${SB_SOURCES})
 
 if (ENABLE_PCH)
@@ -134,3 +152,50 @@ endif ()
 librestudio_set_library_output_name(sb sb OOO)
 
 install(TARGETS sb LIBRARY DESTINATION program)
+
+# --- CppunitTest targets -----------------------------------------------------
+#
+# Module_basic.mk's three CppunitTest check targets (basic_scanner,
+# basic_macros, basic_util) all sit inside "ifneq ($(filter SCRIPTING,
+# $(BUILD_TYPE)),)" -- this port always treats that as on (ENABLE_SCRIPTING
+# defaults ON, matching configure.ac, see the comment on SB_SOURCES above),
+# so all three are ported unconditionally.
+#
+# Only basic_util is wired here, at basic/CMakeLists.txt's own natural
+# position: CppunitTest_basic_util.mk, re-checked directly against the live
+# file, is trivial -- 1 source (basic/qa/cppunit/test_util), use_libraries(sb)
+# only, no use_ure/use_vcl/use_rdb/use_configuration/use_api -- so it has no
+# ordering need this module's own add_subdirectory() point doesn't already
+# satisfy (sb, its only dependency, is the target defined immediately above).
+#
+# basic_scanner and basic_macros are NOT here: both need at least
+# unobootstrapprotector/unoexceptionprotector (unotest/CMakeLists.txt) --
+# basic_macros additionally needs vclbootstrapprotector (test/CMakeLists.txt),
+# test_fixtures (test/CMakeLists.txt, "test" -> test_fixtures, this port's
+# established rename -- see e.g. sax/CppunitTest_deferred.cmake's own comment
+# on this exact rename) and program_services_rdb (defined near the very end
+# of the root CMakeLists.txt) -- and add_subdirectory(basic) (root
+# CMakeLists.txt) runs well before add_subdirectory(unotest)/add_subdirectory
+# (test) and long before program_services_rdb is defined. Both are deferred
+# to basic/CppunitTest_deferred.cmake instead, include()'d from the root
+# CMakeLists.txt after every one of those exists -- see that file's own
+# header comment for the full detail, matching the pattern already
+# established by e.g. toolkit/CppunitTest_deferred.cmake and sax/
+# CppunitTest_deferred.cmake (read either's header comment for the general
+# mechanism).
+librestudio_add_cppunit_test(basic_util
+    SOURCES
+        basic/qa/cppunit/test_util
+    LIBRARIES sb)
+
+# basic/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/basic/CppunitTest_deferred.cmake")

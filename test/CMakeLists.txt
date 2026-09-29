@@ -12,9 +12,18 @@
 # need this for their own CppunitTest targets, not for their production
 # libraries.
 #
-# Out of scope for this tier, and why:
-#   - CppunitTest_test_a11y.mk / CppunitTest_test_xpath.mk: tests of this
-#     module itself, not something anything else depends on.
+# CppunitTest_test_xpath.mk (this module's own self-test, needing only
+# sal+test_fixtures) is ported directly below, right after test_fixtures --
+# it calls no use_ure/use_vcl/use_rdb/use_configuration, so it has no
+# ordering dependency past this file's own targets.
+#
+# CppunitTest_test_a11y.mk (this module's other self-test) is NOT ported
+# here: it calls use_rdb(services), which needs the program_services_rdb
+# target -- not defined until the very end of the root CMakeLists.txt, well
+# after this file's own add_subdirectory() position -- so it lives in its
+# own test/CppunitTest_deferred.cmake instead, include()'d from the root
+# CMakeLists.txt once program_services_rdb exists. See that file for the
+# full detail.
 #
 # subsequenttest (Library_subsequenttest.mk) IS ported below, in its own
 # section right after test_fixtures: ~180 UNO API interface-test helpers
@@ -185,6 +194,30 @@ target_link_libraries(test_fixtures PRIVATE
 # gb_Library_VALIDGROUPS_NOTINSTALLED (solenv/gbuild/Helper.mk) so upstream
 # never installs it either -- the install() below was likewise wrong.
 librestudio_set_library_output_name(test_fixtures test PLAIN)
+
+# --- CppunitTest_test_xpath ---------------------------------------------------
+#
+# CppunitTest_test_xpath.mk, re-checked directly against the live file: 1
+# source (test/qa/cppunit/test_xpath), use_externals(libxml2), use_libraries
+# sal test ("test" -> test_fixtures, this module's own established rename,
+# see this file's header comment), use_sdk_api (normal udkapi+offapi
+# headers). No use_ure/use_vcl/use_rdb/use_components/use_configuration
+# anywhere in this .mk, so none of librestudio_add_cppunit_test()'s
+# PROTECTORS/COMPONENTS/CONFIGURATION machinery is needed, and there is no
+# ordering dependency past sal/test_fixtures, both already real targets by
+# this point.
+librestudio_add_cppunit_test(test_xpath
+    SOURCES
+        test/qa/cppunit/test_xpath
+    LIBRARIES
+        sal test_fixtures
+        LibXml2::LibXml2
+    INCLUDE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        "${LIBXML2_INCLUDE_DIRS}"
+    DEPENDS
+        udkapi_normal_headers offapi_normal_headers)
 
 # --- subsequenttest ----------------------------------------------------------
 
@@ -419,3 +452,15 @@ target_link_libraries(subsequenttest PRIVATE
 # gb_Library_VALIDGROUPS_NOTINSTALLED (solenv/gbuild/Helper.mk), so upstream
 # never installs this library either.
 librestudio_set_library_output_name(subsequenttest subsequenttest PLAIN)
+
+# test/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/test/CppunitTest_deferred.cmake")

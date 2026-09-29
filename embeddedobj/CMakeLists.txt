@@ -34,6 +34,27 @@
 # Both are registered under PLAINLIBS_OOO in Repository.mk -> LAYER OOO.
 # Neither .component file has an <optional/> implementation, so no
 # IMPLEMENTATION filtering is needed for librestudio_add_component().
+#
+# Module_embeddedobj.mk's 2 CppunitTest_*.mk files, re-checked directly:
+#   ifeq ($(OS),LINUX)
+#   $(eval $(call gb_Module_add_slowcheck_targets,embeddedobj,\
+#       CppunitTest_embeddedobj_general \
+#   ))
+#   endif
+#   ifeq ($(OS),WNT)
+#   $(eval $(call gb_Module_add_slowcheck_targets,embeddedobj,\
+#       CppunitTest_embeddedobj_msole \
+#   ))
+#   endif
+# embeddedobj_general is genuinely Linux-applicable and is wired for real,
+# but deferred to embeddedobj/CppunitTest_deferred.cmake -- its gb_CppunitTest_
+# use_rdb(services) needs program_services_rdb, which does not exist yet at
+# this file's own add_subdirectory() position. embeddedobj_msole is gated to
+# $(OS),WNT ONLY upstream -- also wired for real in the same deferred file,
+# inside if (WIN32), following cpputools/CMakeLists.txt's own sp2bv precedent
+# of transcribing a real Windows-only target rather than dropping it -- inert
+# on this Linux build, same posture shell/CMakeLists.txt's CppunitTest_
+# shell_zip now takes.
 
 # --- embobj ---------------------------------------------------------------
 
@@ -110,3 +131,15 @@ librestudio_add_component(emboleobj
 librestudio_set_library_output_name(emboleobj emboleobj OOO)
 
 install(TARGETS emboleobj LIBRARY DESTINATION program)
+
+# embeddedobj/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
+# program_services_rdb, CONFIGURATION's officecfg_registry/
+# LIBRESTUDIO_TEST_UNITTEST_DIR, ...) from a module add_subdirectory()'d
+# later than this one -- scheduled here rather than included directly, so it
+# runs only once every add_subdirectory() in the whole tree has completed,
+# regardless of which one is actually the latest-binding dependency. See
+# that file's own header comment for the specific constraint, and
+# cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
+# CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/embeddedobj/CppunitTest_deferred.cmake")

@@ -75,22 +75,63 @@
 # point it runs, this is a real ordering constraint, not just a lookup
 # detail: the owning module's add_subdirectory() -- and with it, the
 # librestudio_add_component() call inside it -- must have already run by the
-# time a librestudio_add_cppunit_test() call names it in COMPONENTS.
+# time a librestudio_add_cppunit_test() call names it in COMPONENTS. The same
+# is true of CONFIGURATION's LIBRESTUDIO_TEST_UNITTEST_DIR (only set once
+# test/CMakeLists.txt has run) and CONFIGURATION/CONFIGURATION_INSTDIR_ONLY's
+# officecfg_registry target, and of program_services_rdb (only defined once
+# every component-registering module in the whole tree has run).
 # comphelper_test's dependency on i18npool, and sax_parser/sax_xmlimport's on
-# configmgr/framework/i18npool/sfx2/ucb/uui, all hit this: those owning
-# modules' add_subdirectory() calls sit textually AFTER comphelper's and
-# sax's own in the root CMakeLists.txt (comphelper and sax are themselves
-# depended on by many earlier-consumed modules, so reordering them instead
-# would be the much larger, riskier change). The fix used here is to defer
-# just these specific librestudio_add_cppunit_test() calls -- moved into
-# their own comphelper/CppunitTest_deferred.cmake and sax/CppunitTest_
-# deferred.cmake files -- to an include() from the root CMakeLists.txt
-# positioned after every module they reference has already been
-# add_subdirectory()'d; see those files and their include() call sites for
-# the specifics, including the further directory-scope wrinkle (a directory-
-# scoped IMPORTED_TARGET like PkgConfig::NSS is not visible from the root
-# scope a deferred file executes in) that comphelper's deferred file also has
-# to work around.
+# configmgr/framework/i18npool/sfx2/ucb/uui, are the first two modules that
+# hit this: those owning modules' add_subdirectory() calls sit textually
+# AFTER comphelper's and sax's own in the root CMakeLists.txt (comphelper and
+# sax are themselves depended on by many earlier-consumed modules, so
+# reordering them instead would be the much larger, riskier change).
+#
+# The fix (2026-09-27, superseding an earlier scheme that hand-placed a plain
+# include() in the root CMakeLists.txt at whatever point was calculated to be
+# "after every dependency"): each affected module keeps its own
+# librestudio_add_cppunit_test() call in a sibling <module>/CppunitTest_
+# deferred.cmake file, and <module>/CMakeLists.txt itself schedules that file
+# with CMake's own cmake_language(DEFER ...) mechanism (added in CMake 3.19;
+# this port requires 3.20), right after its own normal content:
+#
+#   cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+#       "${CMAKE_SOURCE_DIR}/<module>/CppunitTest_deferred.cmake")
+#
+# DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" schedules the include() to run only
+# once CMake has finished processing the ENTIRE tree under the root source
+# directory -- i.e. after every add_subdirectory() anywhere, not just the
+# ones textually below this point -- so no module has to calculate which
+# dependency is "latest-binding" or worry about a future change moving that
+# target: cmake_language(DEFER) always runs last, unconditionally correct.
+# This replaces the old need for one big, hand-maintained, ordering-sensitive
+# cluster of include() calls in the root CMakeLists.txt.
+#
+# Two real gotchas, both verified empirically against CMake 3.20's actual
+# behaviour (not assumed from the docs alone) before adopting this pattern
+# project-wide:
+#   1. "Variable references in arguments are evaluated at the time the
+#      deferred call is executed" (cmake_language's own documentation, and
+#      reproduced directly: a captured "${CMAKE_CURRENT_SOURCE_DIR}/foo.cmake"
+#      string, built and passed as a DEFER CALL argument from inside a
+#      subdirectory's CMakeLists.txt, resolves to nothing when the deferred
+#      call actually runs -- CMAKE_CURRENT_SOURCE_DIR at THAT point is the
+#      DEFER DIRECTORY's own directory (the root), not the scheduling
+#      module's). So the path argument must be built from CMAKE_SOURCE_DIR
+#      (a value that is the same root path regardless of which directory
+#      scope re-evaluates it) plus a literal, hardcoded module name -- never
+#      CMAKE_CURRENT_SOURCE_DIR, and never a local variable that only exists
+#      in the scheduling module's own directory scope.
+#   2. The deferred include() still executes in the DEFER DIRECTORY's own
+#      directory scope (the root's), exactly like the old plain include()
+#      from root did -- so the same pre-existing directory-scope wrinkle
+#      persists unchanged: a directory-scoped IMPORTED_TARGET like
+#      PkgConfig::NSS, created via pkg_check_modules() inside some other
+#      module's own CMakeLists.txt, is still not visible from a deferred
+#      file's execution scope. comphelper/CppunitTest_deferred.cmake's own
+#      header comment documents its specific workaround; nothing about
+#      switching to cmake_language(DEFER) changed this particular problem,
+#      for better or worse.
 #
 # gb_CppunitTest__make_args (CppunitTest.mk lines 108-131) unconditionally
 # passes "-env:UserInstallation=<file-url>" to every test, regardless of
@@ -238,9 +279,27 @@
 # uiconfig, svt_uiconfig, svx_uiconfig) that add_custom_command()-copies the
 # same .ui files into the build tree directly (see e.g. vcl/CMakeLists.txt's
 # "--- UIConfig_vcl ---" block for the exact mechanism) -- so UICONFIG below
-# has a real target to depend on. UICONFIG takes a single module name (not a
-# list like upstream's use_uiconfigs) because no call site in this port needs
-# more than one module's .ui files.
+# has a real target to depend on. UICONFIG was originally restricted to a
+# single module name ("no call site needs more than one") -- proven false by
+# CppunitTest_desktop_lib.mk's own use_uiconfigs(desktop_lib, cui "modules/
+# swriter"), which names two -- so it is now a proper multi-value list,
+# matching upstream's own variadic use_uiconfigs(name, module...) shape.
+#
+# gb_CppunitTest_use_packages(name, package...) (CppunitTest.mk, mirroring
+# gb_LinkTarget_use_packages -- solenv/gbuild/LinkTarget.mk:2151-2163) adds
+# one order-only build dependency per package on gb_Package_get_target(
+# package) -- upstream's own Package_<name> staging target (raw files, e.g.
+# Basic-macro-library content or shared script bindings, copied into
+# $(INSTDIR) so a test can load them at runtime). Unlike COMPONENTS, this
+# contributes nothing to -env:UNO_SERVICES and involves no linking -- it is
+# conceptually identical to DEPENDS (a plain build-order dependency), just
+# named separately because it maps to gbuild's own separate use_packages
+# call and its own distinct upstream Package_*.mk target names, rather than
+# to an arbitrary CMake target name a call site might pass via DEPENDS.
+# PACKAGES therefore uses the exact same FATAL_ERROR-if-missing strictness
+# COMPONENTS/UICONFIG/NONHEADLESS already established: each name must
+# already be a real CMake target (this port's own build-time mirror for
+# that Package_*.mk, however it is produced) before this call is reached.
 
 # librestudio_add_cppunit_test(<name>
 #     SOURCES <files...>
@@ -251,8 +310,11 @@
 #     [PROTECTORS <cmake-target> <symbol> ...]
 #     [COMPONENTS <name>...]
 #     [CONFIGURATION]
+#     [CONFIGURATION_INSTDIR_ONLY]
 #     [NONHEADLESS]
-#     [UICONFIG <module-name>]
+#     [UICONFIG <module-name>...]
+#     [PACKAGES <package-name>...]
+#     [RDBS <rdb-name>...]
 #     [EXTRA_ARGS <arg>...])
 #
 # SOURCES: gb_CppunitTest_add_exception_objects's own spelling -- a
@@ -291,6 +353,14 @@
 #   header comment for the full mechanism; requires add_subdirectory(officecfg)
 #   and add_subdirectory(test) to have already run (FATAL_ERRORs, naming which
 #   is missing, if not -- the same style as the cppunittester check below).
+# CONFIGURATION_INSTDIR_ONLY: a bare option, mutually exclusive with
+#   CONFIGURATION (FATAL_ERRORs if both given) -- gb_CppunitTest_use_instdir_
+#   configuration's equivalent when a .mk calls only that one sub-call, not
+#   the three-layer gb_CppunitTest_use_configuration composite. See the file
+#   header comment for the full mechanism and why it is a real, separate
+#   request rather than folded into CONFIGURATION's over-approximation.
+#   Requires add_subdirectory(officecfg) to have already run (FATAL_ERRORs if
+#   not); unlike CONFIGURATION, does NOT require add_subdirectory(test).
 # NONHEADLESS: a bare option (present or absent, no value -- gb_CppunitTest_
 #   use_vcl_non_headless_with_windows's equivalent, takes no parameters
 #   either). See the file header comment for the full mechanism and why it
@@ -301,13 +371,31 @@
 #   UNO_SERVICES/CONFIGURATION_LAYERS/UserInstallation. FATAL_ERRORs, naming
 #   the missing target, if vclplug_gen does not exist (e.g. built with
 #   ENABLE_GEN=OFF) -- the same style COMPONENTS/CONFIGURATION already use.
-# UICONFIG: a single module name (gb_CppunitTest_use_uiconfigs's equivalent,
-#   restricted to one module -- see the file header comment for why a list
-#   was not needed). Adds add_dependencies(<name> <module-name>_uiconfig),
-#   the real build-time ALL target vcl/svtools/svx's own UIConfig_* blocks
-#   now define (see the file header comment). FATAL_ERRORs, naming the
-#   module, if "<module-name>_uiconfig" does not exist yet -- same style as
+# UICONFIG: module names (gb_CppunitTest_use_uiconfigs's equivalent -- a
+#   list, same as upstream's own variadic use_uiconfigs(name, module...); see
+#   the file header comment for why this is no longer restricted to one).
+#   Adds add_dependencies(<name> <module-name>_uiconfig) per module, the real
+#   build-time ALL target vcl/svtools/svx/.../swriter's own UIConfig_* blocks
+#   define (see the file header comment). FATAL_ERRORs, naming the module, if
+#   "<module-name>_uiconfig" does not exist yet -- same style as
 #   COMPONENTS/CONFIGURATION/NONHEADLESS.
+# PACKAGES: package names (gb_CppunitTest_use_packages's equivalent -- see
+#   the file header comment for the exact upstream semantics being modelled).
+#   Each name must already be a real CMake target (this port's own
+#   build-time mirror for that Package_*.mk); add_dependencies(<name>
+#   <package-name>) is added per package. FATAL_ERRORs, naming the package,
+#   if the target does not exist yet -- same style as
+#   COMPONENTS/UICONFIG/CONFIGURATION/NONHEADLESS.
+# RDBS: registry names (gb_CppunitTest_use_rdbs's equivalent -- see the file
+#   header comment for the exact upstream semantics: a plain foreach over
+#   gb_CppunitTest_use_rdb, itself just "UNO_SERVICES += <rdb file>", the
+#   same UNO_SERVICES variable COMPONENTS feeds too). Each name must already
+#   have been finalized via librestudio_finalize_components(<name>) (cmake/
+#   LibreStudioComponent.cmake) -- "services" is a valid name like any other,
+#   resolving against the same services_RDB/services_rdb pair program_
+#   services_rdb's own copy step depends on. FATAL_ERRORs, naming the
+#   registry, if it has not been finalized yet -- same style as
+#   COMPONENTS/PACKAGES/UICONFIG/CONFIGURATION/NONHEADLESS.
 # EXTRA_ARGS: gb_CppunitTest_add_arguments's equivalent -- raw extra
 #   arguments appended, verbatim and last, to the cppunittester COMMAND
 #   (gb_CppunitTest__make_args appends its own $(ARGS) last too). Purely
@@ -322,8 +410,29 @@
 #   unchanged is low-risk and keeps this one bespoke test going through the
 #   same generic machinery -- and the same FIXTURES_REQUIRED/CTest plumbing
 #   -- as every other CppunitTest in this port.
+# 2026-09-30, added at the user's explicit request ("флаг, чтобы собирать или
+# нет тесты при сборке" -- a flag for whether tests get built at all): real
+# gbuild itself has no single such switch (a bare `make` never builds any
+# CppunitTest_*.mk target in the first place -- they only get built by
+# `make check`/`make CppunitTest_<name>`/etc.), so this is an intentional,
+# honestly-invented LIBRESTUDIO_* option, not a configure.ac mirror -- same
+# category as LIBRESTUDIO_ENABLE_JAVA/LIBRESTUDIO_FORCE_VENDOR_*. Default OFF
+# matches that real gbuild behavior (tests are opt-in to build, not opt-out) --
+# the user picked this explicitly over defaulting ON (which would have just
+# preserved this port's own prior "always build every test" habit). Setting
+# it to OFF marks every CppunitTest's own MODULE library EXCLUDE_FROM_ALL, so
+# a plain `ninja`/`cmake --build .` skips all of them -- `ninja <test-name>`
+# or `-DLIBRESTUDIO_BUILD_TESTS=ON` still builds them individually/globally.
+# add_test() registration itself is NOT gated: ctest can still list every
+# test either way, and running one that was never built fails with "Unable
+# to find executable", the exact same, already-established UX this port's
+# own unbuilt ixion test suite already has (see [[project_librestudio]]).
+option(LIBRESTUDIO_BUILD_TESTS
+    "Build every CppunitTest target (its own MODULE library) as part of the default 'all' target. OFF (default) matches real gbuild's own behavior -- a bare build never compiles CppunitTest_*.mk targets, only an explicit 'make check' does -- and excludes them via EXCLUDE_FROM_ALL instead; ctest registration is unaffected either way, so ctest can still list/attempt them (failing with \"Unable to find executable\" if never built, same as this port's own unbuilt vendored ixion tests already do)."
+    OFF)
+
 function(librestudio_add_cppunit_test name)
-    cmake_parse_arguments(_cut "CONFIGURATION;NONHEADLESS" "UICONFIG" "SOURCES;LIBRARIES;INCLUDE;DEFINITIONS;DEPENDS;PROTECTORS;COMPONENTS;EXTRA_ARGS" ${ARGN})
+    cmake_parse_arguments(_cut "CONFIGURATION;CONFIGURATION_INSTDIR_ONLY;NONHEADLESS" "" "SOURCES;LIBRARIES;INCLUDE;DEFINITIONS;DEPENDS;PROTECTORS;COMPONENTS;UICONFIG;PACKAGES;RDBS;EXTRA_ARGS" ${ARGN})
 
     if (NOT _cut_SOURCES)
         message(FATAL_ERROR "librestudio_add_cppunit_test(${name}): SOURCES is required")
@@ -331,6 +440,13 @@ function(librestudio_add_cppunit_test name)
     if (_cut_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR
             "librestudio_add_cppunit_test(${name}): unknown arguments: ${_cut_UNPARSED_ARGUMENTS}")
+    endif ()
+    if (_cut_CONFIGURATION AND _cut_CONFIGURATION_INSTDIR_ONLY)
+        message(FATAL_ERROR
+            "librestudio_add_cppunit_test(${name}): CONFIGURATION and CONFIGURATION_INSTDIR_ONLY "
+            "are mutually exclusive (gb_CppunitTest_use_configuration vs. gb_CppunitTest_"
+            "use_instdir_configuration alone are two different upstream calls -- a test's .mk "
+            "calls at most one of the two)")
     endif ()
     list(LENGTH _cut_PROTECTORS _cut_protector_count)
     math(EXPR _cut_protector_remainder "${_cut_protector_count} % 2")
@@ -345,7 +461,16 @@ function(librestudio_add_cppunit_test name)
     # object dlopened by cppunittester, never linked against by anything else
     # -- CMake's MODULE type says exactly that (as opposed to SHARED, which
     # advertises "other targets may link against this").
-    add_library(${name} MODULE ${_cut_SOURCES})
+    #
+    # EXCLUDE_FROM_ALL when LIBRESTUDIO_BUILD_TESTS is OFF (see that option's
+    # own comment above, right before this function): keeps this target
+    # buildable on demand (`ninja ${name}`) without it costing anything in a
+    # plain `ninja`/`cmake --build .` run.
+    set(_cut_exclude_from_all "")
+    if (NOT LIBRESTUDIO_BUILD_TESTS)
+        set(_cut_exclude_from_all EXCLUDE_FROM_ALL)
+    endif ()
+    add_library(${name} MODULE ${_cut_exclude_from_all} ${_cut_SOURCES})
 
     # gb_CppunitTest_get_filename / get_ilibfilename (solenv/gbuild/platform/
     # unxgcc.mk): every CppunitTest's file is named "libtest_<name>.so" on
@@ -384,22 +509,42 @@ function(librestudio_add_cppunit_test name)
         add_dependencies(${name} ${_cut_DEPENDS})
     endif ()
 
-    # UICONFIG -- gb_CppunitTest_use_uiconfigs's equivalent, restricted to a
-    # single module name (see the file header comment for why). Resolved as
-    # a build-order dependency on "<module-name>_uiconfig", the real ALL
-    # target vcl/svtools/svx's own UIConfig_* blocks now define alongside
-    # their install(FILES ...) packaging rule.
-    if (_cut_UICONFIG)
-        if (NOT TARGET "${_cut_UICONFIG}_uiconfig")
+    # UICONFIG -- gb_CppunitTest_use_uiconfigs's equivalent, a list (see the
+    # file header comment for why this is no longer restricted to one
+    # module). Resolved per module as a build-order dependency on
+    # "<module-name>_uiconfig", the real ALL target vcl/svtools/svx/.../
+    # swriter's own UIConfig_* blocks each define alongside their
+    # install(FILES ...) packaging rule.
+    foreach (_cut_uc IN LISTS _cut_UICONFIG)
+        if (NOT TARGET "${_cut_uc}_uiconfig")
             message(FATAL_ERROR
                 "librestudio_add_cppunit_test(${name}): UICONFIG names "
-                "'${_cut_UICONFIG}', but no '${_cut_UICONFIG}_uiconfig' target exists -- "
+                "'${_cut_uc}', but no '${_cut_uc}_uiconfig' target exists -- "
                 "that module's own UIConfig_* build-time mirror (see e.g. vcl/CMakeLists.txt's "
                 "UIConfig_vcl block) must be defined, and its add_subdirectory() must have "
                 "already run, before this librestudio_add_cppunit_test() call is reached")
         endif ()
-        add_dependencies(${name} "${_cut_UICONFIG}_uiconfig")
-    endif ()
+        add_dependencies(${name} "${_cut_uc}_uiconfig")
+    endforeach ()
+    unset(_cut_uc)
+
+    # PACKAGES -- gb_CppunitTest_use_packages's equivalent (see the file
+    # header comment for the exact upstream semantics being modelled: a
+    # plain order-only build dependency per package, no linking, no
+    # UNO_SERVICES contribution). Each name must already be a real CMake
+    # target -- this port's own build-time mirror for that Package_*.mk.
+    foreach (_cut_pkg IN LISTS _cut_PACKAGES)
+        if (NOT TARGET "${_cut_pkg}")
+            message(FATAL_ERROR
+                "librestudio_add_cppunit_test(${name}): PACKAGES names "
+                "'${_cut_pkg}', but no '${_cut_pkg}' target exists -- that package's own "
+                "build-time mirror for its Package_*.mk must be defined, and its "
+                "add_subdirectory() must have already run, before this "
+                "librestudio_add_cppunit_test() call is reached")
+        endif ()
+        add_dependencies(${name} "${_cut_pkg}")
+    endforeach ()
+    unset(_cut_pkg)
 
     # COMPONENTS -- gb_CppunitTest_use_components's equivalent. See the file
     # header comment for the lookup key's exact semantics and the ordering
@@ -426,9 +571,43 @@ function(librestudio_add_cppunit_test name)
         unset(_cut_component_file)
     endforeach ()
 
+    # RDBS -- gb_CppunitTest_use_rdbs's equivalent (solenv/gbuild/CppunitTest.
+    # mk: `foreach rdb,$(2),$(call gb_CppunitTest_use_rdb,$(1),$(rdb))`, and
+    # gb_CppunitTest_use_rdb itself is a plain "UNO_SERVICES += <rdb file>" --
+    # re-verified directly, the exact same UNO_SERVICES variable use_component
+    # appends to above, not a separate mechanism). Each name must already have
+    # a real, already-finalized registry: librestudio_finalize_components(
+    # <name>) (cmake/LibreStudioComponent.cmake) sets the CACHE INTERNAL
+    # "<name>_RDB" variable (the packed .rdb file path) and defines a
+    # "<name>_rdb" ALL target -- both required to exist here, the same
+    # ordering constraint COMPONENTS already has via its own GLOBAL property
+    # check above. "services" itself is a valid RDBS name like any other: the
+    # main app registry is finalized via the exact same librestudio_
+    # finalize_components(services) call (root CMakeLists.txt), so RDBS
+    # "services" resolves against the identical services_RDB/services_rdb
+    # pair program_services_rdb's own copy step already depends on -- this
+    # does not duplicate or replace that copy, it just also references the
+    # same build-tree .rdb file directly in this test's own UNO_SERVICES.
+    foreach (_cut_r IN LISTS _cut_RDBS)
+        if (NOT DEFINED ${_cut_r}_RDB OR NOT TARGET "${_cut_r}_rdb")
+            message(FATAL_ERROR
+                "librestudio_add_cppunit_test(${name}): RDBS names '${_cut_r}', "
+                "but no librestudio_finalize_components(${_cut_r}) has run yet -- "
+                "that call must run, and the module(s) contributing components to "
+                "it via librestudio_add_component(... RDB ${_cut_r}) must already "
+                "be registered, before this librestudio_add_cppunit_test() call "
+                "is reached")
+        endif ()
+        add_dependencies(${name} "${_cut_r}_rdb")
+        list(APPEND _cut_component_urls "file://${${_cut_r}_RDB}")
+    endforeach ()
+    unset(_cut_r)
+
     # gb_CppunitTest__make_args (CppunitTest.mk ~line 119-120): every
     # UNO_SERVICES entry space-joined into ONE "-env:UNO_SERVICES=..."
     # argument, not repeated "-env:" flags -- see the file header comment.
+    # COMPONENTS and RDBS both feed the same list (matching upstream's own
+    # shared UNO_SERVICES variable, see this file's own RDBS comment above).
     set(_cut_uno_services_arg "")
     if (_cut_component_urls)
         string(REPLACE ";" " " _cut_uno_services_joined "${_cut_component_urls}")
@@ -438,6 +617,36 @@ function(librestudio_add_cppunit_test name)
     # CONFIGURATION -- gb_CppunitTest_use_configuration's equivalent. See the
     # file header comment for the full mechanism (the three xcsxcu layers,
     # their fixed order, and what each order-dep below stands in for).
+    #
+    # CONFIGURATION_INSTDIR_ONLY -- gb_CppunitTest_use_instdir_configuration's
+    # equivalent, called ALONE (i.e. a .mk that calls only that one sub-call,
+    # not the gb_CppunitTest_use_configuration composite that chains all
+    # three -- solenv/gbuild/CppunitTest.mk:377-408). Found for real the first
+    # time by cui_dialogs_test2/3/4 (CppunitTest_cui_dialogs_test_2/_3/_4.mk):
+    # each calls gb_CppunitTest_use_instdir_configuration but has its
+    # gb_CppunitTest_use_configuration line commented out in the live file --
+    # a genuinely different, narrower request than CONFIGURATION above (one
+    # xcsxcu layer, not three), not a stricter/looser rewording of it. Giving
+    # such a test the bare CONFIGURATION option instead would silently add two
+    # CONFIGURATION_LAYERS entries (registry-common, registry-user-ui) its own
+    # .mk never asked for -- a real deviation, not a harmless
+    # over-approximation, so this gets its own option rather than being folded
+    # into CONFIGURATION's. (A handful of *_a11y tests elsewhere in this port,
+    # e.g. vcl_a11y, call a different 2-of-3 combination --
+    # use_instdir_configuration + use_common_configuration, never
+    # use_user_ui_configuration -- and were deliberately wired with the bare
+    # CONFIGURATION option anyway as an accepted, documented
+    # over-approximation at the time; CONFIGURATION_INSTDIR_ONLY does not
+    # revisit that choice, it only covers the 1-of-3 shape no prior wave had
+    # hit.) Unlike CONFIGURATION, this does not require
+    # LIBRESTUDIO_TEST_UNITTEST_DIR (that only backs the common/user-ui
+    # layers) and does not upgrade the "<name>.user" FIXTURES_SETUP step to
+    # the real template copy below (upstream's own
+    # gb_CppunitTest_use_instdir_configuration never touches test_unittest/
+    # WORKDIR/unittest either) -- such a test gets the same plain
+    # make_directory every other non-CONFIGURATION use_ure test gets, the same
+    # already-accepted simplification documented in the file header comment
+    # above.
     set(_cut_configuration_layers_arg "")
     if (_cut_CONFIGURATION)
         if (NOT TARGET officecfg_registry)
@@ -455,6 +664,16 @@ function(librestudio_add_cppunit_test name)
         add_dependencies(${name} officecfg_registry)
         set(_cut_configuration_layers_arg
             "-env:CONFIGURATION_LAYERS=xcsxcu:file://${LIBRESTUDIO_REGISTRY_DIR} xcsxcu:file://${LIBRESTUDIO_TEST_UNITTEST_DIR}/registry-common xcsxcu:file://${LIBRESTUDIO_TEST_UNITTEST_DIR}/registry-user-ui")
+    elseif (_cut_CONFIGURATION_INSTDIR_ONLY)
+        if (NOT TARGET officecfg_registry)
+            message(FATAL_ERROR
+                "librestudio_add_cppunit_test(${name}): CONFIGURATION_INSTDIR_ONLY requires the "
+                "officecfg_registry target (officecfg/CMakeLists.txt's instdir registry) -- "
+                "add_subdirectory(officecfg) must run before this call")
+        endif ()
+        add_dependencies(${name} officecfg_registry)
+        set(_cut_configuration_layers_arg
+            "-env:CONFIGURATION_LAYERS=xcsxcu:file://${LIBRESTUDIO_REGISTRY_DIR}")
     endif ()
 
     # NONHEADLESS -- gb_CppunitTest_use_vcl_non_headless_with_windows's
@@ -532,6 +751,36 @@ function(librestudio_add_cppunit_test name)
                 ${_cut_configuration_layers_arg}
                 "-env:UserInstallation=file://${_cut_user_dir}"
                 ${_cut_EXTRA_ARGS})
+
+    # SRC_ROOT / WORKDIR_FOR_BUILD / INSTDIR: real OS environment variables
+    # config_host.mk.in exports unconditionally for every gbuild process
+    # ("export SRC_ROOT=@SRC_ROOT@", "export WORKDIR_FOR_BUILD=@WORKDIR_FOR_BUILD@",
+    # "export INSTDIR=@INSTDIR@"), consumed by unotest/source/cpp/directories.cxx's
+    # test::Directories constructor (o3tl::getEnvironment(u"SRC_ROOT")/
+    # u"WORKDIR_FOR_BUILD"), which every test::BootstrapFixture-derived test
+    # instantiates and which CPPUNIT_ASSERT_MESSAGEs both are non-empty --
+    # found the hard way (2026-09-27) when several newly-ported tests exited 1
+    # with no output before running a single case, and re-verified this is
+    # not new: already-registered editeng_editeng fails identically. Set
+    # unconditionally for every test here (matching upstream's own
+    # unconditional export, not something only CONFIGURATION/use_ure tests
+    # opt into) rather than requiring each call site to work around it
+    # individually -- a handful of call sites (sot_test_sot, sdext_pdfimport,
+    # ucb_webdav_core, lotuswordpro's two tests, libreofficekit_
+    # tiledrendering, canvas_test, emfio's two tests, formula_dialogs_test,
+    # jsuno_testuno) had already done exactly that with a per-test
+    # set_tests_properties(... PROPERTIES ENVIRONMENT ...) call of their own
+    # before this generic fix landed; those are now redundant and have been
+    # removed. WORKDIR_FOR_BUILD/INSTDIR are computed directly from
+    # CMAKE_BINARY_DIR (matching LIBRESTUDIO_TEST_UNITTEST_DIR's "${CMAKE_
+    # BINARY_DIR}/test/unittest" and LIBRESTUDIO_PROGRAM_DIR's "${CMAKE_
+    # BINARY_DIR}/instdir/program" definitions one directory level up) rather
+    # than read from LIBRESTUDIO_TEST_UNITTEST_DIR/LIBRESTUDIO_PROGRAM_DIR
+    # themselves, since this function can run before test/CMakeLists.txt or
+    # the instdir layout is otherwise established (e.g. sal's own tests, the
+    # first CppunitTests this port ever registers) -- both values are the
+    # same either way, just without the ordering dependency.
     set_tests_properties(${name} PROPERTIES
-        FIXTURES_REQUIRED "${name}_user_installation")
+        FIXTURES_REQUIRED "${name}_user_installation"
+        ENVIRONMENT "SRC_ROOT=${CMAKE_SOURCE_DIR};WORKDIR_FOR_BUILD=${CMAKE_BINARY_DIR}/test;INSTDIR=${CMAKE_BINARY_DIR}/instdir")
 endfunction()

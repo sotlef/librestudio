@@ -74,8 +74,18 @@ librestudio_add_cppunit_test(comphelper_test
     PROTECTORS
         unobootstrapprotector unobootstrapprotector
         unoexceptionprotector unoexceptionprotector
+    # 2026-09-29, found via real ctest run: propertyvalue.cxx's
+    # testJsonAwtSize needs the UNO singleton com.sun.star.reflection.
+    # theCoreReflection, supplied by stoc's "reflection" component
+    # (stoc/source/corereflection/crefl.cxx, registered as
+    # stoc_add_library(reflection ...) in stoc/CMakeLists.txt) -- missing
+    # from COMPONENTS here caused a real "component context fails to supply
+    # singleton com.sun.star.reflection.theCoreReflection" UNO exception at
+    # test runtime (not a link/compile error -- this is the first real
+    # ctest-execution-only bug found this session, as opposed to every prior
+    # one found by cmake --build).
     COMPONENTS
-        i18npool)
+        i18npool reflection)
 
 # ifeq ($(TLS),NSS): plc4 + nss3 collapse to the single "nss" pkg-config
 # module, the same simplification comphelper's own crypto backend (and oox's,

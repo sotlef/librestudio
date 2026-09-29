@@ -105,3 +105,70 @@ if (BUILD_TESTING)
     add_test(NAME sot_storage_check
         COMMAND sot_storage_check "${CMAKE_SOURCE_DIR}/sot/qa/cppunit/data")
 endif ()
+
+# --- CppunitTest_sot_test_sot -----------------------------------------------
+#
+# CppunitTest_sot_test_sot.mk, re-checked directly against the live file: 1
+# source (sot/qa/cppunit/test_sot), use_libraries(comphelper cppu cppuhelper
+# sal sot tl unotest -- "test" is NOT in this list, unlike many other
+# CppunitTests: qa/cppunit/test_sot.cxx uses unotest/bootstrapfixturebase.hxx
+# (test::BootstrapFixtureBase), not test/bootstrapfixture.hxx
+# (test::BootstrapFixture) -- the latter is what pulls in the "test" library
+# (test_fixtures here) and vcl; this test needs neither), set_include(sot/inc,
+# $$(INCLUDE)), use_sdk_api (normal udkapi+offapi, called with a trailing
+# empty second argument), use_ure (2 protector pairs: unobootstrapprotector,
+# unoexceptionprotector -- no use_vcl, so no vclbootstrapprotector and no
+# NONHEADLESS-style backend dependency), use_components(i18npool/util/
+# i18npool). No use_configuration anywhere in this .mk, so no CONFIGURATION
+# option and, in turn, no LIBRESTUDIO_TEST_UNITTEST_DIR dependency -- the one
+# thing that would have forced deferral past sot's own natural position (see
+# canvas/CppunitTest_deferred.cmake for a test that does hit that).
+#
+# The old "unotest links vcl" comment above (on sot_storage_check) explains
+# why upstream's own test_sot.cxx could not be used when this file was first
+# written -- true of unotest's production block (unotest/CMakeLists.txt links
+# vcl unconditionally), but irrelevant to *this* test's own use_libraries list
+# (which never names vcl, directly or via "test"/test_fixtures) -- so that
+# past blocker does not apply to sot_test_sot itself.
+#
+# Ordering, re-verified (grep -n "add_subdirectory(" CMakeLists.txt):
+#   - i18npool/util/i18npool -> "i18npool" (i18npool/CMakeLists.txt's own
+#     librestudio_add_component() call) is add_subdirectory()'d well before
+#     sot's own position -- the GLOBAL property COMPONENTS reads is already
+#     set here.
+#   - unobootstrapprotector/unoexceptionprotector (unotest/CMakeLists.txt)
+#     are add_subdirectory()'d AFTER sot's own position, but PROTECTORS is
+#     wired purely through "$<TARGET_FILE:...>" generator expressions inside
+#     add_test()'s COMMAND (cmake/LibreStudioTest.cmake) -- resolved at
+#     CMake's generate step, once every directory's CMakeLists.txt has already
+#     run, not at the point this call is textually reached -- and
+#     target_link_libraries(unotest ...) below is the same kind of
+#     generate-time-resolved forward reference sal/CMakeLists.txt's own
+#     sal_osl already established works (see that file's comment on linking a
+#     not-yet-defined target). So, unlike CONFIGURATION's LIBRESTUDIO_TEST_
+#     UNITTEST_DIR (a plain CMake variable, read immediately) or COMPONENTS
+#     (a GLOBAL property, also read immediately via get_property()), neither
+#     PROTECTORS nor a forward LIBRARIES reference forces deferral here --
+#     confirmed for real by reconfiguring after this call was added, not just
+#     reasoned about.
+librestudio_add_cppunit_test(sot_test_sot
+    SOURCES
+        sot/qa/cppunit/test_sot
+    LIBRARIES
+        comphelper cppu cppuhelper sal sot tl unotest
+    INCLUDE
+        "${CMAKE_SOURCE_DIR}/sot/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    DEPENDS udkapi_normal_headers offapi_normal_headers
+    PROTECTORS
+        unobootstrapprotector unobootstrapprotector
+        unoexceptionprotector unoexceptionprotector
+    COMPONENTS
+        i18npool)
+
+# qa/cppunit/test_sot.cxx's SotTest derives from test::BootstrapFixtureBase,
+# whose Directories member needs SRC_ROOT/WORKDIR_FOR_BUILD -- this is now
+# handled generically by librestudio_add_cppunit_test() itself (cmake/
+# LibreStudioTest.cmake's own header comment on its ENVIRONMENT property has
+# the full history of this gap and why the fix lives there, not per-test).
