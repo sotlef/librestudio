@@ -18,23 +18,26 @@
 class SfxItemSet;
 class SfxRequest;
 
-class SolutionExplorerPanel;
 class EditorAreaPanel;
 class OutputPanel;
 
-// The real SFX view shell: owns the three v1 panels (now parented directly
-// under the frame's own content window -- GetViewFrame().GetWindow() -- the
-// same way basctl::Shell parents its panels, rather than under a hand-built
-// top-level WorkWindow of our own). Menu/toolbar/statusbar are no longer
-// hand-coded here: framework's LayoutManager builds them from
-// code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml.
+// The real SFX view shell: owns the remaining two v1 content panels (now
+// parented directly under the frame's own content window --
+// GetViewFrame().GetWindow() -- the same way basctl::Shell parents its
+// panels, rather than under a hand-built top-level WorkWindow of our own).
+// Menu/toolbar/statusbar are no longer hand-coded here: framework's
+// LayoutManager builds them from
+// code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml. The third v1 panel,
+// Solution Explorer, is no longer one of these fixed content panels either
+// -- it moved to a real, dockable/collapsible sfx2::sidebar deck (see
+// code/source/sidebar/solutionpanel.{hxx,cxx}), registered as a child
+// window below, not owned by this class at all.
 namespace code
 {
 
 class Shell final : public SfxViewShell
 {
 private:
-    VclPtr<SolutionExplorerPanel> mxSolutionExplorer;
     VclPtr<EditorAreaPanel> mxEditorArea;
     VclPtr<OutputPanel> mxOutputPanel;
 

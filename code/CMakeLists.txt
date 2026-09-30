@@ -32,7 +32,6 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeapp.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/solutionexplorer.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editorarea.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/outputpanel.cxx")
 
@@ -47,7 +46,27 @@ target_include_directories(code PRIVATE
     "${OFFICECFG_INCLUDE_DIR}"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry officecfg_headers)
+add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry officecfg_headers program_services_rdb
+    # Runtime-only UNO components/build-tree assets "code" never links
+    # against but silently needs to actually run without crashing or
+    # missing content -- each one found and built ad hoc during a single
+    # debugging session by reproducing the crash and reading the resulting
+    # exception/log. Wiring them here means a plain `cmake --build . --
+    # target code` from a fresh configure rebuilds all of them too, instead
+    # of needing every one of those crashes to be rediscovered by hand
+    # again next time (see project memory for the full list of how each
+    # one was found):
+    #  - uui:           "Open" dialog's InteractionHandler
+    #  - filterconfig:  "Open" dialog's type/filter detection
+    #  - i18nsearch:    toolbar Customize dialog's search box
+    #  - vcl_uiconfig:  vcl's own generic .ui files (combobox.ui et al.),
+    #                   used internally by ordinary widgets, not just code's
+    #                   own uiconfig
+    #  - package2:      ZipFileAccess, which vcl's own ImageTree needs to
+    #                   read *any* icon out of *any* icon-theme zip -- so
+    #                   this one was silently breaking every icon in the
+    #                   app, not just the sidebar's, the whole session
+    uui filterconfig i18nsearch vcl_uiconfig package2)
 
 target_link_libraries(code PRIVATE
     comphelper cppu cppuhelper sal sfx fwk svxcore svx svl svt tk tl ucbhelper utl vcl vclmain)
@@ -57,6 +76,44 @@ target_link_libraries(code PRIVATE
 librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/coderc")
 
 install(TARGETS code RUNTIME DESTINATION program)
+
+# --- codesidebar -----------------------------------------------------------
+#
+# The real Sidebar's ResourceManager (sfx2/source/sidebar/ResourceManager.cxx)
+# instantiates a panel's content dynamically, by UNO service name, the
+# moment the user actually shows that panel -- unlike code::DocShell
+# (constructed directly in codeapp.cxx, never UNO-discovered), a panel
+# factory has to be a real, dlopen()able UNO component, so unlike "code"
+# itself this is a normal librestudio_add_component()-registered SHARED
+# library, discovered at runtime via services.rdb/main.xcd exactly like
+# uui/filterconfig -- "code" (the executable) does not link it.
+add_library(codesidebar SHARED
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx")
+
+target_include_directories(codesidebar PRIVATE
+    "${CMAKE_SOURCE_DIR}/code/source"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers)
+
+target_link_libraries(codesidebar PRIVATE
+    comphelper cppu cppuhelper sal sfx svt tl ucbhelper vcl)
+
+librestudio_add_component(codesidebar
+    COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codesidebar.component"
+    LIBRARY   codesidebar
+    LAYER     OOO)
+
+librestudio_set_library_output_name(codesidebar codesidebar OOO)
+
+install(TARGETS codesidebar LIBRARY DESTINATION program)
+
+# Sibling runtime-only dependency (see the long comment on "code"'s own
+# add_dependencies() above) -- not something "code" links against, but
+# building it is what makes the Solution sidebar panel actually work
+# instead of silently doing nothing.
+add_dependencies(code codesidebar)
 
 # --- UIConfig_code -------------------------------------------------------
 #
@@ -106,4 +163,30 @@ foreach (_code_uiconfig_pair
         list(APPEND _code_uiconfig_outputs "${_code_uiconfig_dest}")
     endforeach ()
 endforeach ()
+
+# solutionpanel.ui isn't module uiconfig (menubar/toolbar/statusbar under
+# .../modules/Code/) -- it's a weld .ui a sidebar panel loads by a plain
+# "code/ui/<file>.ui" path (PanelLayout's rUIXMLDescription argument,
+# code/source/sidebar/solutionpanel.cxx), resolved by AllSettings::
+# GetUIRootDir() (vcl/source/window/builder.cxx) straight against
+# share/config/soffice.cfg/ -- same "<module>/ui/" convention every other
+# module's own weld .ui files use (e.g. svx/ui/sidebarempty.ui).
+set(CODE_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
+)
+install(FILES ${CODE_UI_FILES} DESTINATION share/config/soffice.cfg/code/ui)
+foreach (_code_ui_src IN LISTS CODE_UI_FILES)
+    get_filename_component(_code_ui_name "${_code_ui_src}" NAME)
+    set(_code_ui_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/code/ui/${_code_ui_name}")
+    add_custom_command(
+        OUTPUT "${_code_ui_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/code/ui"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_code_ui_src}" "${_code_ui_dest}"
+        DEPENDS "${_code_ui_src}"
+        COMMENT "Copying ${_code_ui_name} into build-tree soffice.cfg/code/ui"
+        VERBATIM)
+    list(APPEND _code_uiconfig_outputs "${_code_ui_dest}")
+endforeach ()
+
 add_custom_target(code_uiconfig ALL DEPENDS ${_code_uiconfig_outputs})

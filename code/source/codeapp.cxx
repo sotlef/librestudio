@@ -11,9 +11,11 @@
  * =======================================================================
  * LibreStudio Code -- v2: a real sfx2/framework shell. The menu bar,
  * toolbar and status bar are no longer hand-built (see codeviewshell.cxx
- * for what code::Shell actually owns: just the three v1 panels) -- they
- * come from code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml via
- * framework's own LayoutManager, the same mechanism Writer/Calc/basctl use.
+ * for what code::Shell actually owns: the Editor/Output content panels)
+ * -- they come from code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml
+ * via framework's own LayoutManager, the same mechanism Writer/Calc/basctl
+ * use. Solution Explorer is a real sfx2::sidebar deck now too (see
+ * code/source/sidebar/), not a third hand-docked content panel.
  *
  * code::DocShell is constructed directly here and handed to the standard
  * office FrameLoader with an already-built model -- the same pattern
@@ -48,6 +50,9 @@
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
 #include <sfx2/app.hxx>
+#include <sfx2/chalign.hxx>
+#include <sfx2/childwin.hxx>
+#include <sfx2/sidebar/SidebarChildWindow.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/bootstrap.hxx>
@@ -214,6 +219,25 @@ int CodeApplication::Main()
         code::Shell::RegisterFactory(CODE_INTERFACE_VIEWSH);
         code::Shell::RegisterInterface();
 
+        // bVisible=true: this app has no persisted user profile for a
+        // saved ChildWindow state to override (see UserInstallation in
+        // cmake/LibreStudioUnorc.cmake), so the factory default below is
+        // what actually governs whether the Solution sidebar shows up on
+        // first run -- real Writer passes false here and relies on other,
+        // session-persisted state instead (sw/source/uibase/app/swmodule.cxx).
+        sfx2::sidebar::SidebarChildWindow::RegisterChildWindow(true, nullptr);
+
+        // SidebarChildWindow's own constructor used to hardcode
+        // SfxChildAlignment::RIGHT unconditionally -- correct for Writer/
+        // Calc/Impress' Properties-style deck, but the user asked for the
+        // Solution Explorer-style left placement Visual Studio uses
+        // instead. SetDefaultAlignment() only changes the *fallback* used
+        // when there is no real persisted/dragged state to restore (which
+        // is always true here -- no user profile, see above); genuine
+        // saved state still wins, same as every other app. Must be called
+        // before the sidebar's first ShowChildWindow() below.
+        sfx2::sidebar::SidebarChildWindow::SetDefaultAlignment(SfxChildAlignment::LEFT);
+
         // Also basctl's Dll::Dll(): SfxBaseModel::getSupportedServiceNames()
         // (sfx2/source/doc/sfxbasemodel.cxx) delegates to
         // GetObjectShell()->GetFactory().GetDocumentServiceName(), and
@@ -283,6 +307,37 @@ int CodeApplication::Main()
         SfxViewFrame* pViewFrame = SfxViewFrame::GetFirst(xDocShell.get(), false);
         if (pViewFrame)
             pViewFrame->GetFrame().AppearWithUpdate();
+
+        // Same story as AppearWithUpdate() above: RegisterChildWindow's own
+        // bVisible=true factory default is what a normal Desktop-mediated
+        // session's own startup cascade (SfxWorkWindow's initial
+        // UpdateChildWindow pass) consults to auto-create default-visible
+        // child windows -- our hand-built Frame/FrameLoader sequence never
+        // runs that cascade either, so ask for the sidebar explicitly.
+        if (pViewFrame)
+            pViewFrame->ShowChildWindow(sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
+
+        // SidebarController (sfx2/source/sidebar/SidebarController.cxx)
+        // registers itself as a css::ui::XContextChangeEventListener on our
+        // controller in its own constructor, then just waits: the first,
+        // deck-selecting UpdateConfigurations()/SwitchToDeck() call only
+        // happens once a ContextChangeEventObject actually arrives. That
+        // broadcast is normally sent from SfxShell::Activate() (sfx2/source/
+        // control/shell.cxx), called when SfxDispatcher flushes a newly
+        // pushed shell onto its stack -- traced with a temporary diagnostic:
+        // AppearWithUpdate()'s Update_Impl(true) above does flush the
+        // dispatcher and fires exactly two Activate() calls, but neither
+        // this pointer is ever code::Shell's own -- some other piece of the
+        // normal push-activation wiring our hand-built Frame/FrameLoader
+        // sequence relies on isn't happening either. code::Shell::Shell()
+        // already calls SetContextName() (codeviewshell.cxx), so the only
+        // missing step is the broadcast call itself.
+        if (pViewFrame)
+        {
+            if (SfxViewShell* pCodeShell = pViewFrame->GetViewShell())
+                pCodeShell->BroadcastContextForActivation(true);
+        }
+
 
         Execute();
 

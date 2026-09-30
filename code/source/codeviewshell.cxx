@@ -12,12 +12,13 @@
 #include "codedocshell.hxx"
 #include "editorarea.hxx"
 #include "outputpanel.hxx"
-#include "solutionexplorer.hxx"
 
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/sfxsids.hrc>
+#include <sfx2/sidebar/SidebarChildWindow.hxx>
 #include <sfx2/viewfrm.hxx>
+#include <vcl/EnumContext.hxx>
 
 // See codedocshell.cxx for why this is needed.
 extern SFX2_DLLPUBLIC constinit const SfxType0 aSfxVoidItem_Impl;
@@ -37,17 +38,35 @@ SFX_IMPL_INTERFACE(code_Shell, SfxViewShell)
 
 void code_Shell::InitInterface_Impl()
 {
+    // Lets the real Sidebar (its "Solution" deck now hosts what used to be
+    // the in-content SolutionExplorerPanel, see code/source/sidebar/) attach
+    // its SfxChildWindow to this view -- the same call
+    // sw/source/uibase/uiview/view0.cxx makes for Writer.
+    GetStaticInterface()->RegisterChildWindow(
+        sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
 }
 
 Shell::Shell(SfxViewFrame& rFrame, SfxViewShell* /*pOldSh*/)
     : SfxViewShell(rFrame, SfxViewShellFlags::NO_NEWWINDOW)
 {
+    // Without this, SidebarController (sfx2/source/sidebar/SidebarController.cxx)
+    // sits registered as a valid css::ui::XContextChangeEventListener but
+    // never gets its first, deck-selecting ContextChangeEventObject: that
+    // broadcast is gated on SfxShell::maContextChangeBroadcaster's stored
+    // context name (sfx2/source/control/shell.cxx, BroadcastContextForActivation())
+    // being non-empty, and it starts empty until SetContextName() is
+    // called -- every real view shell (sw's textsh.cxx, sc's cellsh.cxx, ...)
+    // does this in its own constructor. Shell activation itself already
+    // happens normally through SfxDispatcher's ordinary shell-stack push,
+    // so this is the one missing piece, not another Appear()-style cascade
+    // to fake.
+    SetContextName(vcl::EnumContext::GetContextName(vcl::EnumContext::Context::Default));
+
     InitPanels();
 }
 
 Shell::~Shell()
 {
-    mxSolutionExplorer.disposeAndClear();
     mxEditorArea.disposeAndClear();
     mxOutputPanel.disposeAndClear();
 }
@@ -67,9 +86,6 @@ void Shell::InitPanels()
     // (possibly 0x0) size they had when first created.
     SetWindow(&rContentWindow);
 
-    mxSolutionExplorer = VclPtr<SolutionExplorerPanel>::Create(&rContentWindow);
-    mxSolutionExplorer->Show();
-
     mxEditorArea = VclPtr<EditorAreaPanel>::Create(&rContentWindow);
     mxEditorArea->Show();
 
@@ -87,22 +103,17 @@ void Shell::OuterResizePixel(const Point& rOfs, const Size& rSize)
 
 void Shell::LayoutPanels(const Point& rOfs, const Size& rSize)
 {
-    if (!mxSolutionExplorer || !mxEditorArea || !mxOutputPanel)
+    if (!mxEditorArea || !mxOutputPanel)
         return;
 
-    const tools::Long nExplorerWidth = mxSolutionExplorer->IsVisible() ? rSize.Width() / 5 : 0;
     const tools::Long nOutputHeight = mxOutputPanel->IsVisible() ? rSize.Height() / 4 : 0;
 
-    if (mxSolutionExplorer->IsVisible())
-        mxSolutionExplorer->SetPosSizePixel(rOfs, Size(nExplorerWidth, rSize.Height()));
-
-    mxEditorArea->SetPosSizePixel(Point(rOfs.X() + nExplorerWidth, rOfs.Y()),
-        Size(rSize.Width() - nExplorerWidth, rSize.Height() - nOutputHeight));
+    mxEditorArea->SetPosSizePixel(rOfs, Size(rSize.Width(), rSize.Height() - nOutputHeight));
 
     if (mxOutputPanel->IsVisible())
         mxOutputPanel->SetPosSizePixel(
-            Point(rOfs.X() + nExplorerWidth, rOfs.Y() + rSize.Height() - nOutputHeight),
-            Size(rSize.Width() - nExplorerWidth, nOutputHeight));
+            Point(rOfs.X(), rOfs.Y() + rSize.Height() - nOutputHeight),
+            Size(rSize.Width(), nOutputHeight));
 }
 
 void Shell::Execute(SfxRequest& rReq)
