@@ -163,7 +163,7 @@ install(TARGETS svt LIBRARY DESTINATION program)
 # --- UIConfig_svt ------------------------------------------------------------
 #
 # UIConfig_svt.mk: 30 .ui files under svtools/uiconfig/ui packaged into
-# share/config/soffice.cfg/svtools/ui -- gb_UIConfig_UIConfig's own
+# share/config/soffice.cfg/svt/ui -- gb_UIConfig_UIConfig's own
 # destination convention (solenv/gbuild/UIConfig.mk: gb_UIConfig_DIR_FOR
 # expands to $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/soffice.cfg/$(2)/ui,
 # LIBO_SHARE_FOLDER being plain "share" on this port -- see officecfg/
@@ -213,7 +213,7 @@ set(SVTOOLS_UICONFIG_UI_FILES
 )
 
 install(FILES ${SVTOOLS_UICONFIG_UI_FILES}
-    DESTINATION share/config/soffice.cfg/svtools/ui)
+    DESTINATION share/config/soffice.cfg/svt/ui)
 
 # Real build-time mirror of the install() rule above, alongside it (not
 # instead of it) -- same rationale, and the same per-file add_custom_command
@@ -228,14 +228,14 @@ install(FILES ${SVTOOLS_UICONFIG_UI_FILES}
 set(_svt_uiconfig_outputs "")
 foreach (_svt_uiconfig_src IN LISTS SVTOOLS_UICONFIG_UI_FILES)
     get_filename_component(_svt_uiconfig_name "${_svt_uiconfig_src}" NAME)
-    set(_svt_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svtools/ui/${_svt_uiconfig_name}")
+    set(_svt_uiconfig_dest "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svt/ui/${_svt_uiconfig_name}")
     add_custom_command(
         OUTPUT "${_svt_uiconfig_dest}"
         COMMAND ${CMAKE_COMMAND} -E make_directory
-                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svtools/ui"
+                "${LIBRESTUDIO_SHARE_DIR}/config/soffice.cfg/svt/ui"
         COMMAND ${CMAKE_COMMAND} -E copy "${_svt_uiconfig_src}" "${_svt_uiconfig_dest}"
         DEPENDS "${_svt_uiconfig_src}"
-        COMMENT "Copying ${_svt_uiconfig_name} into build-tree soffice.cfg/svtools/ui"
+        COMMENT "Copying ${_svt_uiconfig_name} into build-tree soffice.cfg/svt/ui"
         VERBATIM)
     list(APPEND _svt_uiconfig_outputs "${_svt_uiconfig_dest}")
 endforeach ()

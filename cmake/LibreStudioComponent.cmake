@@ -167,6 +167,17 @@ function(librestudio_add_component name)
     # follows the naming rules in LibreStudioPlatform.cmake — a component that
     # points at the wrong filename is a run-time failure with no build-time
     # symptom, which is exactly the kind of thing to avoid guessing at.
+    #
+    # Deliberately NOT listing ${_comp_LIBRARY} in DEPENDS (nor add_dependencies
+    # below): $<TARGET_FILE_NAME:...> only needs CMake's static knowledge of the
+    # target's output-name pattern, resolved into a literal string when
+    # build.ninja is generated -- it does not need the library to actually be
+    # compiled. Upstream gbuild never had a reason to separate these (a plain
+    # `make` builds everything anyway), but this port's whole point is CMake's
+    # scoped `--target` builds, and a real one (building just a single small
+    # app such as code/) must not drag in every other module's library just to
+    # regenerate a small XML file that only names it. See project memory
+    # (project_code_ide) for the concrete case this was found from.
     add_custom_command(
         OUTPUT "${_out}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/components"
@@ -177,12 +188,11 @@ function(librestudio_add_component name)
                 -o "${_out}"
                 "${LIBRESTUDIO_CREATE_COMPONENT_XSLT}"
                 "${_comp_COMPONENT}"
-        DEPENDS "${_comp_COMPONENT}" ${_comp_LIBRARY} ${_comp_IMPLEMENTATION}
+        DEPENDS "${_comp_COMPONENT}" ${_comp_IMPLEMENTATION}
         COMMENT "createcomponent.xslt: ${name}.component"
         VERBATIM)
 
     add_custom_target(${name}_component DEPENDS "${_out}")
-    add_dependencies(${name}_component ${_comp_LIBRARY})
 
     if (_comp_RDB)
         set_property(GLOBAL APPEND PROPERTY "LIBRESTUDIO_COMPONENTS_${_comp_RDB}" "${_out}")
