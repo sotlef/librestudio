@@ -83,6 +83,25 @@
 # program/, where ${ORIGIN} always points); BRAND_SHARE_SUBDIR is "share" --
 # the same fixed folder name OFFICECFG_SHARE_FOLDER already uses elsewhere in
 # this port (officecfg/CMakeLists.txt) for the identical "share" value.
+#
+# UserInstallation: added after a real run of "code" (see project memory
+# project_code_ide) got past everything else and then hard-failed with
+# framework's own STR_CORRUPT_UICFG_USER message ("An error occurred while
+# loading the user interface configuration data"). framework's PresetHandler
+# (framework/source/accelerators/presethandler.cxx,
+# getOrCreateRootStorageUser()) opens a real writable "soffice.cfg" directory
+# under XPathSettings' UserConfig path, which resolves through the $(user)
+# path-substitution variable -- and that variable
+# (framework/source/services/substitutepathvars.cxx,
+# SetPredefinedPathVariables()) comes from utl::Bootstrap::locateUserData(),
+# which reads exactly this "UserInstallation" bootstrap key
+# (unotools/source/config/bootstrap.cxx). Without it $(user) is empty, so
+# UserConfig resolves to a bogus path with nothing there to open -- not
+# specific to Code, every generated rc this function writes was missing it
+# (this file's own history already has one prior case of exactly this shape:
+# BRAND_BASE_DIR/BRAND_SHARE_SUBDIR above). Points inside the build tree
+# itself (a real "user" directory is created there on first run) rather than
+# a real system config directory, since this is a dev build, not an install.
 
 function(librestudio_generate_unorc output_file)
     set(_content
@@ -97,6 +116,7 @@ LO_JAVA_DIR=\${ORIGIN}/classes
 UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb \${ORIGIN}/types/oovbaapi.rdb
 UNO_SERVICES=\${ORIGIN}/services.rdb
 CONFIGURATION_LAYERS=xcsxcu:\${ORIGIN}/../share/registry
+UserInstallation=\${ORIGIN}/../user
 ")
     file(WRITE "${output_file}" "${_content}")
 endfunction ()
