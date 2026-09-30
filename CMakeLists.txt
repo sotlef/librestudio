@@ -1326,6 +1326,13 @@ add_subdirectory(sc)
 # (OOXML factory generator) needs its own CMake design.
 add_subdirectory(sw)
 
+# code: "LibreStudio Code", a new VCL-native IDE app -- not a port of any
+# upstream gbuild module (original code, no Module_code.mk to transcribe, so
+# it has no row in PORTING_STATUS.md). Needs comphelper, cppu, cppuhelper,
+# sal, svtools, tl, ucbhelper, vcl (all declared above) plus the vclmain
+# static lib vcl/CMakeLists.txt defines for its own workbench programs.
+add_subdirectory(code)
+
 # cppuhelper is added last: it consumes the comprehensive header variants of
 # udkapi, offapi and its own private registry, all of which have to be declared
 # before it.
