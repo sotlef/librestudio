@@ -649,6 +649,42 @@
           <value>Basic</value>
         </prop>
       </node>
+      <!-- LibreStudio's own "Code" app (project memory: project_code_ide),
+           not a port of any upstream module. Shaped after BasicIDE just
+           above (ooSetupFactoryEmptyDocumentURL left empty/finalized): its
+           code::DocShell is constructed directly in codeapp.cxx and handed
+           to the FrameLoader with an already built model, the same way
+           basctl's own SID_BASICIDE_APPEAR does (sfx2/source/appl/
+           appserv.cxx), so the generic private:factory/scode resolution
+           path (which would need code::DocShell registered as a
+           dlopen()able UNO component) is never exercised and does not need
+           to work for this to load. ooSetupFactoryShortName is what matters:
+           it is what ModuleManager::identify() (framework/source/services/
+           modulemanager.cxx) uses to find code/uiconfig/code/menubar,
+           toolbar and statusbar XML files under
+           share/config/soffice.cfg/modules/Code/. -->
+      <node oor:name="com.sun.star.code.CodeDocument" oor:op="replace">
+        <prop oor:name="ooSetupFactoryDocumentService" oor:finalized="true"/>
+        <prop oor:name="ooSetupFactoryActualFilter" oor:finalized="true"/>
+        <prop oor:name="ooSetupFactoryActualTemplateFilter" oor:finalized="true"/>
+        <prop oor:name="ooSetupFactoryDefaultFilter" oor:finalized="true"/>
+        <prop oor:name="ooSetupFactoryEmptyDocumentURL" oor:finalized="true"/>
+        <prop oor:name="ooSetupFactoryCommandConfigRef">
+          <value>GenericCommands</value>
+        </prop>
+        <prop oor:name="ooSetupFactoryShortName">
+          <value>Code</value>
+        </prop>
+        <prop oor:name="ooSetupFactoryWindowStateConfigRef">
+          <value>CodeWindowState</value>
+        </prop>
+        <prop oor:name="ooSetupFactoryCmdCategoryConfigRef">
+          <value>GenericCategories</value>
+        </prop>
+        <prop oor:name="ooSetupFactoryUIName">
+          <value>LibreStudio Code</value>
+        </prop>
+      </node>
       <node oor:name="com.sun.star.frame.StartModule" oor:op="replace" install:module="start">
         <prop oor:name="ooSetupFactoryDocumentService" oor:finalized="true"/>
         <prop oor:name="ooSetupFactoryActualFilter" oor:finalized="true"/>

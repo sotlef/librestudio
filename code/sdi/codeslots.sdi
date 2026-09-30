@@ -1,0 +1,11 @@
+module
+Code
+[
+SlotIdFile( "codeslots.hrc" )
+]
+{
+    include "sfxitems.sdi"
+    include "sfx.sdi"
+
+    include "code.sdi"
+}

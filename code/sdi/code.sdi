@@ -1,0 +1,29 @@
+interface CodeDocument
+{
+}
+
+shell code_DocShell
+{
+    import CodeDocument;
+}
+
+interface CodeView
+{
+}
+
+shell code_Shell
+{
+    import CodeView;
+
+    SID_NEWDOC
+    [
+        ExecMethod  = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_SAVEDOC
+    [
+        ExecMethod  = Execute;
+        StateMethod = GetState;
+    ]
+}

@@ -340,6 +340,7 @@ set(OFFICECFG_SCHEMA_FILES
     org/openoffice/Office/UI/Category.xcs
     org/openoffice/Office/UI/ChartCommands.xcs
     org/openoffice/Office/UI/ChartWindowState.xcs
+    org/openoffice/Office/UI/CodeWindowState.xcs
     org/openoffice/Office/UI/Commands.xcs
     org/openoffice/Office/UI/Controller.xcs
     org/openoffice/Office/UI/DbBrowserWindowState.xcs
@@ -522,6 +523,7 @@ set(OFFICECFG_LOCALIZED_FILES
     org/openoffice/Office/UI/MathCommands.xcu
     org/openoffice/Office/UI/BasicIDEWindowState.xcu
     org/openoffice/Office/UI/CalcWindowState.xcu
+    org/openoffice/Office/UI/CodeWindowState.xcu
     org/openoffice/Office/UI/DrawWindowState.xcu
     org/openoffice/Office/UI/ImpressWindowState.xcu
     org/openoffice/Office/UI/MathWindowState.xcu
@@ -589,6 +591,7 @@ set(OFFICECFG_MAIN_XCS
     Office/UI/Category.xcs
     Office/UI/ChartCommands.xcs
     Office/UI/ChartWindowState.xcs
+    Office/UI/CodeWindowState.xcs
     Office/UI/Commands.xcs
     Office/UI/Controller.xcs
     Office/UI/DbBrowserWindowState.xcs
@@ -657,6 +660,7 @@ set(OFFICECFG_MAIN_XCU
     Office/UI/BibliographyCommands.xcu
     Office/UI/ChartCommands.xcu
     Office/UI/ChartWindowState.xcu
+    Office/UI/CodeWindowState.xcu
     Office/UI/Controller.xcu
     Office/UI/DbBrowserWindowState.xcu
     Office/UI/DbQueryWindowState.xcu

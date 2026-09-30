@@ -1,0 +1,18 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+// No new slot IDs of our own. sfx.sdi's own shared slot definitions
+// (pulled in via codeslots.sdi's "include \"sfx.sdi\"") reference IDs
+// beyond just sfx2/sfxsids.hrc's own (e.g. SID_TEMPLATE_NAME, from
+// editeng/editids.hrc) -- svx/svxids.hrc already aggregates
+// svl/solar.hrc + sfx2/sfxsids.hrc + editeng/editids.hrc, so reuse that
+// umbrella header exactly like basctl/sdi/basslots.hrc does, rather than
+// re-deriving the same list by hand.
+#include <svx/svxids.hrc>
+#include <editeng/memberids.h>

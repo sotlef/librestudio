@@ -9,27 +9,56 @@
 
 /*
  * =======================================================================
- * LibreStudio Code -- a visual-only prototype for a future Visual-Studio-
- * like IDE built on VCL. Nothing here opens a real file or builds a real
- * project; it exists so the shell has something to grow from. See
- * code/source/mainwindow.hxx for the composition of the shell itself.
+ * LibreStudio Code -- v2: a real sfx2/framework shell. The menu bar,
+ * toolbar and status bar are no longer hand-built (see codeviewshell.cxx
+ * for what code::Shell actually owns: just the three v1 panels) -- they
+ * come from code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml via
+ * framework's own LayoutManager, the same mechanism Writer/Calc/basctl use.
+ *
+ * code::DocShell is constructed directly here and handed to the standard
+ * office FrameLoader with an already-built model -- the same pattern
+ * basctl's own SID_BASICIDE_APPEAR uses (sfx2/source/appl/appserv.cxx) --
+ * rather than going through the generic private:factory/scode ->
+ * UNO-service-name resolution path, which would require code::DocShell to
+ * be registered as a dlopen()able UNO component. That is why "code" has no
+ * .component file and stays a plain executable.
  * =======================================================================
  */
 
 #include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <typeinfo>
 
+#include <execinfo.h>
+
+#include <com/sun/star/awt/XWindow2.hpp>
+#include <com/sun/star/frame/Frame.hpp>
+#include <com/sun/star/frame/XFrame2.hpp>
+#include <com/sun/star/frame/XModel3.hpp>
+#include <com/sun/star/frame/XSynchronousFrameLoader.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
-#include <com/sun/star/ucb/UniversalContentBroker.hpp>
+#include <comphelper/configuration.hxx>
+#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/bootstrap.hxx>
+#include <officecfg/Office/Common.hxx>
+#include <officecfg/Setup.hxx>
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
+#include <sfx2/app.hxx>
+#include <sfx2/viewfrm.hxx>
+#include <toolkit/helper/vclunohelper.hxx>
+#include <unotools/bootstrap.hxx>
+#include <unotools/configmgr.hxx>
+#include <unotools/resmgr.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/vclmain.hxx>
+#include <vcl/wrkwin.hxx>
 
-#include "mainwindow.hxx"
+#include "codedocshell.hxx"
+#include "codeviewshell.hxx"
 
 using namespace com::sun::star;
 
@@ -45,45 +74,219 @@ private:
     int mnExitCode = EXIT_SUCCESS;
 };
 
+// A great many actions here still dispatch into UNO services that were
+// never built (see the "code" porting log in project memory for the running
+// list of components found missing this way -- uui, filterconfig, ...).
+// Those show up as an *uncaught* UNO/std exception escaping VCL's own event
+// dispatch (ImplWindowFrameProc et al. have no top-level catch of their
+// own), which libstdc++'s default terminate handler turns into a bare
+// "terminate called after throwing an instance of 'X'" with no message and
+// no backtrace -- diagnosing each one has meant reproducing it under gdb by
+// hand. This replaces that handler so every future one is self-diagnosing.
+void CodeTerminateHandler()
+{
+    fprintf(stderr, "\n=== LibreStudio Code: unhandled exception, terminating ===\n");
+    if (std::exception_ptr eptr = std::current_exception())
+    {
+        try
+        {
+            std::rethrow_exception(eptr);
+        }
+        catch (const uno::Exception& e)
+        {
+            fprintf(stderr, "type: %s\nmessage: %s\n", typeid(e).name(),
+                OUStringToOString(e.Message, osl_getThreadTextEncoding()).getStr());
+        }
+        catch (const std::exception& e)
+        {
+            fprintf(stderr, "type: %s\nmessage: %s\n", typeid(e).name(), e.what());
+        }
+        catch (...)
+        {
+            fprintf(stderr, "type: <unknown, neither css::uno::Exception nor std::exception>\n");
+        }
+    }
+    else
+    {
+        fprintf(stderr, "(std::terminate called with no active exception)\n");
+    }
+
+    void* aFrames[64];
+    int nFrames = backtrace(aFrames, sizeof(aFrames) / sizeof(aFrames[0]));
+    fprintf(stderr, "--- backtrace (%d frames) ---\n", nFrames);
+    backtrace_symbols_fd(aFrames, nFrames, fileno(stderr));
+    fflush(stderr);
+
+    std::abort();
+}
+
+// %PRODUCTNAME%/%OOOVENDOR%/%ABOUTBOXPRODUCTVERSION(SUFFIX)% et al. in .ui
+// files and resource strings (e.g. cui's aboutdialog.ui) are left as literal
+// text unless something installs a Translate::SetReadStringHook() --
+// vcl/source/window/builder.cxx checks Translate::GetReadStringHook() for
+// every .ui-loaded string, but nothing sets it by default. Real soffice.bin
+// installs one from desktop::Desktop::Main() (desktop/source/appl/app.cxx's
+// static, desktop-module-private ReplaceStringHookProc); "code" doesn't
+// link desktop at all, so this is the same substitution copied verbatim.
+OUString CodeReplaceStringHookProc(const OUString& rStr)
+{
+    const static OUString sBuildId(utl::Bootstrap::getBuildIdData(u"development"_ustr)),
+        sBrandName(utl::ConfigManager::getProductName()),
+        sVersion(utl::ConfigManager::getProductVersion()),
+        sAboutBoxVersion(utl::ConfigManager::getAboutBoxProductVersion()),
+        sAboutBoxVersionSuffix(utl::ConfigManager::getAboutBoxProductVersionSuffix()),
+        sExtension(utl::ConfigManager::getProductExtension());
+
+    OUString sRet(rStr);
+    if (sRet.indexOf("%PRODUCT") != -1 || sRet.indexOf("%ABOUTBOX") != -1)
+    {
+        sRet = sRet.replaceAll("%PRODUCTNAME", sBrandName);
+        sRet = sRet.replaceAll("%PRODUCTVERSION", sVersion);
+        sRet = sRet.replaceAll("%BUILDID", sBuildId);
+        sRet = sRet.replaceAll("%ABOUTBOXPRODUCTVERSIONSUFFIX", sAboutBoxVersionSuffix);
+        sRet = sRet.replaceAll("%ABOUTBOXPRODUCTVERSION", sAboutBoxVersion);
+        sRet = sRet.replaceAll("%PRODUCTEXTENSION", sExtension);
+    }
+
+    if (sRet.indexOf("%OOOVENDOR") != -1)
+    {
+        const static OUString sOOOVendor = utl::ConfigManager::getVendor();
+        sRet = sRet.replaceAll("%OOOVENDOR", sOOOVendor);
+    }
+
+    return sRet;
+}
+
 }
 
 void CodeApplication::Init()
 {
-    // This prop touches no UNO service of its own (no filters, no config
-    // manager, nothing) -- so unlike icontest.cxx, a missing/incomplete
-    // services.rdb/types.rdb (this scoped build never built the rest of the
-    // office that produces them) is not fatal here. Try the same bootstrap
-    // icontest does, but keep going without it if it fails; wire this back
-    // to a hard requirement once a real UNO-based plugin needs it.
-    try
-    {
-        uno::Reference<uno::XComponentContext> xContext =
-            cppu::defaultBootstrap_InitialComponentContext();
-        uno::Reference<lang::XMultiComponentFactory> xFactory = xContext->getServiceManager();
-        uno::Reference<lang::XMultiServiceFactory> xSFactory(xFactory, uno::UNO_QUERY_THROW);
-        comphelper::setProcessServiceFactory(xSFactory);
+    std::set_terminate(&CodeTerminateHandler);
+    Translate::SetReadStringHook(&CodeReplaceStringHookProc);
 
-        // Same as vcl/workben/icontest.cxx: create the UCB for backwards
-        // compatibility with code that still expects a default instance.
-        ::ucb::UniversalContentBroker::create(comphelper::getProcessComponentContext());
-    }
-    catch (const uno::Exception& e)
-    {
-        fprintf(stderr, "warning: UNO bootstrap failed, continuing without it: %s\n",
-            OUStringToOString(e.Message, osl_getThreadTextEncoding()).getStr());
-    }
+    // Unlike v1, this is no longer optional: SfxApplication and the whole
+    // sfx2/framework machinery need a real UNO context to exist at all.
+    uno::Reference<uno::XComponentContext> xContext =
+        cppu::defaultBootstrap_InitialComponentContext();
+    uno::Reference<lang::XMultiComponentFactory> xFactory = xContext->getServiceManager();
+    uno::Reference<lang::XMultiServiceFactory> xSFactory(xFactory, uno::UNO_QUERY_THROW);
+    comphelper::setProcessServiceFactory(xSFactory);
 }
 
 int CodeApplication::Main()
 {
+    VclPtr<WorkWindow> xMainWindow;
+
     try
     {
-        VclPtrInstance<CodeMainWindow> xMainWindow(nullptr);
+        SfxApplication::GetOrCreate();
+
+        // ShowTipOfTheDay: not what actually fixed the icon-theme crash
+        // (that turned out to be postprocess_images never having been
+        // built here, see project memory project_librestudio) -- kept
+        // anyway as a genuine, independent UX choice.
+        //
+        // WhatsNew: this is the real one -- SfxViewFrame's own startup
+        // code (sfx2/source/view/viewfrm.cxx, the wantsWhatsNew branch)
+        // shows a real "Welcome to %PRODUCTNAME%!" wizard (welcomedialog.ui,
+        // 3 tabs: Welcome/User Interface/Appearance) whenever
+        // utl::isProductVersionNew() sees no prior-version marker in the
+        // user profile -- true every run here, since this process has no
+        // persisted user profile at all. Gating on WhatsNew is what that
+        // code itself checks first; false skips the dialog, the "what's
+        // new" alternative dialog, and its infobar fallback in one go.
+        // Both settings are scoped to this process only, not a shared
+        // config file.
+        {
+            auto xBatch = comphelper::ConfigurationChanges::create();
+            officecfg::Office::Common::Misc::ShowTipOfTheDay::set(false, xBatch);
+            officecfg::Setup::Product::WhatsNew::set(false, xBatch);
+            xBatch->commit();
+        }
+
+        // basctl does this same registration inside its own Dll::Dll()
+        // constructor (basctl/source/basicide/iderdll.cxx), reached via
+        // EnsureIde() the first time anything touches the Basic IDE. "code"
+        // has no UNO-component entry point to hang an equivalent lazy
+        // singleton off, so it just does it directly here, once, before the
+        // first (and only) DocShell/Shell of the process is created.
+        code::DocShell::RegisterInterface();
+        code::Shell::RegisterFactory(CODE_INTERFACE_VIEWSH);
+        code::Shell::RegisterInterface();
+
+        // Also basctl's Dll::Dll(): SfxBaseModel::getSupportedServiceNames()
+        // (sfx2/source/doc/sfxbasemodel.cxx) delegates to
+        // GetObjectShell()->GetFactory().GetDocumentServiceName(), and
+        // framework's ModuleManager::identify() (framework/source/services/
+        // modulemanager.cxx) works purely by matching that reported service
+        // name against the officecfg Setup.xcu factory nodes -- without this
+        // call our model reports no service name at all, identify() throws
+        // UnknownModuleException, and that exception crosses enough shared
+        // library boundaries that it stops matching `catch (css::uno::
+        // Exception&)` by the time it reaches vcl's scheduler, landing in
+        // its catch (...) instead, which is an abort(), not a warning.
+        code::DocShell::Factory().SetDocumentServiceName(u"com.sun.star.code.CodeDocument"_ustr);
+
+        xMainWindow = VclPtr<WorkWindow>::Create(nullptr,
+            WB_APP | WB_STDWORK | WB_SIZEABLE | WB_CLOSEABLE | WB_CLIPCHILDREN);
+        xMainWindow->SetText(u"LibreStudio Code"_ustr);
         xMainWindow->SetSizePixel(Size(1200, 800));
+
+        // LayoutManager::implts_doLayout() (framework/source/layoutmanager/
+        // layoutmanager.cxx) bails out immediately whenever m_bParentWindowVisible
+        // is false, and that flag is latched once, synchronously, from
+        // pContainerWindow->IsVisible() inside setDockingAreaAcceptor() -- which
+        // Frame::initListeners() calls as part of initialize() below. The later
+        // windowShown() listener callback (fired when we Show() the window) only
+        // flips the flag back to true; it never re-runs the layout pass. Real
+        // Desktop-mediated loading never hits this because Desktop's own
+        // TaskCreatorService shows the container window as part of creating it.
+        // So the container window must already be visible *before*
+        // xFrame->initialize() below, or the FrameAction_COMPONENT_ATTACHED-
+        // triggered layout during xLoader->load() silently does nothing -- no
+        // menubar/toolbar/statusbar creation, no content-window sizing.
         xMainWindow->Show();
+
+        uno::Reference<awt::XWindow2> xWin(
+            VCLUnoHelper::GetInterface(xMainWindow.get()), uno::UNO_QUERY_THROW);
+
+        uno::Reference<uno::XComponentContext> xContext(comphelper::getProcessComponentContext());
+        uno::Reference<frame::XFrame2> xFrame(frame::Frame::create(xContext));
+        xFrame->initialize(xWin);
+
+        rtl::Reference<SfxObjectShell> xDocShell = new code::DocShell();
+        xDocShell->DoInitNew();
+        xDocShell->SetModified(false);
+
+        uno::Reference<frame::XSynchronousFrameLoader> xLoader(
+            xContext->getServiceManager()->createInstanceWithContext(
+                u"com.sun.star.comp.office.FrameLoader"_ustr, xContext),
+            uno::UNO_QUERY_THROW);
+
+        comphelper::NamedValueCollection aLoadArgs;
+        aLoadArgs.put(u"Model"_ustr, xDocShell->GetModel());
+        aLoadArgs.put(u"URL"_ustr, u"private:factory/scode"_ustr);
+
+        uno::Reference<frame::XFrame> xFrameBase(xFrame, uno::UNO_QUERY_THROW);
+        xLoader->load(aLoadArgs.getPropertyValues(), xFrameBase);
+
+        // AppearWithUpdate(), not plain Appear(): SfxFrame::Appear() only
+        // shows the windows. The actual "private:resource/menubar/menubar"
+        // creation happens inside SfxDispatcher::SetMenu_Impl()
+        // (sfx2/source/control/dispatch.cxx), called from Update_Impl() --
+        // real Desktop-mediated loading reaches that via the window-focus
+        // activation cascade (SfxFrameWindow_Impl::GetFocus() ->
+        // MakeActive_Impl(), sfx2/source/view/frame2.cxx) that our hand-built
+        // Frame/FrameLoader sequence never triggers on its own.
+        // AppearWithUpdate() calls Update_Impl(true) explicitly, bypassing
+        // that cascade instead of trying to fake it.
+        SfxViewFrame* pViewFrame = SfxViewFrame::GetFirst(xDocShell.get(), false);
+        if (pViewFrame)
+            pViewFrame->GetFrame().AppearWithUpdate();
 
         Execute();
 
+        xDocShell->DoClose();
         xMainWindow.disposeAndClear();
     }
     catch (const uno::Exception& e)
