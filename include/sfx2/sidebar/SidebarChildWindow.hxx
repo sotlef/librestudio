@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include <sfx2/chalign.hxx>
 #include <sfx2/childwin.hxx>
 
 
@@ -38,6 +39,20 @@ public:
     SFX_DECL_CHILDWINDOW_WITHID(SidebarChildWindow);
 
     static sal_Int32 GetDefaultWidth(vcl::Window const * pWindow);
+
+    /** Alignment used for a freshly created sidebar that has no persisted
+        (or drag-and-dropped) SfxChildWinInfo state to restore -- i.e. the
+        very first time it is shown in a profile/session that has never
+        docked it anywhere. Defaults to SfxChildAlignment::RIGHT, matching
+        this class' own prior hardcoded behaviour (Writer/Calc/Impress'
+        Properties-style deck); an app whose own sidebar convention differs
+        (e.g. a Visual-Studio-style Solution Explorer on the left) can call
+        this once, before its first sidebar is shown, without needing to
+        hand-construct a persisted SfxChildWinInfo string. Real persisted
+        state (SfxChildWinInfo::GetExtraData_Impl) still takes priority
+        over this default once it exists.
+    */
+    static void SetDefaultAlignment(SfxChildAlignment eAlign);
 };
 
 
