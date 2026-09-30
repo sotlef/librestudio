@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <com/sun/star/ui/XSidebar.hpp>
 #include <sfx2/sidebar/PanelLayout.hxx>
 
 namespace weld { class TreeView; }
@@ -24,11 +25,13 @@ namespace code::sidebar
 class SolutionPanel final : public PanelLayout
 {
 public:
-    explicit SolutionPanel(weld::Widget* pParent);
+    SolutionPanel(weld::Widget* pParent,
+        css::uno::Reference<css::ui::XSidebar> xSidebar);
     virtual ~SolutionPanel() override;
 
 private:
     std::unique_ptr<weld::TreeView> mxTree;
+    css::uno::Reference<css::ui::XSidebar> mxSidebar;
 };
 
 } // namespace code::sidebar

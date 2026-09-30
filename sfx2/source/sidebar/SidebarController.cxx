@@ -34,6 +34,7 @@
 #include <com/sun/star/ui/XSidebarProvider.hpp>
 #include <com/sun/star/frame/XController2.hpp>
 #include <sfx2/sidebar/Context.hxx>
+#include <sfx2/frame.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/viewsh.hxx>
 
@@ -47,6 +48,7 @@
 #include <vcl/weld/Image.hxx>
 #include <vcl/weld/Menu.hxx>
 #include <splitwin.hxx>
+#include <workwin.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <tools/json_writer.hxx>
 #include <tools/link.hxx>
@@ -113,6 +115,16 @@ namespace {
     /** When in doubt, show this deck.
     */
     constexpr OUString gsDefaultDeckId(u"PropertyDeck"_ustr);
+
+    /** Backing storage for SidebarController::RegisterHiddenDeckForApplication():
+        (application identity, deck id) pairs. Process-wide, outlives any
+        one SidebarController/ResourceManager instance on purpose.
+    */
+    std::vector<std::pair<OUString, OUString>>& GetHiddenDecksForApplicationRegistry()
+    {
+        static std::vector<std::pair<OUString, OUString>> aRegistry;
+        return aRegistry;
+    }
 }
 
 SidebarController::SidebarController (
@@ -590,6 +602,19 @@ void SidebarController::UpdateConfigurations()
     maCurrentContext = maRequestedContext;
 
     mpResourceManager->InitDeckContext(GetCurrentContext());
+
+    // Re-apply any decks an app registered as always-hidden for itself
+    // (RegisterHiddenDeckForApplication()) -- InitDeckContext() just reset
+    // every deck's mbIsEnabled purely from Sidebar.xcu's own "any"/named
+    // ContextList entries, so a deck an app wants hidden (e.g. "Code" hiding
+    // the generic PropertyDeck) needs to be re-hidden here, every time --
+    // this ResourceManager may be a brand new instance (see HideDeck's own
+    // comment) that never saw an app-specific HideDeck() call at all.
+    for (const auto& rHidden : GetHiddenDecksForApplicationRegistry())
+    {
+        if (rHidden.first == maCurrentContext.msApplication)
+            HideDeck(rHidden.second, maCurrentContext.msApplication);
+    }
 
     // Find the set of decks that could be displayed for the new context.
     ResourceManager::DeckContextDescriptorContainer aDecks;
@@ -1403,6 +1428,23 @@ void SidebarController::RestrictWidth (sal_Int32 nWidth)
         pSplitWindow->SetItemSizeRange(
             nSetId,
             Range(nRequestedWidth, std::max(nRequestedWidth, getMaximumWidth())));
+
+        // SetItemSizeRange() alone only records a min/max constraint for
+        // *future* interactive (drag) resizing -- confirmed earlier this
+        // session -- it does not itself resize anything. The real, already-
+        // built mechanism that DOES grow a split window to respect an
+        // item's range is SfxWorkWindow::Arrange_Impl() (sfx2/source/appl/
+        // workwin.cxx): for a LEFT/RIGHT-aligned SfxSplitWindow it calls
+        // SplitWindow::CalcLayoutSizePixel(), which *does* read the ranges
+        // just set above. That is also, empirically, exactly what an
+        // interactive drag/tab click ends up triggering via the normal VCL
+        // resize/layout cascade -- ask for the same recalculation
+        // programmatically instead of relying on the user to trigger it.
+        if (mpViewFrame != nullptr)
+        {
+            if (SfxWorkWindow* pWorkWindow = mpViewFrame->GetFrame().GetWorkWindow_Impl())
+                pWorkWindow->ArrangeChildren_Impl();
+        }
     }
 }
 
@@ -1528,6 +1570,27 @@ ResourceManager::PanelContextDescriptorContainer SidebarController::GetMatchingP
 void SidebarController::updateModel(const css::uno::Reference<css::frame::XModel>& xModel)
 {
     mpResourceManager->UpdateModel(xModel);
+}
+
+void SidebarController::HideDeck(std::u16string_view rsDeckId, std::u16string_view rsApplication)
+{
+    std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rsDeckId);
+    if (!xDeckDescriptor)
+        return;
+
+    xDeckDescriptor->mbIsEnabled = false;
+
+    Context aContext;
+    aContext.msApplication = rsApplication;
+    // leave aContext.msContext on default 'any' -- same reasoning as
+    // TabBar::ToggleHideFlag: we're hiding the whole deck for this module,
+    // not one particular sub-context of it
+    xDeckDescriptor->maContextList.ToggleVisibilityForContext(aContext, false);
+}
+
+void SidebarController::RegisterHiddenDeckForApplication(std::u16string_view rsApplication, std::u16string_view rsDeckId)
+{
+    GetHiddenDecksForApplicationRegistry().emplace_back(OUString(rsApplication), OUString(rsDeckId));
 }
 
 void SidebarController::FadeOut()

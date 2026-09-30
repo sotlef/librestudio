@@ -11,6 +11,7 @@
 
 #include "solutionpanel.hxx"
 
+#include <com/sun/star/ui/XSidebar.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/namedvaluecollection.hxx>
 #include <cppuhelper/supportsservice.hxx>
@@ -33,6 +34,8 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
     uno::Reference<frame::XFrame> xFrame(sfx2::sidebar::GetFrame(aArguments));
     uno::Reference<awt::XWindow> xParentWindow(
         aArguments.getOrDefault(u"ParentWindow"_ustr, uno::Reference<awt::XWindow>()));
+    uno::Reference<ui::XSidebar> xSidebar(
+        aArguments.getOrDefault(u"Sidebar"_ustr, uno::Reference<ui::XSidebar>()));
 
     weld::Widget* pParent(nullptr);
     if (auto* pTunnel = dynamic_cast<weld::TransportAsXWindow*>(xParentWindow.get()))
@@ -49,7 +52,7 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
     ui::LayoutSize aLayoutSize(-1, -1, -1);
 
     if (rsResourceURL.endsWith("/SolutionPanel"))
-        xControl = std::make_unique<code::sidebar::SolutionPanel>(pParent);
+        xControl = std::make_unique<code::sidebar::SolutionPanel>(pParent, xSidebar);
 
     if (xControl)
         return sfx2::sidebar::SidebarPanelBase::Create(rsResourceURL, xFrame, std::move(xControl),

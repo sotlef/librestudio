@@ -152,6 +152,40 @@ public:
     ResourceManager::DeckContextDescriptorContainer GetMatchingDecks();
     ResourceManager::PanelContextDescriptorContainer GetMatchingPanels(std::u16string_view rDeckId);
 
+    /** Hide the given deck for one module only, without touching its "any"
+        entry (and thus every other module's visibility of it). Same
+        mechanism as the interactive "hide this deck" tab bar context menu
+        (TabBar::ToggleHideFlag, sfx2/source/sidebar/TabBar.cxx), just
+        callable directly by deck id instead of tab index, and one-way
+        (hide only) instead of a toggle.
+
+        rsApplication must be the caller's own real module identity (e.g.
+        the same string passed to SfxObjectFactory::SetDocumentServiceName),
+        not read from GetCurrentContext()/maCurrentContext: this is meant to
+        be called during startup, before the first context-change broadcast
+        has run, when maCurrentContext is still its default-constructed
+        "any" -- using that instead would key the override against "any"
+        itself, colliding with (and losing to, on ties) the very "any" entry
+        it's supposed to leave alone.
+    */
+    void HideDeck(std::u16string_view rsDeckId, std::u16string_view rsApplication);
+
+    /** Register a deck to be hidden, for the given application, every time
+        a SidebarController is (re)created for it -- a one-shot HideDeck()
+        call at app startup is not enough, because the menu/toolbar-driven
+        ".uno:Sidebar" toggle (SfxWorkWindow::ToggleChildWindow_Impl,
+        sfx2/source/appl/workwin.cxx) unconditionally destroys and recreates
+        the docking window/controller/ResourceManager on every OFF->ON
+        cycle -- unlike SfxWorkWindow::UpdateChildWindows_Impl, it does not
+        consult SfxChildWindow::IsHideNotDelete() at all, so that call does
+        not help here. This instead re-applies automatically inside every
+        UpdateConfigurations() run for a matching application, independent
+        of how many controller instances come and go. Call this once,
+        anywhere (it is a process-wide registry, not tied to any one
+        controller instance).
+    */
+    static void RegisterHiddenDeckForApplication(std::u16string_view rsApplication, std::u16string_view rsDeckId);
+
     void notifyDeckTitle(std::u16string_view targetDeckId);
 
     void updateModel(const css::uno::Reference<css::frame::XModel>& xModel);

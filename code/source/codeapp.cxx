@@ -53,6 +53,7 @@
 #include <sfx2/chalign.hxx>
 #include <sfx2/childwin.hxx>
 #include <sfx2/sidebar/SidebarChildWindow.hxx>
+#include <sfx2/sidebar/SidebarController.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <unotools/bootstrap.hxx>
@@ -317,6 +318,31 @@ int CodeApplication::Main()
         if (pViewFrame)
             pViewFrame->ShowChildWindow(sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
 
+        // PropertyDeck (officecfg's Sidebar.xcu) is scoped "any, any,
+        // visible" -- a generic default meant for real document modules
+        // (Writer/Calc/...), not ours, and it has no content that makes
+        // sense for "Code" (it shows character/paragraph/cell formatting
+        // controls, all bound to the active text/draw selection). Worse,
+        // being a second tab in the same deck, it takes part in the deck's
+        // width negotiation alongside Solution. Hide it for our module only
+        // -- leaving the shared "any" entry other modules still rely on
+        // untouched -- via SidebarController::RegisterHiddenDeckForApplication()
+        // (sfx2/source/sidebar/SidebarController.cxx). A one-shot HideDeck()
+        // call on the current controller is NOT enough: SfxWorkWindow::
+        // ToggleChildWindow_Impl() (sfx2/source/appl/workwin.cxx), the code
+        // behind every ".uno:Sidebar" menu/toolbar toggle, unconditionally
+        // destroys and recreates the docking window/SidebarController/
+        // ResourceManager on every OFF->ON cycle -- unlike
+        // SfxWorkWindow::UpdateChildWindows_Impl, it never consults
+        // SfxChildWindow::IsHideNotDelete() at all, so a hide applied to one
+        // instance is lost the moment the user toggles the checkbox.
+        // RegisterHiddenDeckForApplication() is a static, process-wide
+        // registry consulted fresh by every controller instance's own
+        // UpdateConfigurations(), so it survives any number of recreations;
+        // call it once, anywhere before the sidebar is first shown.
+        sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
+            u"com.sun.star.code.CodeDocument", u"PropertyDeck");
+
         // SidebarController (sfx2/source/sidebar/SidebarController.cxx)
         // registers itself as a css::ui::XContextChangeEventListener on our
         // controller in its own constructor, then just waits: the first,
@@ -338,6 +364,28 @@ int CodeApplication::Main()
                 pCodeShell->BroadcastContextForActivation(true);
         }
 
+        // SolutionPanel already calls XSidebar::requestLayout() itself once
+        // its content is built (code/source/sidebar/solutionpanel.cxx) --
+        // that's the real, already-built "size the sidebar to fit its
+        // content" feature (officecfg's Office.UI.Sidebar.General.
+        // MinimumWidth, on by default; SidebarController::requestLayout()
+        // computes and applies Deck::GetMinimalWidth()), not something to
+        // hand-compute. But that call happens *during* panel construction,
+        // itself nested inside the BroadcastContextForActivation() call
+        // above's own SwitchToDeck()/CreateDeck() sequence, which still has
+        // a later step of its own (SwitchToDeck's mpCurrentDeck->
+        // setPosSizePixel() using the *current* window width) that runs
+        // after and overwrites it. Ask again now that everything has
+        // actually settled.
+        if (pViewFrame)
+        {
+            if (SfxViewShell* pCodeShell = pViewFrame->GetViewShell())
+            {
+                if (auto* pSidebarController
+                    = sfx2::sidebar::SidebarController::GetSidebarControllerForView(pCodeShell))
+                    pSidebarController->requestLayout();
+            }
+        }
 
         Execute();
 

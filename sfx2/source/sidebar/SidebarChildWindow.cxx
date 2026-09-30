@@ -22,6 +22,7 @@
 #include <sfx2/sidebar/TabBar.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/sidebar/SidebarChildWindow.hxx>
+#include <sfx2/sidebar/SidebarController.hxx>
 #include <sfx2/sidebar/SidebarDockingWindow.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <helpids.h>
@@ -89,6 +90,23 @@ SidebarChildWindow::SidebarChildWindow(vcl::Window* pParentWindow, sal_uInt16 nI
     SetHideNotDelete(true);
 
     pDockWin->Show();
+
+    // GetOrCreateSidebarController() above (SidebarDockingWindow's own
+    // constructor, called from the very first line of this constructor)
+    // creates the SidebarController -- and, whenever this module's context
+    // is already active (e.g. this is a recreation from a ".uno:Sidebar"
+    // menu/toolbar toggle -- SfxWorkWindow::ToggleChildWindow_Impl,
+    // sfx2/source/appl/workwin.cxx -- unconditionally destroys and recreates
+    // this whole child window every time, regardless of
+    // SetHideNotDelete()), its first deck-selection/layout pass can run
+    // synchronously right then and there -- before SetOutputSizePixel()
+    // above has even run, let alone Show(). That pass's own width
+    // computations (SidebarController::RestrictWidth()/NotifyResize()) are
+    // therefore made against this window's still-default (zero) size, and
+    // nothing here re-does them once a real size actually exists. Ask once
+    // more, now that it does; NotifyResize() is idempotent and cheap.
+    if (SidebarController* pController = pDockWin->GetOrCreateSidebarController().get())
+        pController->NotifyResize();
 }
 
 sal_Int32 SidebarChildWindow::GetDefaultWidth(vcl::Window const* pWindow)

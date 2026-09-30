@@ -51,9 +51,11 @@ void InsertRow(weld::TreeView& rTree, const weld::TreeIter* pParent, const OUStr
 }
 }
 
-SolutionPanel::SolutionPanel(weld::Widget* pParent)
+SolutionPanel::SolutionPanel(weld::Widget* pParent,
+    css::uno::Reference<css::ui::XSidebar> xSidebar)
     : PanelLayout(pParent, u"SolutionPanel"_ustr, u"code/ui/solutionpanel.ui"_ustr)
     , mxTree(m_xBuilder->weld_tree_view(u"tree"_ustr))
+    , mxSidebar(std::move(xSidebar))
 {
     // Same fake demo project as the old SolutionExplorerPanel
     // (code/source/solutionexplorer.cxx), now a real parent/child tree
@@ -83,6 +85,17 @@ SolutionPanel::SolutionPanel(weld::Widget* pParent)
 
     mxTree->expand_row(*xSolution);
     mxTree->expand_row(*xProject);
+
+    // SidebarController::requestLayout() (sfx2/source/sidebar/
+    // SidebarController.cxx) is what computes and applies
+    // Deck::GetMinimalWidth() -- the real, already-built "size the sidebar
+    // to fit its content" feature (officecfg's Office.UI.Sidebar.General.
+    // MinimumWidth, on by default), not something to hand-compute here --
+    // but it only runs when asked: real panels call this once their
+    // content (and thus their natural width) is known, we have nothing
+    // that changes after construction so once, here, is enough.
+    if (mxSidebar.is())
+        mxSidebar->requestLayout();
 }
 
 SolutionPanel::~SolutionPanel()
