@@ -27,9 +27,18 @@
 #include <helpids.h>
 #include <comphelper/lok.hxx>
 
+namespace {
+SfxChildAlignment gDefaultSidebarAlignment = SfxChildAlignment::RIGHT;
+}
+
 namespace sfx2::sidebar {
 
 SFX_IMPL_DOCKINGWINDOW_WITHID(SidebarChildWindow, SID_SIDEBAR);
+
+void SidebarChildWindow::SetDefaultAlignment(SfxChildAlignment eAlign)
+{
+    gDefaultSidebarAlignment = eAlign;
+}
 
 SidebarChildWindow::SidebarChildWindow(vcl::Window* pParentWindow, sal_uInt16 nId,
                                        SfxBindings& rBindings, SfxChildWinInfo& rInfo)
@@ -39,7 +48,11 @@ SidebarChildWindow::SidebarChildWindow(vcl::Window* pParentWindow, sal_uInt16 nI
         rBindings, *this, pParentWindow,
         WB_STDDOCKWIN | WB_OWNERDRAWDECORATION | WB_CLIPCHILDREN | WB_SIZEABLE | WB_3DLOOK);
     SetWindow(pDockWin);
-    SetAlignment(SfxChildAlignment::RIGHT);
+
+    // Real, persisted (or drag-and-dropped) alignment state -- if any --
+    // still wins over the app-configurable default below.
+    SfxChildAlignment eSavedAlign;
+    SetAlignment(rInfo.GetExtraData_Impl(&eSavedAlign) ? eSavedAlign : gDefaultSidebarAlignment);
 
     pDockWin->SetHelpId(HID_SIDEBAR_WINDOW);
     pDockWin->SetOutputSizePixel(Size(GetDefaultWidth(pDockWin), 450));
