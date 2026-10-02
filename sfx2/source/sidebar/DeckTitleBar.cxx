@@ -74,6 +74,14 @@ DeckTitleBar::DeckTitleBar (const OUString& rsTitle,
     mxLabel->set_label(rsTitle);
     mxGripWidget->SetPointer(PointerStyle::Move);
 
+    // a real icon instead of upstream's "?" text label: native-widget
+    // backends style a text toolbar button as a "text-button" (its own
+    // min-height/padding, so it came out as a different-size rectangle
+    // than the icon-button closer next to it); with an icon both titlebar
+    // buttons get the same square geometry on every backend. ExtendedHelp
+    // ("What's This?") is the closest stock help glyph.
+    mxToolBox->set_item_icon_name(u"btn_help"_ustr, u"cmd/sc_extendedhelp.png"_ustr);
+
     if (maCloserAction)
         SetCloserVisible(true);
 }

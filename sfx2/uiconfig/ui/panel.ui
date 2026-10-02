@@ -85,9 +85,8 @@
                 <property name="homogeneous">False</property>
               </packing>
             </child>
-            <style>
-              <class name="small-button"/>
-            </style>
+            <!-- deliberately no "small-button" style class (unlike upstream),
+                 same reasoning as the deck.ui titlebar toolbar -->
           </object>
           <packing>
             <property name="expand">False</property>

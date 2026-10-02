@@ -92,6 +92,10 @@
           <object class="GtkToolbar" id="toolbar">
             <property name="can-focus">True</property>
             <property name="no-show-all">True</property>
+            <!-- center like every other titlebar child: otherwise the buttons
+                 are stretched to the full titlebar height and come out as
+                 tall rectangles instead of their natural square-ish size -->
+            <property name="valign">center</property>
             <property name="toolbar-style">icons</property>
             <property name="show-arrow">False</property>
             <property name="icon_size">2</property>
@@ -130,9 +134,11 @@
                 <property name="homogeneous">False</property>
               </packing>
             </child>
-            <style>
-              <class name="small-button"/>
-            </style>
+            <!-- deliberately no "small-button" style class (unlike upstream):
+                 under a native-widget backend that class zeroes the buttons'
+                 padding/min-size, leaving content-tight hover targets that
+                 don't match the uniform default-image-size buttons the vcl
+                 ToolBox rendering produces for this toolbar -->
           </object>
           <packing>
             <property name="expand">False</property>
