@@ -120,6 +120,15 @@ int QtInstanceMDI::insert_document(int nPos, const OUString& rLabel, const OUStr
 
         QToolButton* pPinButton = new QToolButton;
         pPinButton->setAutoRaise(true);
+        // a really transparent resting state: document-mode inactive tabs
+        // paint no background of their own, and Breeze fills a resting
+        // auto-raise QToolButton with its own computed color (not a
+        // palette role -- transparent Window/Button brushes change
+        // nothing, checked with a standalone repro), which shows up as a
+        // window-colored square on such tabs; only a stylesheet reliably
+        // suppresses that fill
+        pPinButton->setStyleSheet(
+            QStringLiteral("QToolButton { background: transparent; border: none; }"));
         // Left to its own devices a QToolButton's sizeHint is massive relative
         // to a tab label (34px for a 13px-high font under Breeze), and
         // QTabBar grows every tab to fit the side widget -- size it like the

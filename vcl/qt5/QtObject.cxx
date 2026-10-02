@@ -50,6 +50,26 @@ QtObject::QtObject(QtFrame* pParent, bool bShow, bool bWidgetHost)
         // widgets; WA_NoSystemBackground/WA_OpaquePaintEvent likewise
         // suppress exactly the background erase a widget host needs.
         m_pQWidget = new QtObjectWidget(*this);
+
+        // Fill the host's own background: the hosted subtree's partial
+        // repaints (e.g. a tab bar's hover highlight; document-mode
+        // inactive tabs paint no background of their own) would
+        // otherwise show whatever VCL last left in the toplevel's
+        // backing store underneath this region -- visible as stripes of
+        // stale splitter/window pixels inside the MDI tab bar.
+        m_pQWidget->setAutoFillBackground(true);
+
+        // An own cursor, so the hosted subtree doesn't inherit the
+        // frame-wide one VCL last set: QtFrame::SetPointer() puts VCL's
+        // pointer on the whole toplevel, and once the mouse crosses from
+        // a vcl window straight onto this native subtree, VCL gets no
+        // further MouseMove to reset it -- hovering the MDI tabs showed
+        // the splitter's V-split cursor forever. The hosted Qt widgets
+        // manage their own cursors (QLineEdit's I-beam etc.) on top of
+        // this neutral default, and gtk3 behaves the same way because
+        // the embedded subtree's GdkWindow likewise never follows the
+        // frame cursor.
+        m_pQWidget->setCursor(Qt::ArrowCursor);
     }
     else if (QLibraryInfo::version().majorVersion() > 5)
     {
