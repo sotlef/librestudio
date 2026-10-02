@@ -42,6 +42,11 @@
         <prop oor:name="HiddenInViewer" oor:type="xs:boolean">
           <value>true</value>
         </prop>
+        <!-- the tree is scrollable: content width = nice initial width,
+             but the user may drag the sidebar narrower -->
+        <prop oor:name="FreeResize" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
       </node>
 
       <!-- "Code"'s bottom-only Output dock (code::sidebar::OutputController,
@@ -81,6 +86,10 @@
           <value>10</value>
         </prop>
         <prop oor:name="HiddenInViewer" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <!-- the log view is scrollable, same reasoning as SolutionDeck -->
+        <prop oor:name="FreeResize" oor:type="xs:boolean">
           <value>true</value>
         </prop>
       </node>

@@ -300,6 +300,11 @@ private:
 
     void UpdateDeckOpenState();
     void RestrictWidth (sal_Int32 nWidth);
+    /** Whether the current deck's content width must be enforced as the
+        sidebar's minimum width (General/MinimumWidth on, and the deck is
+        not marked FreeResize in Sidebar.xcu).
+    */
+    bool IsCurrentDeckWidthEnforced() const;
     SfxSplitWindow* GetSplitWindow();
     void ProcessNewWidth (const sal_Int32 nNewWidth);
     void UpdateCloseIndicator (const bool bIsIndicatorVisible);

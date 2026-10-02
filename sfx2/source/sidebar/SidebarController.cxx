@@ -428,9 +428,21 @@ void SAL_CALL SidebarController::requestLayout()
     if (mpCurrentDeck && !mpCurrentDeck->isDisposed())
     {
         mpCurrentDeck->RequestLayout();
-        nMinimalWidth = mbMinimumSidebarWidth ? mpCurrentDeck->GetMinimalWidth() : 0;
+        nMinimalWidth = IsCurrentDeckWidthEnforced() ? mpCurrentDeck->GetMinimalWidth() : 0;
     }
     RestrictWidth(nMinimalWidth);
+}
+
+bool SidebarController::IsCurrentDeckWidthEnforced() const
+{
+    if (!mbMinimumSidebarWidth)
+        return false;
+    // a FreeResize deck's content width is only the initial open width
+    // (OpenThenToggleDeck()), never an enforced minimum: the user may drag
+    // the sidebar narrower than the content (Sidebar.xcs Deck/FreeResize)
+    std::shared_ptr<DeckDescriptor> xDeckDescriptor(
+        mpResourceManager->GetDeckDescriptor(msCurrentDeckId));
+    return !xDeckDescriptor || !xDeckDescriptor->mbFreeResize;
 }
 
 void SidebarController::BroadcastPropertyChange()
@@ -521,7 +533,7 @@ void SidebarController::NotifyResize()
         DeckTitleBar* pTitleBar = mpCurrentDeck->GetTitleBar();
         if (pTitleBar && pTitleBar->GetVisible())
             pTitleBar->SetCloserVisible(CanModifyChildWindowWidth());
-        nMinimalWidth = mbMinimumSidebarWidth ? mpCurrentDeck->GetMinimalWidth() : 0;
+        nMinimalWidth = IsCurrentDeckWidthEnforced() ? mpCurrentDeck->GetMinimalWidth() : 0;
     }
 
     RestrictWidth(nMinimalWidth);

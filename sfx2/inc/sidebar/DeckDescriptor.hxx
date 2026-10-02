@@ -40,6 +40,10 @@ public:
     sal_Int32 mnOrderIndex;
     bool mbExperimental;
     bool mbHiddenInViewerMode = false;
+    // content width is only the initial open width, not an enforced
+    // minimum: the user may drag the sidebar narrower than the content
+    // (for decks whose content is scrollable)
+    bool mbFreeResize = false;
 
     OUString msNodeName; // some impress deck nodes names are different from their Id
 

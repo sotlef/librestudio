@@ -288,6 +288,7 @@ void ResourceManager::ReadDeckList()
         rDeckDescriptor.mnOrderIndex = getInt32(aDeckNode, u"OrderIndex"_ustr);
         rDeckDescriptor.mbExperimental = getBool(aDeckNode, u"IsExperimental"_ustr);
         rDeckDescriptor.mbHiddenInViewerMode = getBool(aDeckNode, u"HiddenInViewer"_ustr);
+        rDeckDescriptor.mbFreeResize = getBool(aDeckNode, u"FreeResize"_ustr);
 
         rDeckDescriptor.msNodeName = aDeckName;
 

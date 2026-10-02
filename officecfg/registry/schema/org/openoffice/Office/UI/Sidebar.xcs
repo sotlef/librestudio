@@ -146,6 +146,15 @@
         </info>
         <value>false</value>
       </prop>
+      <prop oor:name="FreeResize" oor:type="xs:boolean">
+        <info>
+          <desc>When true, the deck's content width is only used as the initial sidebar width when
+          the deck is opened, not enforced as the minimum while resizing: the user may make the
+          sidebar narrower than the content (sensible for decks whose content is scrollable).
+          When false (the default), General/MinimumWidth behavior applies unchanged.</desc>
+        </info>
+        <value>false</value>
+      </prop>
     </group>
     <group oor:name="Panel">
       <info>
