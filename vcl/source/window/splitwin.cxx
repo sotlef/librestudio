@@ -153,16 +153,27 @@ static void ImplCalcBorder( WindowAlign eAlign,
         rBottom = 0;
         break;
     case WindowAlign::Left:
+        // no border on the resize-strip side, like every other alignment
+        // (Top: rBottom=0, Bottom: rTop=0, Right: rLeft=0) -- a left dock's
+        // strip is on its RIGHT, so the border-free side is rRight, not the
+        // rLeft the Right-alignment values would suggest; keeping Right's
+        // rRight=2 here made a left dock's total gap towards the document
+        // 2px wider than a bottom/top dock's
         rLeft   = 0;
         rTop    = 2;
-        rRight  = 2;
+        rRight  = 0;
         rBottom = 2;
         break;
     case WindowAlign::Bottom:
+        // no border on the outer (window-bottom) edge either, like a left
+        // dock's outer edge (rLeft=0 above): ImplDrawBorder() paints
+        // nothing there, so the 2px only showed as a flat run under the
+        // separator groove -- with the dock dragged shut that read as the
+        // groove floating above the window edge instead of sitting on it
         rLeft   = 2;
         rTop    = 0;
         rRight  = 2;
-        rBottom = 2;
+        rBottom = 0;
         break;
     default:
         rLeft   = 0;
@@ -207,23 +218,21 @@ void SplitWindow::ImplDrawBorderLine(vcl::RenderContext& rRenderContext)
     {
     case WindowAlign::Left:
     {
-        // draw the separator pair flush against the docked content's right
-        // edge, not SPLITWIN_SPLITSIZEEXLN from the window edge: the few
-        // splitter-bar pixels that used to sit left of the line carry the
-        // same flat background as the dock content and read as extra
-        // right-hand padding inside it (e.g. the sidebar tab buttons
-        // looking off-center in their strip); right of the line the whole
-        // bar is one uniform gutter towards the neighbouring window
-        tools::Long nSplitSize = mpMainSet->mnSplitSize - 2;
-        if (mbFadeOut)
-            nSplitSize += SPLITWIN_SPLITSIZEEXLN;
-        const tools::Long nContentEnd = nDX - mnRightBorder - nSplitSize;
+        // groove flush against the docked content's edge (the exact mirror
+        // of the Bottom case below): shadow / 1px gap / light, shadow kept
+        // on the top-left side per the global light direction, then a flat
+        // gutter of the strip's remaining pixels towards the document.
+        // Upstream drew the pair SPLITWIN_SPLITSIZEEXLN from the window
+        // edge instead, splitting the flat run across both sides of the
+        // line -- the few pixels before it carry the same background as
+        // the dock content and read as padding inside it.
+        const tools::Long nStrip = mpMainSet->mnSplitSize - 2 + SPLITWIN_SPLITSIZEEXLN;
 
         rRenderContext.SetLineColor( rStyleSettings.GetShadowColor() );
-        rRenderContext.DrawLine( Point( nContentEnd, 1 ), Point( nContentEnd, nDY-2 ) );
+        rRenderContext.DrawLine( Point( nDX-nStrip, 0 ), Point( nDX-nStrip, nDY-1 ) );
 
         rRenderContext.SetLineColor( rStyleSettings.GetLightColor() );
-        rRenderContext.DrawLine( Point( nContentEnd+1, 1 ), Point( nContentEnd+1, nDY-3 ) );
+        rRenderContext.DrawLine( Point( nDX-nStrip+2, 0 ), Point( nDX-nStrip+2, nDY-1 ) );
         break;
     }
     case WindowAlign::Right:
@@ -236,12 +245,22 @@ void SplitWindow::ImplDrawBorderLine(vcl::RenderContext& rRenderContext)
         rRenderContext.DrawLine( Point( 0, nDY-SPLITWIN_SPLITSIZEEXLN ), Point( nDX-1, nDY-SPLITWIN_SPLITSIZEEXLN ) );
         break;
     case WindowAlign::Bottom:
-        rRenderContext.SetLineColor( rStyleSettings.GetShadowColor() );
-        rRenderContext.DrawLine( Point( 0, 5 ), Point( nDX-1, 5 ) );
+    {
+        // groove flush against the docked content's top edge, not centered
+        // within the strip (upstream drew it at 5/SPLITWIN_SPLITSIZEEXLN,
+        // leaving a stray flat pixel between the light line and the
+        // content): light / 1px gap / shadow, shadow line directly
+        // adjacent to the content below, the strip's remaining flat pixels
+        // all on the document side above.
+        const tools::Long nStrip = mpMainSet->mnSplitSize - 2 + SPLITWIN_SPLITSIZEEXLN;
 
         rRenderContext.SetLineColor( rStyleSettings.GetLightColor() );
-        rRenderContext.DrawLine( Point( 0, SPLITWIN_SPLITSIZEEXLN ), Point( nDX-1, SPLITWIN_SPLITSIZEEXLN ) );
+        rRenderContext.DrawLine( Point( 0, nStrip-3 ), Point( nDX-1, nStrip-3 ) );
+
+        rRenderContext.SetLineColor( rStyleSettings.GetShadowColor() );
+        rRenderContext.DrawLine( Point( 0, nStrip-1 ), Point( nDX-1, nStrip-1 ) );
         break;
+    }
     }
 }
 
@@ -2750,12 +2769,14 @@ tools::Long SplitWindow::GetSplitBarSize() const
     switch ( meAlign )
     {
     case WindowAlign::Left:
-        // ImplDrawBorderLine() paints the line pair flush against the item
-        // area (at nDX - mnRightBorder - n .. +1), so everything right of
-        // the pair -- the whole resize strip but those two line pixels --
-        // may be covered
+        // ImplDrawBorderLine() paints the groove flush against the item
+        // area (shadow at nDX-strip, gap, light at nDX-strip+2), leaving a
+        // flat run of strip-3 px between the light line and the window
+        // edge: only that run may be covered -- the annexing window's own
+        // horizontal groove then starts right next to this window's
+        // vertical one, forming a clean T junction
         if ( mbFadeOut )
-            n += mnRightBorder - 2;
+            n -= 3;
         else
             n += mnRightBorder;
         break;
