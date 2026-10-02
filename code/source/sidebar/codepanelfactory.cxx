@@ -50,7 +50,14 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
             u"CodePanelFactory::createUIElement called without Frame"_ustr, nullptr);
 
     std::unique_ptr<PanelLayout> xControl;
-    ui::LayoutSize aLayoutSize(-1, -1, -1);
+    // (0, -1, -1) = "minimum 0, take all available height, expandable" --
+    // sw's NavigatorPanel precedent (SwPanelFactory.cxx) for a greedy panel
+    // whose content scrolls itself. With all three -1 (most format panels)
+    // SidebarPanelBase::getHeightForWidth falls back to the widget's
+    // preferred size as a FIXED height: for a tree/log that is the full
+    // content height, so once it outgrows the deck, the deck adds its own
+    // vertical scrollbar and narrows the panel by a scrollbar's width.
+    ui::LayoutSize aLayoutSize(0, -1, -1);
 
     if (rsResourceURL.endsWith("/SolutionPanel"))
         xControl = std::make_unique<code::sidebar::SolutionPanel>(pParent, xSidebar);
