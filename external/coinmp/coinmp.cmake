@@ -79,7 +79,17 @@ function(librestudio_vendor_coinmp)
             "${_coinmp_build}/configure" "COIN_SKIP_PROJECTS=Data/Sample"
                 --enable-silent-rules --disable-bzlib --without-glpk
                 --enable-dependency-linking F77=unavailable
-                "LDFLAGS=-Wl,-z,origin -Wl,-rpath,$ORIGIN"
+                # \\$$ORIGIN, not $ORIGIN: this value survives two more
+                # expansion layers after CMake -- it lands verbatim in every
+                # sub-project Makefile's LDFLAGS, where GNU Make expands it
+                # (a bare $ORIGIN loses its "$O" there: the linker got
+                # "-rpath,RIGIN", seen on this port's first real CoinMP
+                # build), and the make-expanded result then passes through
+                # the recipe's shell. Makefile needs \$$ORIGIN -> make
+                # yields \$ORIGIN -> shell yields the literal $ORIGIN ld
+                # wants. Upstream's ExternalProject_coinmp.mk spells the
+                # same thing \$$$$ORIGIN for its extra gbuild-make layer.
+                "LDFLAGS=-Wl,-z,origin -Wl,-rpath,\\$$ORIGIN"
         BUILD_COMMAND "${MAKE_EXECUTABLE}"
         INSTALL_COMMAND ""
         BUILD_BYPRODUCTS
