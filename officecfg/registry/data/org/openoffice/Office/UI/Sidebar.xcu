@@ -23,7 +23,7 @@
 
       <node oor:name="SolutionDeck" oor:op="replace">
         <prop oor:name="Title" oor:type="xs:string">
-          <value xml:lang="en-US">Solution</value>
+          <value xml:lang="en-US">Solution Explorer</value>
         </prop>
         <prop oor:name="Id" oor:type="xs:string">
           <value>SolutionDeck</value>
