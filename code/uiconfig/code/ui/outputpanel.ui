@@ -9,14 +9,192 @@
 <interface domain="code">
   <requires lib="gtk+" version="3.24"/>
   <object class="GtkTextBuffer" id="buffer"/>
-  <!-- n-columns=1 n-rows=1 -->
+  <!-- n-columns=1 n-rows=2 -->
   <object class="GtkGrid" id="OutputPanel">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
     <property name="hexpand">True</property>
     <property name="vexpand">True</property>
-    <property name="row-homogeneous">True</property>
-    <property name="column-homogeneous">True</property>
+    <child>
+      <!-- Visual-Studio-style Output toolbar strip: "Show output from:"
+           source selector, then icon buttons separated into groups -->
+      <object class="GtkBox" id="toolbarstrip">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="spacing">6</property>
+        <property name="margin-start">3</property>
+        <property name="margin-end">3</property>
+        <child>
+          <object class="GtkLabel" id="sourcelabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="outputpanel|sourcelabel">Show output from:</property>
+            <property name="mnemonic-widget">source</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="source">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <!-- explicit, not just omitted: gtk3 weld replaces a
+                 non-editable combobox with its own widget tree whose inner
+                 cell view is hexpand=true, and that propagates up and makes
+                 this box cell swallow all free width (pushing the toolbar to
+                 the right edge); an explicit hexpand stops the propagation
+                 and gets copied onto the replacement (see replaceWidget in
+                 gtkinst.cxx) -->
+            <property name="hexpand">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToolbar" id="toolbar">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="toolbar-style">icons</property>
+            <property name="show-arrow">False</property>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator0">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="find">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|find|tooltip_text">Find Message in Code</property>
+                <property name="icon-name">cmd/sc_searchdialog.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator1">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="prev">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|prev|tooltip_text">Go to Previous Message</property>
+                <property name="icon-name">cmd/sc_upsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="next">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|next|tooltip_text">Go to Next Message</property>
+                <property name="icon-name">cmd/sc_downsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator2">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="clear">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|clear|tooltip_text">Clear All</property>
+                <property name="icon-name">cmd/sc_delete.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator3">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleToolButton" id="wordwrap">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|wordwrap|tooltip_text">Toggle Word Wrap</property>
+                <property name="icon-name">cmd/sc_wraptext.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator4">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleToolButton" id="timestamp">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="outputpanel|timestamp|tooltip_text">Show Timestamp</property>
+                <property name="icon-name">cmd/sc_timefield.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">0</property>
+      </packing>
+    </child>
     <child>
       <object class="GtkScrolledWindow">
         <property name="visible">True</property>
@@ -45,7 +223,7 @@
       </object>
       <packing>
         <property name="left-attach">0</property>
-        <property name="top-attach">0</property>
+        <property name="top-attach">1</property>
       </packing>
     </child>
   </object>
