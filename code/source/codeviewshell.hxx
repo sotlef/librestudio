@@ -40,7 +40,6 @@ private:
     VclPtr<EditorMDIPanel> mxEditorArea;
 
     void InitPanels();
-    void LayoutPanels(const Point& rPos, const Size& rSize);
 
 public:
     SFX_DECL_INTERFACE(CODE_INTERFACE_VIEWSH)
@@ -52,8 +51,6 @@ private:
 public:
     Shell(SfxViewFrame& rFrame, SfxViewShell* pOldSh);
     virtual ~Shell() override;
-
-    virtual void OuterResizePixel(const Point& rOfs, const Size& rSize) override;
 
     // Real dispatch targets for the .sdi's SID_NEWDOC/SID_SAVEDOC -- still
     // no-ops (same "decorative for now" spirit as v1's menu), but reached

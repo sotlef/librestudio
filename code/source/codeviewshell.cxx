@@ -73,6 +73,9 @@ Shell::Shell(SfxViewFrame& rFrame, SfxViewShell* /*pOldSh*/)
 
 Shell::~Shell()
 {
+    // Unregister before destroying it -- same order as SwView's dtor, so
+    // the base class never holds a dangling window pointer.
+    SetWindow(nullptr);
     mxEditorArea.disposeAndClear();
 }
 
@@ -80,39 +83,39 @@ void Shell::InitPanels()
 {
     vcl::Window& rContentWindow = GetViewFrame().GetWindow();
 
-    // SfxViewFrame::DoAdjustPosSizePixel() -- the real caller of
-    // OuterResizePixel() below (sfx2/source/view/viewfrm.cxx) -- only calls
-    // it when SfxViewShell::GetWindow() is non-null:
-    //   if (pSh && pSh->GetWindow() && !m_nAdjustPosPixelLock) ...
-    // basctl::Shell never calls SetWindow() either, but basctl only ever
-    // runs hosted inside a full soffice.bin session, where some other path
-    // apparently keeps it laid out; our own standalone Frame never resizes
-    // this view at all without this call, so the panels stay at whatever
-    // (possibly 0x0) size they had when first created.
-    SetWindow(&rContentWindow);
-
+    // The editor is a child of the frame's own content window, and -- like
+    // every real app's edit window (sw's SwEditWin, basctl's window) -- it,
+    // NOT the content window itself, is what gets registered via
+    // SetWindow(). Two reasons, both load-bearing:
+    //
+    // - SfxViewFrame::DoAdjustPosSizePixel() (sfx2/source/view/viewfrm.cxx)
+    //   only runs the OuterResizePixel()/SetBorderPixel() layout cascade at
+    //   all when SfxViewShell::GetWindow() is non-null; our standalone
+    //   Frame never resizes this view without it.
+    //
+    // - SfxViewFrame::SetBorderPixelImpl() positions GetWindow() at the
+    //   edit area -- (0,0, content-window size) for a shell with no inner
+    //   tools -- as a CHILD inside the content window. Registering the
+    //   content window itself here made that call reposition the content
+    //   window to (0,0) within the sfx2 WorkWindow, clobbering the
+    //   tool-space border offset SfxFrame::SetToolSpaceBorderPixel_Impl()
+    //   had just applied: any LEFT/TOP-docked strip (e.g. the collapsed
+    //   sidebar's 8px fade-in splitter) ended up covered by the editor.
+    //   RIGHT/BOTTOM docks survived only because (0,0) happens to be the
+    //   correct position when the border is on those sides.
+    //
+    // With the editor registered instead, SetBorderPixelImpl() lays the
+    // editor out inside the content window on every resize, so there is no
+    // hand-written OuterResizePixel()/LayoutPanels() layout here anymore.
+    // (The Output dock and Solution deck live outside this content area
+    // entirely, as real sfx2 docks -- see code/source/sidebar/.)
     mxEditorArea = VclPtr<EditorMDIPanel>::Create(&rContentWindow);
     mxEditorArea->Show();
+    SetWindow(mxEditorArea.get());
 
-    LayoutPanels(Point(0, 0), rContentWindow.GetOutputSizePixel());
-}
-
-void Shell::OuterResizePixel(const Point& rOfs, const Size& rSize)
-{
-    SfxViewShell::OuterResizePixel(rOfs, rSize);
-    LayoutPanels(rOfs, rSize);
-}
-
-void Shell::LayoutPanels(const Point& rOfs, const Size& rSize)
-{
-    if (!mxEditorArea)
-        return;
-
-    // The Output dock (code/source/sidebar/) now lives outside this content
-    // area entirely, the same way the real Sidebar's Solution deck does --
-    // the editor simply reclaims the quarter-height strip the old, hand-docked
-    // OutputPanel used to occupy here.
-    mxEditorArea->SetPosSizePixel(rOfs, rSize);
+    // First paint happens before any resize reaches the cascade above;
+    // start out filling the content window like SetBorderPixelImpl() will.
+    mxEditorArea->SetPosSizePixel(Point(0, 0), rContentWindow.GetOutputSizePixel());
 }
 
 void Shell::Execute(SfxRequest& rReq)
