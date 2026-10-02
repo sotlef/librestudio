@@ -5492,6 +5492,29 @@ void SalInstanceTextView::set_monospace(bool bMonospace)
     set_font(aFont);
 }
 
+void SalInstanceTextView::set_word_wrap(bool bWrap)
+{
+    // VclMultiLineEdit has no direct wrap switch: wrapping follows the style
+    // bits -- without WB_HSCROLL, ImpVclMEdit::Resize() clamps the text
+    // engine's max text width to the window width (= wrap), with it the
+    // engine keeps an unlimited width and the horizontal scrollbar scrolls.
+    // SetStyle() triggers StateChanged(Style) -> InitFromStyle(), which
+    // updates the scrollbar visibility.
+    WinBits nStyle = m_xTextView->GetStyle();
+    if (bWrap)
+        nStyle &= ~WB_HSCROLL;
+    else
+        nStyle |= WB_HSCROLL;
+    m_xTextView->SetStyle(nStyle);
+    if (!bWrap)
+    {
+        // Resize() only narrows the max text width while the scrollbar is
+        // hidden; widen it back explicitly (0 = unlimited)
+        m_xTextView->SetMaxTextWidth(0);
+    }
+    m_xTextView->Resize();
+}
+
 void SalInstanceTextView::set_font(const vcl::Font& rFont)
 {
     m_xTextView->SetFont(rFont);

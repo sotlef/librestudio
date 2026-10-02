@@ -1440,6 +1440,8 @@ public:
 
     virtual void set_monospace(bool bMonospace) override;
 
+    virtual void set_word_wrap(bool bWrap) override;
+
     virtual void set_font(const vcl::Font& rFont) override;
 
     virtual bool can_move_cursor_with_up() const override;

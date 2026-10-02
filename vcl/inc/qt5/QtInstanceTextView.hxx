@@ -35,6 +35,7 @@ public:
     virtual void set_editable(bool bEditable) override;
     virtual bool get_editable() const override;
     virtual void set_monospace(bool bMonospace) override;
+    virtual void set_word_wrap(bool bWrap) override;
     virtual void set_max_length(int nChars) override;
 
     virtual bool can_move_cursor_with_up() const override;

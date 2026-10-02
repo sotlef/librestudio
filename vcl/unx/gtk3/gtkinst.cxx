@@ -17906,6 +17906,11 @@ public:
         m_nMaxTextLength = nChars;
     }
 
+    virtual void set_word_wrap(bool bWrap) override
+    {
+        gtk_text_view_set_wrap_mode(m_pTextView, bWrap ? GTK_WRAP_WORD_CHAR : GTK_WRAP_NONE);
+    }
+
     virtual void set_monospace(bool bMonospace) override
     {
         gtk_text_view_set_monospace(m_pTextView, bMonospace);

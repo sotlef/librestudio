@@ -25,6 +25,10 @@ protected:
 
 public:
     virtual void set_monospace(bool bMonospace) = 0;
+    // Toggle wrapping of overlong lines at the view's width (word wrap) vs.
+    // horizontal scrolling; .ui files only fix the initial state (wrap-mode /
+    // the scrolled window's hscrollbar-policy), this switches it at runtime
+    virtual void set_word_wrap(bool bWrap) = 0;
     // The maximum length of the entry. Use 0 for no maximum
     virtual void set_max_length(int nChars) = 0;
     int get_height_rows(int nRows) const;

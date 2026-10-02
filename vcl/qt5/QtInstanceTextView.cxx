@@ -129,6 +129,16 @@ void QtInstanceTextView::set_monospace(bool bMonospace)
     });
 }
 
+void QtInstanceTextView::set_word_wrap(bool bWrap)
+{
+    SolarMutexGuard g;
+
+    GetQtInstance().RunInMainThread([&] {
+        m_pTextEdit->setLineWrapMode(bWrap ? QPlainTextEdit::WidgetWidth
+                                           : QPlainTextEdit::NoWrap);
+    });
+}
+
 void QtInstanceTextView::set_max_length(int) { assert(false && "Not implemented yet"); }
 
 bool QtInstanceTextView::can_move_cursor_with_up() const
