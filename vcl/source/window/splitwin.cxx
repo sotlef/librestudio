@@ -206,12 +206,26 @@ void SplitWindow::ImplDrawBorderLine(vcl::RenderContext& rRenderContext)
     switch (meAlign)
     {
     case WindowAlign::Left:
+    {
+        // draw the separator pair flush against the docked content's right
+        // edge, not SPLITWIN_SPLITSIZEEXLN from the window edge: the few
+        // splitter-bar pixels that used to sit left of the line carry the
+        // same flat background as the dock content and read as extra
+        // right-hand padding inside it (e.g. the sidebar tab buttons
+        // looking off-center in their strip); right of the line the whole
+        // bar is one uniform gutter towards the neighbouring window
+        tools::Long nSplitSize = mpMainSet->mnSplitSize - 2;
+        if (mbFadeOut)
+            nSplitSize += SPLITWIN_SPLITSIZEEXLN;
+        const tools::Long nContentEnd = nDX - mnRightBorder - nSplitSize;
+
         rRenderContext.SetLineColor( rStyleSettings.GetShadowColor() );
-        rRenderContext.DrawLine( Point( nDX-SPLITWIN_SPLITSIZEEXLN-1, 1 ), Point( nDX-SPLITWIN_SPLITSIZEEXLN-1, nDY-2 ) );
+        rRenderContext.DrawLine( Point( nContentEnd, 1 ), Point( nContentEnd, nDY-2 ) );
 
         rRenderContext.SetLineColor( rStyleSettings.GetLightColor() );
-        rRenderContext.DrawLine( Point( nDX-SPLITWIN_SPLITSIZEEXLN, 1 ), Point( nDX-SPLITWIN_SPLITSIZEEXLN, nDY-3 ) );
+        rRenderContext.DrawLine( Point( nContentEnd+1, 1 ), Point( nContentEnd+1, nDY-3 ) );
         break;
+    }
     case WindowAlign::Right:
         break;
     case WindowAlign::Top:
@@ -2736,9 +2750,12 @@ tools::Long SplitWindow::GetSplitBarSize() const
     switch ( meAlign )
     {
     case WindowAlign::Left:
-        // line pair at nDX-SPLITWIN_SPLITSIZEEXLN-1 .. -SPLITWIN_SPLITSIZEEXLN
+        // ImplDrawBorderLine() paints the line pair flush against the item
+        // area (at nDX - mnRightBorder - n .. +1), so everything right of
+        // the pair -- the whole resize strip but those two line pixels --
+        // may be covered
         if ( mbFadeOut )
-            n = SPLITWIN_SPLITSIZEEXLN-1;
+            n += mnRightBorder - 2;
         else
             n += mnRightBorder;
         break;
