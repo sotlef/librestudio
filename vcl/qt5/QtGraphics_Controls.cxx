@@ -667,8 +667,33 @@ bool QtGraphics_Controls::drawNativeControl(ControlType type, ControlPart part,
     }
     else if (type == ControlType::Frame)
     {
-        drawFrame(QStyle::PE_Frame, m_image.get(), rBackgroundColor,
-                  vclStateValue2StateFlag(nControlState, value));
+        if (pixelMetric(QStyle::PM_DefaultFrameWidth) > 0)
+            drawFrame(QStyle::PE_Frame, m_image.get(), rBackgroundColor,
+                      vclStateValue2StateFlag(nControlState, value));
+        else
+        {
+            // PM_DefaultFrameWidth 0 means the style draws no view frames at
+            // all (Breeze 6's flat look: even a real QFrame/QTreeView gets
+            // frameWidth() 0 there) -- but vcl asks for ControlType::Frame
+            // only where the widget really wants a visible border (e.g. a
+            // .ui's GtkScrolledWindow shadow-type). Left to drawFrame, the
+            // zero width would make its border clip region empty and paint
+            // nothing. Draw the same substitute QtBuilder uses for framed
+            // scrolled windows on such styles (the GtkScrolledWindow branch
+            // in QtBuilder.cxx): a square 1px box in the theme's usual
+            // outline gray, a 3:1 window:text mix.
+            QPalette aPal = QApplication::palette();
+            const QColor aWindow = aPal.color(QPalette::Window);
+            const QColor aText = aPal.color(QPalette::WindowText);
+            const QColor aOutline((3 * aWindow.red() + aText.red()) / 4,
+                                  (3 * aWindow.green() + aText.green()) / 4,
+                                  (3 * aWindow.blue() + aText.blue()) / 4);
+            QPainter aPainter(m_image.get());
+            const QRect aRect = downscale(m_image->rect());
+            aPainter.setPen(aOutline);
+            aPainter.setBrush(Qt::NoBrush);
+            aPainter.drawRect(aRect.adjusted(0, 0, -1, -1));
+        }
     }
     else if (type == ControlType::WindowBackground)
     {
@@ -974,7 +999,12 @@ bool QtGraphics_Controls::getNativeControlRegion(
         {
             if (part == ControlPart::Border)
             {
-                int nFrameWidth = upscale(pixelMetric(QStyle::PM_DefaultFrameWidth), Round::Ceil);
+                // floor at 1: a style that draws no view frames at all
+                // (PM_DefaultFrameWidth 0, e.g. Breeze 6) still needs room
+                // reserved for the substitute 1px box drawNativeControl's
+                // ControlType::Frame branch paints on such styles
+                int nFrameWidth = upscale(
+                    std::max(pixelMetric(QStyle::PM_DefaultFrameWidth), 1), Round::Ceil);
                 contentRect.adjust(nFrameWidth, nFrameWidth, -nFrameWidth, -nFrameWidth);
                 retVal = true;
             }
