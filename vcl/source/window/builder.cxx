@@ -1481,6 +1481,20 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OUString 
 
                 VclPtr<SvHeaderTabListBox> xHeaderBox = VclPtr<SvHeaderTabListBox>::Create(xContainer, nWinStyle, xHeader);
                 xContainer->set_expand(true);
+                // in GTK a child's hexpand/vexpand propagates up through its
+                // ancestors, so a .ui only flags the GtkTreeView itself; vcl
+                // has no such propagation and it is this interposed container,
+                // not the tree, that sits in the outer grid/box -- without
+                // mirroring the flags here a vexpand tree in a fixed-height
+                // host (e.g. a sidebar panel) stays at its preferred height
+                // instead of filling it (dialogs masked this by sizing
+                // themselves to their preferred height to begin with)
+                auto aExpandFind = rMap.find(u"hexpand"_ustr);
+                if (aExpandFind != rMap.end())
+                    xContainer->set_hexpand(toBool(aExpandFind->second));
+                aExpandFind = rMap.find(u"vexpand"_ustr);
+                if (aExpandFind != rMap.end())
+                    xContainer->set_vexpand(toBool(aExpandFind->second));
                 xHeader->Show();
                 xContainer->Show();
                 xBox = xHeaderBox;
