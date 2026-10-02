@@ -94,6 +94,37 @@
         </prop>
       </node>
 
+      <!-- second deck of the same bottom-only Output dock (a second tab in
+           its TabBar, Visual-Studio-style Error List next to Output); the
+           "any, any, visible" ContextList caveat on OutputDeck above
+           applies here identically -->
+      <node oor:name="ErrorListDeck" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Error List</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>ErrorListDeck</value>
+        </prop>
+        <prop oor:name="IconURL" oor:type="xs:string">
+          <value>private:graphicrepository/cmd/lc_showerrors.png</value>
+        </prop>
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>20</value>
+        </prop>
+        <prop oor:name="HiddenInViewer" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <!-- the error table is scrollable, same reasoning as OutputDeck -->
+        <prop oor:name="FreeResize" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+      </node>
+
       <node oor:name="PropertyDeck" oor:op="replace">
         <prop oor:name="Title" oor:type="xs:string">
           <value xml:lang="en-US">Properties</value>
@@ -550,6 +581,37 @@
         </prop>
         <prop oor:name="ImplementationURL" oor:type="xs:string">
           <value>private:resource/toolpanel/CodePanelFactory/OutputPanel</value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>100</value>
+        </prop>
+        <prop oor:name="WantsAWT" oor:type="xs:boolean">
+          <value>false</value>
+        </prop>
+      </node>
+
+      <node oor:name="ErrorListPanel" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Error List</value>
+        </prop>
+        <prop oor:name="TitleBarIsOptional" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>ErrorListPanel</value>
+        </prop>
+        <prop oor:name="DeckId" oor:type="xs:string">
+          <value>ErrorListDeck</value>
+        </prop>
+        <!-- "any, any, visible", not scoped to "Code"; see OutputDeck's
+             own comment above. -->
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="ImplementationURL" oor:type="xs:string">
+          <value>private:resource/toolpanel/CodePanelFactory/ErrorListPanel</value>
         </prop>
         <prop oor:name="OrderIndex" oor:type="xs:int">
           <value>100</value>

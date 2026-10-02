@@ -386,6 +386,11 @@ int CodeApplication::Main()
         sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
             u"com.sun.star.code.CodeDocument", u"OutputDeck");
 
+        // ... and for ErrorListDeck, the Output dock's second tab (same
+        // bottom-dock-only deck, same "any, any, visible" ContextList).
+        sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
+            u"com.sun.star.code.CodeDocument", u"ErrorListDeck");
+
         // SidebarController (sfx2/source/sidebar/SidebarController.cxx)
         // registers itself as a css::ui::XContextChangeEventListener on our
         // controller in its own constructor, then just waits: the first,

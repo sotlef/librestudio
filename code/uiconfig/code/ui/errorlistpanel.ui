@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkListStore" id="liststore">
+    <columns>
+      <!-- column-name blank1: VS's leftmost, purpose-unknown column -->
+      <column type="gchararray"/>
+      <!-- column-name severity (icon) -->
+      <column type="GdkPixbuf"/>
+      <!-- column-name code -->
+      <column type="gchararray"/>
+      <!-- column-name description -->
+      <column type="gchararray"/>
+      <!-- column-name project -->
+      <column type="gchararray"/>
+      <!-- column-name file -->
+      <column type="gchararray"/>
+      <!-- column-name line -->
+      <column type="gchararray"/>
+      <!-- column-name details -->
+      <column type="gchararray"/>
+      <!-- column-name blank2: VS's two rightmost, purpose-unknown columns -->
+      <column type="gchararray"/>
+      <!-- column-name blank3 -->
+      <column type="gchararray"/>
+      <!-- column-name id -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <!-- n-columns=1 n-rows=2 -->
+  <object class="GtkGrid" id="ErrorListPanel">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+    <child>
+      <!-- Visual-Studio-style Error List toolbar strip: scope selector,
+           severity filter toggles with live counts, clear-filters, provider
+           selector (all packed left); search box packed to the far right.
+           NB: no double-hyphen inside these comments, the strict XML parser
+           of the generic vcl builder (the qt6 path) rejects it -->
+      <object class="GtkBox" id="toolbarstrip">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="spacing">6</property>
+        <property name="margin-start">3</property>
+        <property name="margin-end">3</property>
+        <child>
+          <object class="GtkComboBoxText" id="scope">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <!-- explicit for the same reason as outputpanel.ui's "source":
+                 gtk3 weld's combobox replacement is inner-hexpand and would
+                 otherwise swallow all free strip width -->
+            <property name="hexpand">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkSeparator" id="separator0">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="errors">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="active">True</property>
+            <property name="image">errorsimage</property>
+            <property name="always-show-image">True</property>
+            <property name="label">0 Errors</property>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkSeparator" id="separator1">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="warnings">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="active">True</property>
+            <property name="image">warningsimage</property>
+            <property name="always-show-image">True</property>
+            <property name="label">0 Warnings</property>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkSeparator" id="separator2">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToggleButton" id="messages">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="active">True</property>
+            <property name="image">messagesimage</property>
+            <property name="always-show-image">True</property>
+            <property name="label">0 Messages</property>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkSeparator" id="separator3">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="clearfilters">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">False</property>
+            <property name="tooltip-text" translatable="yes" context="errorlistpanel|clearfilters|tooltip_text">Clear All Filters</property>
+            <property name="image">clearfiltersimage</property>
+            <property name="always-show-image">True</property>
+            <style>
+              <class name="flat"/>
+            </style>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkSeparator" id="separator4">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="provider">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <!-- same gtk3 propagation note as "scope" above -->
+            <property name="hexpand">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <!-- magnifier + search box as ONE end-packed child: with two
+               separate pack-type=end children their visual order diverges
+               between native GtkBuilder (packs end children from the edge
+               inwards) and the generic vcl builder (which only reverses
+               end children by their explicit "position" packing property,
+               keeping document order otherwise) -->
+          <object class="GtkBox" id="searchgroup">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="spacing">6</property>
+            <child>
+              <!-- VS draws the magnifier INSIDE the search entry, right
+                   before the drop-down arrow; weld::ComboBox has no
+                   entry-icon API (gtk3 weld rebuilds the entry from its
+                   own template, see vcl/ui/combobox.ui), so for now the
+                   magnifier sits directly in front of the search box
+                   instead; see TODO.md -->
+              <object class="GtkImage" id="searchimage">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="valign">center</property>
+                <property name="icon-name">cmd/sc_recsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBoxText" id="search">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="has-entry">True</property>
+                <!-- same gtk3 propagation note as "scope" above -->
+                <property name="hexpand">False</property>
+                <!-- an empty editable combobox has no content to size
+                     itself by, and the generic vcl builder's ComboBox
+                     autosizes to content (collapsing to a near-square),
+                     so give the search box VS's fixed-ish width -->
+                <property name="width-request">180</property>
+                <child internal-child="entry">
+                  <object class="GtkEntry">
+                    <property name="truncate-multiline">True</property>
+                    <property name="can-focus">True</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">0</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="visible">True</property>
+        <property name="can-focus">True</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+        <property name="vscrollbar-policy">automatic</property>
+        <property name="shadow-type">in</property>
+        <!-- see solutionpanel.ui: GTK scrolled windows don't request their
+             child's natural size without these -->
+        <property name="propagate-natural-width">True</property>
+        <property name="propagate-natural-height">True</property>
+        <child>
+          <object class="GtkTreeView" id="errorlist">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="model">liststore</property>
+            <property name="search-column">3</property>
+            <child internal-child="selection">
+              <object class="GtkTreeSelection" id="errorlist-selection"/>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnblank1">
+                <property name="title"></property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererblank1"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <!-- VS shows "Severity" only as this column header's tooltip;
+                   weld has no column-header tooltip API, so the header stays
+                   blank for now; see TODO.md -->
+              <object class="GtkTreeViewColumn" id="columnseverity">
+                <property name="title"></property>
+                <child>
+                  <object class="GtkCellRendererPixbuf" id="rendererseverity"/>
+                  <attributes>
+                    <attribute name="pixbuf">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columncode">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|code">Code</property>
+                <child>
+                  <object class="GtkCellRendererText" id="renderercode"/>
+                  <attributes>
+                    <attribute name="text">2</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columndescription">
+                <property name="resizable">True</property>
+                <property name="expand">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|description">Description</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererdescription"/>
+                  <attributes>
+                    <attribute name="text">3</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnproject">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|project">Project</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererproject"/>
+                  <attributes>
+                    <attribute name="text">4</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnfile">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|file">File</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererfile"/>
+                  <attributes>
+                    <attribute name="text">5</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnline">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|line">Line</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererline"/>
+                  <attributes>
+                    <attribute name="text">6</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columndetails">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="errorlistpanel|details">Details</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererdetails"/>
+                  <attributes>
+                    <attribute name="text">7</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnblank2">
+                <property name="title"></property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererblank2"/>
+                  <attributes>
+                    <attribute name="text">8</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnblank3">
+                <property name="title"></property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererblank3"/>
+                  <attributes>
+                    <attribute name="text">9</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">1</property>
+      </packing>
+    </child>
+  </object>
+  <object class="GtkImage" id="errorsimage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">cmd/sc_errorcellstyles.png</property>
+  </object>
+  <object class="GtkImage" id="warningsimage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">cmd/sc_warningcellstyles.png</property>
+  </object>
+  <object class="GtkImage" id="messagesimage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">svtools/res/info_small.png</property>
+  </object>
+  <object class="GtkImage" id="clearfiltersimage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">cmd/sc_removefiltersort.png</property>
+  </object>
+</interface>

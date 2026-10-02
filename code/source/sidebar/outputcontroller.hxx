@@ -26,8 +26,9 @@ namespace sfx2::sidebar { class TabBar; }
 namespace code::sidebar
 {
 
-/** Owns the one deck ("OutputDeck", Sidebar.xcu) the "Code" app's
-    bottom-only Output dock ever shows, built through
+/** Owns the decks of the "Code" app's bottom-only Output dock
+    ("OutputDeck" and "ErrorListDeck", Sidebar.xcu; one visible at a
+    time, switched via the TabBar), built through
     sfx2::sidebar::DeckPanelBuilder -- the same Deck/Panel construction
     machinery the real, left/right Sidebar is itself built on (see
     sfx2::sidebar::SidebarController) -- just hosted by our own
@@ -38,8 +39,8 @@ namespace code::sidebar
     match the current context" the way the real Sidebar does, because
     that would also match every other deck whose ContextList says "any"
     (SolutionDeck, PropertyDeck, ...) and add them as extra tabs here --
-    this dock only ever shows the one deck it was built for, so its own
-    TabBar is fed a single, hand-built DeckContextDescriptor instead.
+    this dock only ever shows the decks it was built for, so its own
+    TabBar is fed a hand-built DeckContextDescriptor list instead.
 */
 class OutputController final : public sfx2::sidebar::IDeckHost
 {
@@ -60,6 +61,11 @@ public:
     void NotifyResize();
 
 private:
+    /** Show rsDeckId (creating it through DeckPanelBuilder on first use,
+        which caches it in maResourceManager's DeckDescriptor), hiding the
+        previously shown deck. */
+    void SwitchToDeck(std::u16string_view rsDeckId);
+
     DockingWindow* mpParentWindow;
     SfxBindings& mrBindings;
     css::uno::Reference<css::frame::XFrame> mxFrame;

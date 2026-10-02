@@ -31,40 +31,64 @@ OutputController::OutputController(DockingWindow* pParentWindow, SfxBindings& rB
 {
     maResourceManager.InitDeckContext(maContext);
 
-    mxDeck = sfx2::sidebar::DeckPanelBuilder::CreateDeck(
-        maResourceManager, u"OutputDeck", mpParentWindow, [] {});
-
-    sfx2::sidebar::DeckPanelBuilder::CreatePanels(
-        maResourceManager, u"OutputDeck", maContext, mxDeck, mxFrame,
-        mxFrame.is() ? mxFrame->getController() : uno::Reference<frame::XController>(),
-        /*bIsDocumentReadOnly=*/false, [this] { return maContext; },
-        uno::Reference<ui::XSidebar>(), &mrBindings);
-
-    // No deck-switching menu wiring: this dock only ever shows one deck, so
-    // the "..." popup menu's dock/undock/customization entries (see
-    // sfx2::sidebar::SidebarController::ConnectMenuActivateHandlers) have
-    // nothing to do yet -- future work if a second deck/tab is ever added.
+    // No "..." popup menu wiring: the menu's dock/undock/customization
+    // entries (see sfx2::sidebar::SidebarController::
+    // ConnectMenuActivateHandlers) still have nothing to do here; deck
+    // SWITCHING, though, is real now -- the first functor feeds tab
+    // clicks into SwitchToDeck().
     mxTabBar = VclPtr<sfx2::sidebar::TabBar>::Create(
-        mpParentWindow, mxFrame, [](const OUString&) {}, [](weld::Menu&, weld::Menu&) {}, *this);
+        mpParentWindow, mxFrame,
+        [this](const OUString& rsDeckId) { SwitchToDeck(rsDeckId); },
+        [](weld::Menu&, weld::Menu&) {}, *this);
 
     sfx2::sidebar::ResourceManager::DeckContextDescriptorContainer aDecks;
     sfx2::sidebar::ResourceManager::DeckContextDescriptor aOutputDeck;
     aOutputDeck.msId = u"OutputDeck"_ustr;
     aOutputDeck.mbIsEnabled = true;
     aDecks.push_back(aOutputDeck);
+    sfx2::sidebar::ResourceManager::DeckContextDescriptor aErrorListDeck;
+    aErrorListDeck.msId = u"ErrorListDeck"_ustr;
+    aErrorListDeck.mbIsEnabled = true;
+    aDecks.push_back(aErrorListDeck);
     mxTabBar->SetDecks(aDecks);
-    mxTabBar->HighlightDeck(u"OutputDeck");
 
-    mxDeck->Show();
+    SwitchToDeck(u"OutputDeck");
     mxTabBar->Show();
-
-    NotifyResize();
 }
 
 OutputController::~OutputController()
 {
     mxTabBar.disposeAndClear();
-    mxDeck.disposeAndClear();
+    // Decks (the current one included) are cached in maResourceManager's
+    // DeckDescriptors by DeckPanelBuilder::CreateDeck; dispose them all
+    // there, not just the visible one.
+    mxDeck = nullptr;
+    maResourceManager.disposeDecks();
+}
+
+void OutputController::SwitchToDeck(std::u16string_view rsDeckId)
+{
+    if (mxDeck && mxDeck->GetId() == rsDeckId)
+        return;
+
+    if (mxDeck)
+        mxDeck->Hide();
+
+    mxDeck = sfx2::sidebar::DeckPanelBuilder::CreateDeck(
+        maResourceManager, rsDeckId, mpParentWindow, [] {});
+    if (!mxDeck)
+        return;
+
+    sfx2::sidebar::DeckPanelBuilder::CreatePanels(
+        maResourceManager, rsDeckId, maContext, mxDeck, mxFrame,
+        mxFrame.is() ? mxFrame->getController() : uno::Reference<frame::XController>(),
+        /*bIsDocumentReadOnly=*/false, [this] { return maContext; },
+        uno::Reference<ui::XSidebar>(), &mrBindings);
+
+    mxTabBar->HighlightDeck(rsDeckId);
+    mxDeck->Show();
+
+    NotifyResize();
 }
 
 bool OutputController::IsDocked() const

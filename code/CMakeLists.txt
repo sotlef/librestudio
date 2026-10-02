@@ -113,6 +113,7 @@ install(TARGETS code RUNTIME DESTINATION program)
 # uui/filterconfig -- "code" (the executable) does not link it.
 add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/errorlistpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputlogpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx")
 
@@ -199,6 +200,7 @@ endforeach ()
 set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editordocumentcontent.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editormdi.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/errorlistpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/outputpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
 )
