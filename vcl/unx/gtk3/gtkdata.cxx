@@ -457,6 +457,11 @@ static GtkStyleProvider* CreateStyleProvider()
       // tdf#161662 the bullet list is too tall with the Arabic text in it, remove its vert padding
       "combobox.novertpad *.combo, box#combobox.novertpad *.combo { "
       "padding-top: 0; padding-bottom: 0; }"
+      // the sidebar tabbar's one-button deck-switcher toolbars: some themes
+      // declare asymmetric horizontal toolbar padding (Breeze: left 4px,
+      // right 3px), which shows as the button sitting 1px off-center in the
+      // narrow vertical strip; force the smaller of that pair on both sides
+      "toolbar.symmetric-hpadding { padding-left: 3px; padding-right: 3px; }"
 #if GTK_CHECK_VERSION(4, 0, 0)
       // we basically assumed during dialog design that the frame's were invisible, because
       // they used to be in the default theme during gtk3

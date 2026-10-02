@@ -92,7 +92,14 @@
                   <object class="GtkBox">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
-                    <property name="border-width">2</property>
+                    <!-- deliberately no border-width (unlike upstream): the
+                         vcl builder ignores it, but a native-widget backend
+                         honors it, making TabBar::GetDefaultWidth() (measured
+                         over this box) 4px wider than the per-deck tab
+                         toolbars inserted WITHOUT this wrapper, so the whole
+                         tab column then sits left-aligned in the strip with
+                         the slack on one side; the menubutton keeps its air
+                         via its own margins instead -->
                     <property name="orientation">vertical</property>
                     <child>
                       <object class="GtkMenuButton" id="menubutton">
@@ -102,6 +109,7 @@
                         <property name="tooltip-text" translatable="yes" context="tabbar|menubutton|tool_tip">Sidebar Settings</property>
                         <property name="halign">center</property>
                         <property name="valign">center</property>
+                        <property name="margin-top">2</property>
                         <property name="margin-bottom">3</property>
                         <property name="image">image6</property>
                         <property name="relief">none</property>
@@ -134,6 +142,9 @@
                             <property name="homogeneous">True</property>
                           </packing>
                         </child>
+                        <style>
+                          <class name="symmetric-hpadding"/>
+                        </style>
                       </object>
                       <packing>
                         <property name="expand">False</property>

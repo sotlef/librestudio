@@ -20,5 +20,8 @@
         <property name="homogeneous">True</property>
       </packing>
     </child>
+    <style>
+      <class name="symmetric-hpadding"/>
+    </style>
   </object>
 </interface>
