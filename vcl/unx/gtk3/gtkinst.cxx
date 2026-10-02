@@ -59,6 +59,7 @@
 #include <vcl/weld/MenuButton.hxx>
 #include <vcl/weld/MessageDialog.hxx>
 #include <vcl/weld/MetricSpinButton.hxx>
+#include <vcl/weld/MDI.hxx>
 #include <vcl/weld/Notebook.hxx>
 #include <vcl/weld/Paned.hxx>
 #include <vcl/weld/Popover.hxx>
@@ -9602,6 +9603,286 @@ IMPL_LINK_NOARG(GtkInstanceNotebook, SizeAllocateHdl, void*, void)
     signal_notebook_size_allocate();
 }
 #endif
+
+// weld::MDI's gtk3 implementation. Deliberately much simpler than
+// GtkInstanceNotebook above: no overflow-splitting (that exists for
+// dialog tab pages that can legitimately have a dozen+ tabs; an IDE's
+// open-document strip is expected to stay small, and GtkNotebook already
+// scrolls on its own if it doesn't), and documents are identified by an
+// opaque int id this class assigns itself (g_object_set_data on the page
+// widget), not by a buildable-id string the caller has to invent.
+class GtkInstanceMDI : public GtkInstanceWidget, public virtual weld::MDI
+{
+private:
+    GtkNotebook* m_pNotebook;
+    gulong m_nSwitchPageSignalId;
+    int m_nNextDocId;
+
+    std::map<int, GtkWidget*> m_aDocumentPages;
+    std::map<int, GtkWidget*> m_aDocumentTabBoxes;
+    std::map<int, GtkLabel*> m_aDocumentLabels;
+    std::map<int, GtkButton*> m_aDocumentPinButtons;
+    std::map<int, bool> m_aDocumentDirty;
+    std::map<int, bool> m_aDocumentPinned;
+    std::map<int, OUString> m_aDocumentLabelText;
+    mutable std::map<int, std::unique_ptr<GtkInstanceContainer>> m_aDocumentPageWrappers;
+
+    static constexpr const char* DOC_ID_KEY = "code-mdi-doc-id";
+
+    static int get_doc_id(GtkWidget* pPage)
+    {
+        return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(pPage), DOC_ID_KEY));
+    }
+
+    static void signalSwitchPage(GtkNotebook*, GtkWidget* pPage, guint, gpointer widget)
+    {
+        GtkInstanceMDI* pThis = static_cast<GtkInstanceMDI*>(widget);
+        SolarMutexGuard aGuard;
+        pThis->signal_current_document_changed(get_doc_id(pPage));
+    }
+
+    static void signalCloseClicked(GtkButton* pButton, gpointer widget)
+    {
+        GtkInstanceMDI* pThis = static_cast<GtkInstanceMDI*>(widget);
+        SolarMutexGuard aGuard;
+        int nDocId = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(pButton), DOC_ID_KEY));
+        pThis->signal_document_close_request(nDocId);
+    }
+
+    static void signalPinClicked(GtkButton* pButton, gpointer widget)
+    {
+        GtkInstanceMDI* pThis = static_cast<GtkInstanceMDI*>(widget);
+        SolarMutexGuard aGuard;
+        int nDocId = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(pButton), DOC_ID_KEY));
+        pThis->set_document_pinned(nDocId, !pThis->get_document_pinned(nDocId));
+        pThis->signal_document_pin_toggled(nDocId);
+    }
+
+    void UpdateTabLabel(int nDocId)
+    {
+        GtkLabel* pLabel = m_aDocumentLabels[nDocId];
+        if (!pLabel)
+            return;
+        OUString sText = m_aDocumentLabelText[nDocId];
+        if (m_aDocumentDirty[nDocId])
+            sText = u"● "_ustr + sText;
+        gtk_label_set_text(pLabel, OUStringToOString(sText, RTL_TEXTENCODING_UTF8).getStr());
+    }
+
+    // Deliberately NOT LO's own image_new_from_icon_name()/
+    // button_set_from_icon_name() helpers: those resolve names through
+    // vcl's bundled ImageTree (a literal file lookup in this tree's own
+    // icon-theme packages, e.g. icon-themes/colibre/...), which has no
+    // "window-close-symbolic"/"starred-symbolic"-style freedesktop names
+    // at all (confirmed: no such files anywhere under icon-themes/) --
+    // using them here left both the close and pin buttons' icons blank.
+    // A plain .ui-declared GtkToolButton's "icon-name" *property* (as this
+    // session's earlier, rejected EditorTabBar prototype used) instead
+    // goes through GTK's own native icon-theme resolution (the system
+    // theme, e.g. Adwaita/Breeze, which does have these names) via
+    // GtkBuilder's built-in property handling -- this helper calls that
+    // same native GTK API directly, bypassing ImageTree entirely.
+    static void SetSystemThemeIcon(GtkButton* pButton, const char* pIconName)
+    {
+#if !GTK_CHECK_VERSION(4, 0, 0)
+        gtk_button_set_image(pButton, gtk_image_new_from_icon_name(pIconName, GTK_ICON_SIZE_BUTTON));
+#else
+        gtk_button_set_child(pButton, gtk_image_new_from_icon_name(pIconName));
+#endif
+    }
+
+    void UpdatePinIcon(int nDocId)
+    {
+        GtkButton* pPinButton = m_aDocumentPinButtons[nDocId];
+        if (!pPinButton)
+            return;
+        // "starred"/"non-starred" (GNOME's own bookmark-toggle icon pair,
+        // used e.g. by Nautilus) rather than a dedicated pin icon: no
+        // standard "pin" name is as universally shipped as this pair.
+        const bool bPinned = m_aDocumentPinned[nDocId];
+        SetSystemThemeIcon(pPinButton, bPinned ? "starred-symbolic" : "non-starred-symbolic");
+    }
+
+public:
+    GtkInstanceMDI(GtkNotebook* pNotebook, GtkInstanceBuilder* pBuilder, bool bTakeOwnership)
+        : GtkInstanceWidget(GTK_WIDGET(pNotebook), pBuilder, bTakeOwnership)
+        , m_pNotebook(pNotebook)
+        , m_nSwitchPageSignalId(g_signal_connect(pNotebook, "switch-page", G_CALLBACK(signalSwitchPage), this))
+        , m_nNextDocId(1)
+    {
+        gtk_notebook_set_scrollable(m_pNotebook, true);
+    }
+
+    virtual int insert_document(int nPos, const OUString& rLabel, const OUString* pIconName) override
+    {
+        disable_notify_events();
+
+        const int nDocId = m_nNextDocId++;
+
+        GtkWidget* pTabBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+
+        if (pIconName)
+        {
+            GtkWidget* pImage = image_new_from_icon_name(*pIconName);
+#if !GTK_CHECK_VERSION(4, 0, 0)
+            gtk_box_pack_start(GTK_BOX(pTabBox), pImage, false, true, 0);
+#else
+            gtk_box_insert_child_after(GTK_BOX(pTabBox), pImage, nullptr);
+#endif
+        }
+
+        GtkWidget* pLabel = gtk_label_new(OUStringToOString(rLabel, RTL_TEXTENCODING_UTF8).getStr());
+        GtkWidget* pPinButton = gtk_button_new();
+        GtkWidget* pCloseButton = gtk_button_new();
+#if !GTK_CHECK_VERSION(4, 0, 0)
+        gtk_button_set_relief(GTK_BUTTON(pPinButton), GTK_RELIEF_NONE);
+        gtk_button_set_relief(GTK_BUTTON(pCloseButton), GTK_RELIEF_NONE);
+#endif
+        SetSystemThemeIcon(GTK_BUTTON(pCloseButton), "window-close-symbolic");
+
+#if !GTK_CHECK_VERSION(4, 0, 0)
+        gtk_box_pack_start(GTK_BOX(pTabBox), pLabel, true, true, 0);
+        gtk_box_pack_start(GTK_BOX(pTabBox), pPinButton, false, true, 0);
+        gtk_box_pack_start(GTK_BOX(pTabBox), pCloseButton, false, true, 0);
+        gtk_widget_show_all(pTabBox);
+#else
+        gtk_box_insert_child_after(GTK_BOX(pTabBox), pLabel, nullptr);
+        gtk_box_insert_child_after(GTK_BOX(pTabBox), pPinButton, pLabel);
+        gtk_box_insert_child_after(GTK_BOX(pTabBox), pCloseButton, pPinButton);
+#endif
+
+        GtkWidget* pPage = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+
+        g_object_set_data(G_OBJECT(pPage), DOC_ID_KEY, GINT_TO_POINTER(nDocId));
+        g_object_set_data(G_OBJECT(pPinButton), DOC_ID_KEY, GINT_TO_POINTER(nDocId));
+        g_object_set_data(G_OBJECT(pCloseButton), DOC_ID_KEY, GINT_TO_POINTER(nDocId));
+
+        g_signal_connect(pPinButton, "clicked", G_CALLBACK(signalPinClicked), this);
+        g_signal_connect(pCloseButton, "clicked", G_CALLBACK(signalCloseClicked), this);
+
+        gtk_notebook_insert_page(m_pNotebook, pPage, pTabBox, nPos);
+        gtk_widget_set_visible(pPage, true);
+        gtk_widget_set_visible(pTabBox, true);
+
+        m_aDocumentPages[nDocId] = pPage;
+        m_aDocumentTabBoxes[nDocId] = pTabBox;
+        m_aDocumentLabels[nDocId] = GTK_LABEL(pLabel);
+        m_aDocumentPinButtons[nDocId] = GTK_BUTTON(pPinButton);
+        m_aDocumentDirty[nDocId] = false;
+        m_aDocumentPinned[nDocId] = false;
+        m_aDocumentLabelText[nDocId] = rLabel;
+
+        UpdatePinIcon(nDocId);
+
+        enable_notify_events();
+
+        return nDocId;
+    }
+
+    virtual void close_document(int nDocId) override
+    {
+        auto it = m_aDocumentPages.find(nDocId);
+        if (it == m_aDocumentPages.end())
+            return;
+
+        disable_notify_events();
+        int nPageNum = gtk_notebook_page_num(m_pNotebook, it->second);
+        if (nPageNum != -1)
+            gtk_notebook_remove_page(m_pNotebook, nPageNum);
+        enable_notify_events();
+
+        m_aDocumentPages.erase(nDocId);
+        m_aDocumentTabBoxes.erase(nDocId);
+        m_aDocumentLabels.erase(nDocId);
+        m_aDocumentPinButtons.erase(nDocId);
+        m_aDocumentDirty.erase(nDocId);
+        m_aDocumentPinned.erase(nDocId);
+        m_aDocumentLabelText.erase(nDocId);
+        m_aDocumentPageWrappers.erase(nDocId);
+    }
+
+    virtual void set_document_label(int nDocId, const OUString& rLabel) override
+    {
+        m_aDocumentLabelText[nDocId] = rLabel;
+        UpdateTabLabel(nDocId);
+    }
+
+    virtual void set_document_dirty(int nDocId, bool bDirty) override
+    {
+        m_aDocumentDirty[nDocId] = bDirty;
+        UpdateTabLabel(nDocId);
+    }
+
+    virtual bool get_document_dirty(int nDocId) const override
+    {
+        auto it = m_aDocumentDirty.find(nDocId);
+        return it != m_aDocumentDirty.end() && it->second;
+    }
+
+    virtual void set_document_pinned(int nDocId, bool bPinned) override
+    {
+        m_aDocumentPinned[nDocId] = bPinned;
+        UpdatePinIcon(nDocId);
+    }
+
+    virtual bool get_document_pinned(int nDocId) const override
+    {
+        auto it = m_aDocumentPinned.find(nDocId);
+        return it != m_aDocumentPinned.end() && it->second;
+    }
+
+    virtual int get_current_document() const override
+    {
+        int nPage = gtk_notebook_get_current_page(m_pNotebook);
+        if (nPage == -1)
+            return 0;
+        return get_doc_id(gtk_notebook_get_nth_page(m_pNotebook, nPage));
+    }
+
+    virtual void set_current_document(int nDocId) override
+    {
+        auto it = m_aDocumentPages.find(nDocId);
+        if (it == m_aDocumentPages.end())
+            return;
+        int nPageNum = gtk_notebook_page_num(m_pNotebook, it->second);
+        if (nPageNum != -1)
+            gtk_notebook_set_current_page(m_pNotebook, nPageNum);
+    }
+
+    virtual int get_document_count() const override
+    {
+        return gtk_notebook_get_n_pages(m_pNotebook);
+    }
+
+    virtual int get_document_id(int nIndex) const override
+    {
+        GtkWidget* pPage = gtk_notebook_get_nth_page(m_pNotebook, nIndex);
+        return pPage ? get_doc_id(pPage) : 0;
+    }
+
+    virtual weld::Container* get_document_page(int nDocId) const override
+    {
+        auto it = m_aDocumentPages.find(nDocId);
+        if (it == m_aDocumentPages.end())
+            return nullptr;
+
+        auto& rxWrapper = m_aDocumentPageWrappers[nDocId];
+        if (!rxWrapper)
+        {
+#if !GTK_CHECK_VERSION(4, 0, 0)
+            rxWrapper.reset(new GtkInstanceContainer(GTK_CONTAINER(it->second), m_pBuilder, false));
+#else
+            rxWrapper.reset(new GtkInstanceContainer(it->second, m_pBuilder, false));
+#endif
+        }
+        return rxWrapper.get();
+    }
+
+    virtual ~GtkInstanceMDI() override
+    {
+        g_signal_handler_disconnect(m_pNotebook, m_nSwitchPageSignalId);
+    }
+};
 
 
 OUString vcl_font_to_css(const vcl::Font& rFont)
@@ -23832,6 +24113,15 @@ public:
             return nullptr;
         auto_add_parentless_widgets_to_container(GTK_WIDGET(pNotebook));
         return std::make_unique<GtkInstanceNotebook>(pNotebook, this, false);
+    }
+
+    virtual std::unique_ptr<weld::MDI> weld_mdi(const OUString &id) override
+    {
+        GtkNotebook* pNotebook = GTK_NOTEBOOK(gtk_builder_get_object(m_pBuilder, OUStringToOString(id, RTL_TEXTENCODING_UTF8).getStr()));
+        if (!pNotebook)
+            return nullptr;
+        auto_add_parentless_widgets_to_container(GTK_WIDGET(pNotebook));
+        return std::make_unique<GtkInstanceMDI>(pNotebook, this, false);
     }
 
     virtual std::unique_ptr<weld::Button> weld_button(const OUString &id) override

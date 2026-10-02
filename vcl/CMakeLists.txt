@@ -1512,7 +1512,7 @@ if (ENABLE_QT6)
         QtInstanceEntryTreeView QtInstanceExpander
         QtInstanceFormattedSpinButton QtInstanceFrame QtInstanceGrid
         QtInstanceIconView QtInstanceImage QtInstanceItemView QtInstanceLabel
-        QtInstanceLevelBar QtInstanceLinkButton QtInstanceMenu
+        QtInstanceLevelBar QtInstanceLinkButton QtInstanceMDI QtInstanceMenu
         QtInstanceMenuButton QtInstanceMessageDialog QtInstanceNotebook
         QtInstancePaned QtInstancePopover QtInstanceProgressBar
         QtInstanceRadioButton QtInstanceScale QtInstanceScrollbar
@@ -1614,6 +1614,7 @@ if (ENABLE_QT6)
         vcl/qt6/QtInstanceLabel
         vcl/qt6/QtInstanceLevelBar
         vcl/qt6/QtInstanceLinkButton
+        vcl/qt6/QtInstanceMDI
         vcl/qt6/QtInstanceMenu
         vcl/qt6/QtInstanceMenuButton
         vcl/qt6/QtInstanceMessageDialog

@@ -49,6 +49,7 @@ class LinkButton;
 class Menu;
 class MenuButton;
 class MessageDialog;
+class MDI;
 class MetricSpinButton;
 class Notebook;
 class Paned;
@@ -89,6 +90,7 @@ public:
                                                                  bool bUserManagedScrolling = false)
         = 0;
     virtual std::unique_ptr<Notebook> weld_notebook(const OUString& id) = 0;
+    virtual std::unique_ptr<MDI> weld_mdi(const OUString& id) = 0;
     virtual std::unique_ptr<ToggleButton> weld_toggle_button(const OUString& id) = 0;
     virtual std::unique_ptr<RadioButton> weld_radio_button(const OUString& id) = 0;
     virtual std::unique_ptr<CheckButton> weld_check_button(const OUString& id) = 0;

@@ -6527,6 +6527,13 @@ std::unique_ptr<weld::Notebook> SalInstanceBuilder::weld_notebook(const OUString
     return nullptr;
 }
 
+std::unique_ptr<weld::MDI> SalInstanceBuilder::weld_mdi(const OUString&)
+{
+    // No generic/headless implementation -- see the long comment on the
+    // declaration in salvtables.hxx and TODO.md in the repo root.
+    return nullptr;
+}
+
 std::unique_ptr<weld::Button> SalInstanceBuilder::weld_button(const OUString& id)
 {
     Button* pButton = m_xBuilder->get<Button>(id);

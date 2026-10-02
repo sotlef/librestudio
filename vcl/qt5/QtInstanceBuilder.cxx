@@ -31,6 +31,7 @@
 #include <QtInstanceMenu.hxx>
 #include <QtInstanceMenuButton.hxx>
 #include <QtInstanceMessageDialog.hxx>
+#include <QtInstanceMDI.hxx>
 #include <QtInstanceNotebook.hxx>
 #include <QtInstancePaned.hxx>
 #include <QtInstancePopover.hxx>
@@ -427,6 +428,16 @@ constexpr auto SUPPORTED_UI_FILES = frozen::make_unordered_set<std::u16string_vi
 
 // These UI files are only supported inside native Qt dialogs/widgets
 constexpr auto SUPPORTED_WITH_QT_PARENT = frozen::make_unordered_set<std::u16string_view>({
+    // code::sidebar::OutputController (sfx2::sidebar::Deck/TabBar.ui, via
+    // the generic sfx/ui/tabbar.ui route) doesn't need listing here --
+    // but these two, code's own weld::MDI consumer
+    // (code/source/editormdipanel.cxx), do: without this, QtInstance::
+    // CreateInterimBuilder()/CreateBuilder() silently falls back to the
+    // generic SalInstanceBuilder, whose weld_mdi() is a stub returning
+    // nullptr (see TODO.md) -- the symptom was the whole MDI area staying
+    // empty under Qt with no error.
+    u"code/ui/editordocumentcontent.ui",
+    u"code/ui/editormdi.ui",
     u"cui/ui/acorexceptpage.ui",
     u"cui/ui/acoroptionspage.ui",
     u"cui/ui/acorreplacepage.ui",
@@ -822,6 +833,18 @@ std::unique_ptr<weld::Notebook> QtInstanceBuilder::weld_notebook(const OUString&
     GetQtInstance().RunInMainThread([&] {
         if (QTabWidget* pTabWidget = m_xBuilder->get<QTabWidget>(rId))
             xRet = std::make_unique<QtInstanceNotebook>(pTabWidget);
+    });
+    return xRet;
+}
+
+std::unique_ptr<weld::MDI> QtInstanceBuilder::weld_mdi(const OUString& rId)
+{
+    SolarMutexGuard g;
+
+    std::unique_ptr<weld::MDI> xRet;
+    GetQtInstance().RunInMainThread([&] {
+        if (QTabWidget* pTabWidget = m_xBuilder->get<QTabWidget>(rId))
+            xRet = std::make_unique<QtInstanceMDI>(pTabWidget);
     });
     return xRet;
 }

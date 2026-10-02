@@ -33,6 +33,7 @@
 #include <vcl/weld/LevelBar.hxx>
 #include <vcl/weld/LinkButton.hxx>
 #include <vcl/weld/Menu.hxx>
+#include <vcl/weld/MDI.hxx>
 #include <vcl/weld/MenuButton.hxx>
 #include <vcl/weld/MessageDialog.hxx>
 #include <vcl/weld/MetricSpinButton.hxx>
@@ -118,6 +119,10 @@ public:
     weld_scrolled_window(const OUString& id, bool bUserManagedScrolling = false) override;
 
     virtual std::unique_ptr<weld::Notebook> weld_notebook(const OUString& id) override;
+
+    // No generic/headless implementation -- weld::MDI only exists for the
+    // gtk3 and Qt backends so far (see TODO.md in the repo root).
+    virtual std::unique_ptr<weld::MDI> weld_mdi(const OUString& id) override;
 
     virtual std::unique_ptr<weld::Button> weld_button(const OUString& id) override;
 
