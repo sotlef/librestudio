@@ -34,6 +34,13 @@
         <property name="vexpand">True</property>
         <property name="vscrollbar-policy">automatic</property>
         <property name="shadow-type">in</property>
+        <!-- a GtkScrolledWindow's natural size does NOT include its child's
+             unless these are set (GTK semantics; vcl's VclScrolledWindow
+             always measures the child) - without them the gtk3 Sidebar
+             opens this deck ~40px wide instead of sized to the tree,
+             same props as sfx2's templatepanel.ui -->
+        <property name="propagate-natural-width">True</property>
+        <property name="propagate-natural-height">True</property>
         <child>
           <object class="GtkTreeView" id="tree">
             <property name="visible">True</property>

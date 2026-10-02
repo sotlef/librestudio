@@ -25,6 +25,10 @@
         <property name="vexpand">True</property>
         <property name="vscrollbar-policy">automatic</property>
         <property name="shadow-type">in</property>
+        <!-- see solutionpanel.ui: GTK scrolled windows don't request their
+             child's natural size without these -->
+        <property name="propagate-natural-width">True</property>
+        <property name="propagate-natural-height">True</property>
         <child>
           <object class="GtkTextView" id="log">
             <property name="visible">True</property>
