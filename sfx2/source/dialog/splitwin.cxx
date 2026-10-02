@@ -111,6 +111,9 @@ public:
                                 LINK(pOwner, SfxSplitWindow, TimerHdl ) );
                             aTimer.SetTimeout( 200 );
                             SetAlign( pOwner->GetAlign() );
+                            // same reasoning as the owner's own call, see
+                            // SfxSplitWindow's ctor
+                            EnableClipSiblings( true );
                             Actualize();
                             ShowFadeInHideButton();
                         }
@@ -216,6 +219,15 @@ SfxSplitWindow::SfxSplitWindow( vcl::Window* pParent, SfxChildAlignment eAl,
     }
 
     SetAlign (eTbxAlign);
+
+    // The bottom split window may overlap this window's splitter strip
+    // (SfxWorkWindow::Arrange_Impl() extends it over the adjacent columns'
+    // strips); with ClipSiblings the overlapped window yields those pixels
+    // during paint to every visible sibling stacked above it (= created
+    // earlier, see SfxWorkWindow's split-window creation order). A no-op
+    // while nothing overlaps.
+    EnableClipSiblings( true );
+
     pEmptyWin = VclPtr<SfxEmptySplitWin_Impl>::Create( this );
     if ( bPinned )
     {

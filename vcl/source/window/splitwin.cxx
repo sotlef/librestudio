@@ -19,6 +19,8 @@
 
 #include <string.h>
 
+#include <algorithm>
+
 #include <o3tl/safeint.hxx>
 #include <sal/log.hxx>
 
@@ -1077,6 +1079,7 @@ void SplitWindow::ImplInit( vcl::Window* pParent, WinBits nStyle )
     mnRightBorder           = 0;
     mnBottomBorder          = 0;
     mnMaxSize               = 0;
+    mnBarCoveredEnd         = 0;
     mnMouseOff              = 0;
     meAlign                 = WindowAlign::Top;
     mnWinStyle              = nStyle;
@@ -1384,9 +1387,9 @@ void SplitWindow::ImplGetButtonRect( tools::Rectangle& rRect, bool bTest ) const
         nButtonSize += SPLITWIN_SPLITSIZEFADE+1;
     tools::Long nCenterEx = 0;
     if ( mbHorz )
-        nCenterEx += ((mnDX-mnLeftBorder-mnRightBorder)-nButtonSize)/2;
+        nCenterEx += ((mnDX-mnLeftBorder-mnRightBorder-mnBarCoveredEnd)-nButtonSize)/2;
     else
-        nCenterEx += ((mnDY-mnTopBorder-mnBottomBorder)-nButtonSize)/2;
+        nCenterEx += ((mnDY-mnTopBorder-mnBottomBorder-mnBarCoveredEnd)-nButtonSize)/2;
     tools::Long nEx = 0;
     if ( nCenterEx > 0 )
         nEx += nCenterEx;
@@ -2713,6 +2716,59 @@ tools::Long SplitWindow::GetFadeInSize() const
         n = mnLeftBorder+mnRightBorder;
 
     return n+SPLITWIN_SPLITSIZE+SPLITWIN_SPLITSIZEEX-2;
+}
+
+tools::Long SplitWindow::GetSplitBarSize() const
+{
+    // the share of the strip ImplCalcLayout() reserves beyond the item
+    // area for interactive resizing (on the edge facing away from the
+    // align side, that edge's border included) that a neighbouring window
+    // may cover WITHOUT hiding the separator ImplDrawBorderLine() paints:
+    // that line pair runs the full window length and stays the visual
+    // boundary between the items and whatever covers the strip
+    if ( !(mnWinStyle & WB_SIZEABLE) )
+        return 0;
+
+    tools::Long n = mpMainSet->mnSplitSize-2;
+    if ( mbFadeOut )
+        n += SPLITWIN_SPLITSIZEEXLN;
+
+    switch ( meAlign )
+    {
+    case WindowAlign::Left:
+        // line pair at nDX-SPLITWIN_SPLITSIZEEXLN-1 .. -SPLITWIN_SPLITSIZEEXLN
+        if ( mbFadeOut )
+            n = SPLITWIN_SPLITSIZEEXLN-1;
+        else
+            n += mnRightBorder;
+        break;
+    case WindowAlign::Right:
+        // ImplDrawBorderLine() paints no separator on this side at all,
+        // nothing to keep visible
+        n += mnLeftBorder;
+        break;
+    case WindowAlign::Top:
+        n += mnBottomBorder;
+        break;
+    case WindowAlign::Bottom:
+        n += mnTopBorder;
+        break;
+    }
+
+    return n;
+}
+
+void SplitWindow::SetSplitBarCoveredEnd( tools::Long nPixels )
+{
+    nPixels = std::max<tools::Long>( nPixels, 0 );
+    if ( mnBarCoveredEnd == nPixels )
+        return;
+
+    mnBarCoveredEnd = nPixels;
+    // the fade in/out button centers within the uncovered run of the bar
+    // (ImplGetButtonRect()), so it just moved: repaint it at its new place
+    if ( mbFadeIn || mbFadeOut )
+        Invalidate();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

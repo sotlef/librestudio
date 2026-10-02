@@ -498,9 +498,16 @@ SfxWorkWindow::SfxWorkWindow(vcl::Window* pWin, SfxFrame& rFrame, SfxFrame& rMas
         m_bInternalDockingAllowed = true;
     }
 
-    // The required split windows (one for each side) can be created
-    for ( sal_uInt16 n=0; n<SFX_SPLITWINDOWS_MAX; n++ )
+    // The required split windows (one for each side) can be created.
+    // Created in REVERSE arrange order (bottom first, left last): vcl
+    // stacks earlier-created siblings on top for both painting (with
+    // ClipSiblings, see SfxSplitWindow's ctor) and mouse hit-testing, and
+    // Arrange_Impl() extends the bottom split window sideways over the
+    // adjacent columns' splitter strips, so it has to stack above them.
+    for ( sal_uInt16 i=SFX_SPLITWINDOWS_MAX; i-- > 0; )
     {
+        const sal_uInt16 n = i;
+
         // The SplitWindows excludes direct ChildWindows of the WorkWindows
         // and receives the docked window.
 
@@ -740,6 +747,27 @@ SvBorder SfxWorkWindow::Arrange_Impl()
     Size aSize;
     tools::Rectangle aTmp(m_aClientArea);
 
+    // Splitter-strip widths of the LEFT/RIGHT split-window columns, once
+    // those are arranged (they sort before BOTTOM, see ChildAlignValue()).
+    // The bottom split window is widened sideways over these strips below,
+    // so its content reaches the columns' visual edge instead of leaving a
+    // panel-colored dead zone beside itself that reads as a bogus extra
+    // content margin. A faded-out column IS just its strip, hence the whole
+    // window width then.
+    tools::Long nLeftSplitBar = 0;
+    tools::Long nRightSplitBar = 0;
+    // The columns themselves and their arranged bottom edges: once the
+    // bottom split window is placed, each column is told how much of its
+    // split bar's lower end that window covers, so the bar's collapse
+    // button keeps (re)centering within the uncovered run -- see
+    // SplitWindow::SetSplitBarCoveredEnd(). Reset to 0 right when a column
+    // is arranged, so the value can't go stale when the bottom dock is
+    // closed.
+    SplitWindow* pLeftSplitWin = nullptr;
+    SplitWindow* pRightSplitWin = nullptr;
+    tools::Long nLeftSplitBottom = 0;
+    tools::Long nRightSplitBottom = 0;
+
     for (sal_uInt16 n : m_aSortedList)
     {
         SfxChild_Impl* pCli = m_aChildren[n].get();
@@ -790,6 +818,33 @@ SvBorder SfxWorkWindow::Arrange_Impl()
                 aTmp.AdjustBottom( -(aSize.Height()) );
                 if ( pCli->eAlign == SfxChildAlignment::LOWESTBOTTOM )
                     m_aUpperClientArea.AdjustBottom(-(aSize.Height()));
+                if ( pCli->eAlign == SfxChildAlignment::BOTTOM
+                     && pCli->pWin->GetType() == WindowType::SPLITWINDOW )
+                {
+                    // Widen the bottom split window sideways over the
+                    // already-arranged columns' splitter strips: those
+                    // strips run the full window height alongside this
+                    // window, and nothing separates them from its content
+                    // visually. Window geometry only -- the free-area
+                    // (aTmp) and border bookkeeping above stay untouched,
+                    // the columns simply get overlapped (they stack below
+                    // and yield the pixels, see the creation order in the
+                    // ctor and ClipSiblings in SfxSplitWindow).
+                    aPos.AdjustX( -nLeftSplitBar );
+                    aSize.AdjustWidth( nLeftSplitBar + nRightSplitBar );
+
+                    // ... and tell those columns how much of their split
+                    // bars' lower run this window now covers, so their
+                    // collapse buttons re-center within the still-visible
+                    // part of the bar (and stay reachable when this window
+                    // is taller than half the column).
+                    if ( pLeftSplitWin )
+                        pLeftSplitWin->SetSplitBarCoveredEnd(
+                            nLeftSplitBottom - aPos.Y() );
+                    if ( pRightSplitWin )
+                        pRightSplitWin->SetSplitBarCoveredEnd(
+                            nRightSplitBottom - aPos.Y() );
+                }
                 break;
 
             case SfxChildAlignment::FIRSTLEFT:
@@ -798,10 +853,19 @@ SvBorder SfxWorkWindow::Arrange_Impl()
             case SfxChildAlignment::TOOLBOXLEFT:
                 aSize.setHeight( aTmp.GetHeight() );
                 if ( pCli->pWin->GetType() == WindowType::SPLITWINDOW )
-                    aSize = static_cast<SplitWindow *>(pCli->pWin.get())->CalcLayoutSizePixel( aSize );
+                {
+                    SplitWindow* pSplitWin = static_cast<SplitWindow *>(pCli->pWin.get());
+                    aSize = pSplitWin->CalcLayoutSizePixel( aSize );
+                    nLeftSplitBar = pSplitWin->GetItemCount()
+                        ? pSplitWin->GetSplitBarSize() : aSize.Width();
+                    pLeftSplitWin = pSplitWin;
+                    pSplitWin->SetSplitBarCoveredEnd( 0 );
+                }
                 bAllowHiding = false;
                 aBorder.Left() += aSize.Width();
                 aPos = aTmp.TopLeft();
+                if ( pLeftSplitWin == pCli->pWin.get() )
+                    nLeftSplitBottom = aPos.Y() + aSize.Height();
                 aTmp.AdjustLeft(aSize.Width() );
                 if ( pCli->eAlign != SfxChildAlignment::TOOLBOXLEFT )
                     m_aUpperClientArea.AdjustLeft(aSize.Width());
@@ -813,9 +877,18 @@ SvBorder SfxWorkWindow::Arrange_Impl()
             case SfxChildAlignment::TOOLBOXRIGHT:
                 aSize.setHeight( aTmp.GetHeight() );
                 if ( pCli->pWin->GetType() == WindowType::SPLITWINDOW )
-                    aSize = static_cast<SplitWindow *>(pCli->pWin.get())->CalcLayoutSizePixel( aSize );
+                {
+                    SplitWindow* pSplitWin = static_cast<SplitWindow *>(pCli->pWin.get());
+                    aSize = pSplitWin->CalcLayoutSizePixel( aSize );
+                    nRightSplitBar = pSplitWin->GetItemCount()
+                        ? pSplitWin->GetSplitBarSize() : aSize.Width();
+                    pRightSplitWin = pSplitWin;
+                    pSplitWin->SetSplitBarCoveredEnd( 0 );
+                }
                 aBorder.Right() += aSize.Width();
                 aPos = aTmp.TopRight();
+                if ( pRightSplitWin == pCli->pWin.get() )
+                    nRightSplitBottom = aTmp.Top() + aSize.Height();
                 aPos.AdjustX( -(aSize.Width()-1) );
                 aTmp.AdjustRight( -(aSize.Width()) );
                 if ( pCli->eAlign != SfxChildAlignment::TOOLBOXRIGHT )

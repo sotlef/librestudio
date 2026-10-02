@@ -60,6 +60,7 @@ private:
     tools::Long                mnRightBorder;
     tools::Long                mnBottomBorder;
     tools::Long                mnMaxSize;
+    tools::Long                mnBarCoveredEnd;
     tools::Long                mnMouseOff;
     tools::Long                mnMStartPos;
     tools::Long                mnMSplitPos;
@@ -177,6 +178,17 @@ public:
     void                ShowFadeInHideButton();
     void                ShowFadeOutButton();
     tools::Long                GetFadeInSize() const;
+    // the share of the interactive resize strip along the content-facing
+    // edge (that edge's border included) that a neighbouring window may
+    // cover without hiding the painted separator line; 0 without
+    // WB_SIZEABLE
+    tools::Long         GetSplitBarSize() const;
+    // how much of the split bar's far end (bottom for a vertical bar, right
+    // for a horizontal one) is covered by an overlapping neighbour window
+    // (see SfxWorkWindow::Arrange_Impl's bottom-dock widening): the fade
+    // in/out button centers itself, and is hit-tested, within the remaining
+    // uncovered run of the bar only
+    void                SetSplitBarCoveredEnd( tools::Long nPixels );
     bool                IsFadeNoButtonMode() const { return mbFadeNoButtonMode; }
 
     void                SetSplitHdl( const Link<SplitWindow*,void>& rLink ) { maSplitHdl = rLink; }
