@@ -16,6 +16,7 @@
 #include <vcl/builder.hxx>
 
 #include <QtCore/QObject>
+#include <QtCore/QPointer>
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QDoubleSpinBox>
@@ -40,6 +41,12 @@ private:
     // * a widget to remove from the widget hierarchy and delete (first item)
     // * the widget to put in its place instead (second item)
     std::vector<std::pair<QWidget*, QWidget*>> m_aWidgetReplacements;
+
+    // every box/grid layout created from a .ui GtkBox/GtkGrid, for the
+    // post-build surplus-space pass (see the QtBuilder ctor): QPointer
+    // because replaceWidget()/deleteObject() may delete some of them
+    // together with their owning widget before that pass runs
+    std::vector<QPointer<QLayout>> m_aChildLayouts;
 
 public:
     QtBuilder(QWidget* pParent, std::u16string_view sUIRoot, const OUString& rUIFile);
@@ -85,11 +92,11 @@ public:
     virtual void set_response(const OUString& rId, int nResponse) override;
 
 private:
-    static void deleteObject(QObject* pObject);
+    void deleteObject(QObject* pObject);
     static QTreeView* enableTreeViewColumnDataRole(QWidget* pParentWidget,
                                                    Qt::ItemDataRole eDataRole);
     // remove pOldWidget from the widget hierarchy and set (child widget) pNewWidget in its place
-    static void replaceWidget(QWidget* pOldWidget, QWidget* pNewWidget);
+    void replaceWidget(QWidget* pOldWidget, QWidget* pNewWidget);
     void setButtonProperties(QAbstractButton& rButton, stringmap& rProps, QWidget* pParentWidget);
     void setCheckButtonProperties(QAbstractButton& rButton, stringmap& rProps,
                                   QWidget* pParentWidget);

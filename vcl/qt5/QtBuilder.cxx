@@ -59,6 +59,114 @@ QString convertAccelerator(const OUString& rText)
     // preserve literal '&'s and use '&' instead of '_' for the accelerator
     return toQString(rText.replaceAll("&", "&&").replace('_', '&'));
 }
+
+// QLabel following Gtk's wrapping-label geometry: a GtkLabel with
+// wrap=True still *prefers* its full single-line width (natural size)
+// and only wraps once the layout really constrains it, while a
+// word-wrapping QLabel's sizeHint() is an aspect-ratio heuristic that
+// happily wraps despite available space; and once the text does wrap,
+// the wrapped height is a hard floor in Gtk (height-for-width), while
+// plain QLabel reports a one-line minimumSizeHint() and lets layouts
+// squeeze and clip it.
+class QtWrappingLabel : public QLabel
+{
+public:
+    using QLabel::QLabel;
+
+    QSize sizeHint() const override
+    {
+        if (!wordWrap())
+            return QLabel::sizeHint();
+        // natural size, Gtk-style: the whole text laid out in one line
+        // (builder labels are plain text with '&' mnemonics, see the
+        // GtkLabel branch in QtBuilder::insertObject)
+        QSize aSize = fontMetrics().size(Qt::TextShowMnemonic, text());
+        const QMargins aMargins = contentsMargins();
+        aSize.rwidth() += aMargins.left() + aMargins.right() + 2 * margin();
+        aSize.rheight() += aMargins.top() + aMargins.bottom() + 2 * margin();
+        return aSize;
+    }
+
+    // NO resizeEvent/setMinimumHeight floor here: an earlier version
+    // pinned minimumHeight to heightForWidth(width()) on every resize,
+    // and the very first resize often comes at a transient narrow width
+    // (Qt's 100px pre-layout default), where a long label wraps into a
+    // dozen lines -- that huge minimum momentarily entered the top-level
+    // minimum size and permanently grew the whole dialog (Options nearly
+    // doubled in height when its search built and showed pages). The
+    // wrapped-height floor is height-for-width business, which QLabel
+    // with wordWrap already reports natively.
+};
+
+// What a layout's content asks to expand by declared intent
+// (QSizePolicy), unlike QLayout::expandingDirections(), whose
+// QWidgetItem items mask out any axis they are aligned on: Gtk still
+// grows the row/column of an aligned hexpand/vexpand child and only
+// aligns the child inside the grown cell (optadvancedpage.ui's "Open
+// Expert Configuration" button, hexpand=True + halign=end), so the
+// surplus-space pass must not treat such a layout as non-expanding.
+// GtkScrolledWindow does not propagate its child's natural size by
+// default (propagate-natural-width/-height are FALSE): its natural size
+// equals its (small) minimum, and any real extent comes from expand
+// flags and the surrounding layout. Qt's scroll-area widgets instead
+// report a ~256px sizeHint() above a much smaller minimum -- that gap
+// is slack the layout visibly jitters in at the resize extremes
+// (optionsdialog.ui: the options tree made the left column gain/lose a
+// few mm at both ends of the resize range). Pin the hint to the
+// minimum, like Gtk.
+template <typename T> class QtScrolledNatural : public T
+{
+public:
+    using T::T;
+    QSize sizeHint() const override { return this->minimumSizeHint(); }
+};
+
+// The other half of the Gtk no-slack geometry: GtkEntry's minimum width
+// IS its natural width (a Gtk layout can never squeeze an entry below
+// its ~150px natural), while QLineEdit's minimumSizeHint() is only a
+// few characters wide. Raise the minimum to the hint.
+class QtNaturalLineEdit : public QLineEdit
+{
+public:
+    using QLineEdit::QLineEdit;
+    QSize minimumSizeHint() const override
+    {
+        QSize aSize = QLineEdit::minimumSizeHint();
+        aSize.setWidth(QLineEdit::sizeHint().width());
+        return aSize;
+    }
+};
+
+Qt::Orientations declaredExpandingDirections(const QLayout& rLayout)
+{
+    Qt::Orientations eDirections;
+    for (int i = 0; i < rLayout.count(); ++i)
+    {
+        QLayoutItem* pItem = rLayout.itemAt(i);
+        if (QWidget* pItemWidget = pItem->widget())
+        {
+            const QSizePolicy aPolicy = pItemWidget->sizePolicy();
+            eDirections |= aPolicy.expandingDirections();
+            if (QLayout* pChildLayout = pItemWidget->layout())
+            {
+                // same combination rule as QWidgetItem::expandingDirections,
+                // minus its alignment masking: a container widget passes its
+                // layout's expansion through where its own policy can grow
+                const Qt::Orientations eChild = declaredExpandingDirections(*pChildLayout);
+                if ((aPolicy.horizontalPolicy() & QSizePolicy::GrowFlag)
+                    && (eChild & Qt::Horizontal))
+                    eDirections |= Qt::Horizontal;
+                if ((aPolicy.verticalPolicy() & QSizePolicy::GrowFlag) && (eChild & Qt::Vertical))
+                    eDirections |= Qt::Vertical;
+            }
+        }
+        else if (QLayout* pChildLayout = pItem->layout())
+            eDirections |= declaredExpandingDirections(*pChildLayout);
+        else
+            eDirections |= pItem->expandingDirections();
+    }
+    return eDirections;
+}
 }
 
 const char* const PROPERTY_ALIGNMENT = "property-alignment";
@@ -74,6 +182,47 @@ QtBuilder::QtBuilder(QWidget* pParent, std::u16string_view sUIRoot, const OUStri
         // tweak widget hierarchy (remove unnecessary parent widgets)
         for (const std::pair<QWidget*, QWidget*>& rPair : m_aWidgetReplacements)
             replaceWidget(rPair.first, rPair.second);
+
+        // Surplus-space pass, Gtk semantics: a Gtk container hands extra
+        // space only to children with (h/v)expand and leaves the rest
+        // empty at the end, so content hugs the start; Qt layouts instead
+        // distribute surplus across all rows/columns (widgets' default
+        // Preferred policy may grow past the size hint), visually
+        // centering e.g. a group box's single row, or -- with
+        // right-aligned labels in a label/field grid -- drifting a whole
+        // column towards the middle (optctlpage.ui). For every .ui-built
+        // layout where nothing asks for growth on an axis, park that
+        // axis' surplus in a trailing stretch.
+        for (const QPointer<QLayout>& rpLayout : m_aChildLayouts)
+        {
+            QLayout* pLayout = rpLayout.data();
+            if (!pLayout)
+                continue;
+            // an empty box/grid in the .ui is a placeholder container whose
+            // real content arrives at runtime, built by a separate builder
+            // straight into this layout (e.g. optionsdialog.ui's "box" the
+            // option pages land in) -- a stretch added now would precede
+            // that content and pin it to the far end
+            if (pLayout->count() == 0)
+                continue;
+            const Qt::Orientations eExpand = declaredExpandingDirections(*pLayout);
+            if (QBoxLayout* pBoxLayout = qobject_cast<QBoxLayout*>(pLayout))
+            {
+                const bool bVertical = pBoxLayout->direction() == QBoxLayout::TopToBottom
+                                       || pBoxLayout->direction() == QBoxLayout::BottomToTop;
+                // only the box's own axis needs a stretch; on the other
+                // axis children fill the full extent in Gtk too
+                if (!(eExpand & (bVertical ? Qt::Vertical : Qt::Horizontal)))
+                    pBoxLayout->addStretch(1);
+            }
+            else if (QGridLayout* pGridLayout = qobject_cast<QGridLayout*>(pLayout))
+            {
+                if (!(eExpand & Qt::Vertical))
+                    pGridLayout->setRowStretch(pGridLayout->rowCount(), 1);
+                if (!(eExpand & Qt::Horizontal))
+                    pGridLayout->setColumnStretch(pGridLayout->columnCount(), 1);
+            }
+        }
     });
 }
 
@@ -173,6 +322,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
                 pObject = new QVBoxLayout(pBoxParentWidget);
             else
                 pObject = new QHBoxLayout(pBoxParentWidget);
+            m_aChildLayouts.emplace_back(static_cast<QLayout*>(pObject));
         }
     }
     else if (rClass == u"GtkButtonBox")
@@ -228,6 +378,14 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     {
         QComboBox* pComboBox = new QComboBox(pParentWidget);
         pComboBox->setEditable(extractEntry(rProps));
+        // Gtk semantics: a GtkComboBox whose .ui doesn't ask for
+        // ellipsizing has minimum width = its longest item, so the
+        // surrounding dialog must grow to fit the content; Qt's default
+        // AdjustToContentsOnFirstShow keeps the minimum at a few chars,
+        // letting layouts squeeze the box and elide its current value
+        // instead. AdjustToContents makes min width track the model like
+        // Gtk does.
+        pComboBox->setSizeAdjustPolicy(QComboBox::AdjustToContents);
         // use a model that supports sorting
         QSortFilterProxyModel* pModel = new QSortFilterProxyModel(pComboBox);
         pModel->setSourceModel(new QStandardItemModel(0, 1, pComboBox));
@@ -246,7 +404,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkEntry")
     {
-        QLineEdit* pLineEdit = new QLineEdit(pParentWidget);
+        QLineEdit* pLineEdit = new QtNaturalLineEdit(pParentWidget);
         setEntryProperties(*pLineEdit, rProps);
         pObject = pLineEdit;
     }
@@ -263,6 +421,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
         pLayoutParentWidget = new QWidget(pParentWidget);
         QGridLayout* pGridLayout = new QGridLayout(pLayoutParentWidget);
         setGridLayoutProperties(*pGridLayout, rProps);
+        m_aChildLayouts.emplace_back(pGridLayout);
         pObject = pGridLayout;
     }
     else if (rClass == u"GtkIconView")
@@ -285,7 +444,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkLabel")
     {
-        QLabel* pLabel = new QLabel(pParentWidget);
+        QLabel* pLabel = new QtWrappingLabel(pParentWidget);
         pLabel->setTextFormat(Qt::TextFormat::PlainText);
         setLabelProperties(*pLabel, rProps, rPango);
         extractMnemonicWidget(rId, rProps);
@@ -325,7 +484,12 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     else if (rClass == u"GtkPopover")
     {
         QWidget* pWidget = new QWidget(pParentWidget, Qt::Popup);
-        pWidget->setLayout(new QVBoxLayout);
+        // margins/spacing 0 like every other GtkBuilder container default;
+        // any padding belongs to the .ui's own child margins
+        QVBoxLayout* pPopoverLayout = new QVBoxLayout;
+        pPopoverLayout->setContentsMargins(0, 0, 0, 0);
+        pPopoverLayout->setSpacing(0);
+        pWidget->setLayout(pPopoverLayout);
         pObject = pWidget;
     }
     else if (rClass == u"GtkRadioButton")
@@ -348,8 +512,44 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkScrolledWindow")
     {
-        QScrollArea* pScrollArea = new QScrollArea(pParentWidget);
+        QScrollArea* pScrollArea = new QtScrolledNatural<QScrollArea>(pParentWidget);
         pScrollArea->setWidgetResizable(true);
+        // GtkScrolledWindow's shadow-type: "none" (also the GtkBuilder
+        // default when unset) means no frame, anything else ("in", "out",
+        // "etched-in", "etched-out") draws one. Previously ignored
+        // entirely, which lost the frame the .ui asked for (gtk3 renders
+        // it). Box+Plain, not StyledPanel: StyledPanel delegates frame
+        // painting to the style, and Breeze deliberately paints nothing
+        // for views inside documentMode tab widgets (its "the document IS
+        // the window" convention) -- the .ui explicitly asked for a
+        // border, so draw one QFrame paints itself: a solid 1px
+        // windowText-colored rectangle, theme-proof. If a self-scrolling
+        // child later replaces this scroll area, tweakInsertedChild
+        // transfers the frame onto that child.
+        auto aShadowIt = rProps.find(u"shadow-type"_ustr);
+        if (aShadowIt != rProps.end() && aShadowIt->second != "none")
+        {
+            pScrollArea->setFrameShape(QFrame::Box);
+            pScrollArea->setFrameShadow(QFrame::Plain);
+            // a Plain box is painted with the palette's WindowText --
+            // full-contrast black, much harsher than the theme's own
+            // outlines. Soften it to the usual outline gray by overriding
+            // WindowText on the frame widget itself with the same 3:1
+            // window:text mix Breeze uses for its frame outlines; the
+            // content inside paints with the Text role, so it keeps full
+            // contrast. tweakInsertedChild copies the palette along with
+            // the frame when a self-scrolling child replaces this area.
+            QPalette aPal = pScrollArea->palette();
+            const QColor aWindow = aPal.color(QPalette::Window);
+            const QColor aText = aPal.color(QPalette::WindowText);
+            const QColor aOutline((3 * aWindow.red() + aText.red()) / 4,
+                                  (3 * aWindow.green() + aText.green()) / 4,
+                                  (3 * aWindow.blue() + aText.blue()) / 4);
+            aPal.setColor(QPalette::WindowText, aOutline);
+            pScrollArea->setPalette(aPal);
+        }
+        else
+            pScrollArea->setFrameShape(QFrame::NoFrame);
         pObject = pScrollArea;
     }
     else if (rClass == u"GtkSeparator")
@@ -380,7 +580,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkTextView")
     {
-        QPlainTextEdit* pTextEdit = new QPlainTextEdit(pParentWidget);
+        QPlainTextEdit* pTextEdit = new QtScrolledNatural<QPlainTextEdit>(pParentWidget);
         setTextViewProperties(*pTextEdit, rProps);
         pObject = pTextEdit;
     }
@@ -416,7 +616,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkTreeView")
     {
-        QTreeView* pTreeView = new QTreeView(pParentWidget);
+        QTreeView* pTreeView = new QtScrolledNatural<QTreeView>(pParentWidget);
         QtTreeViewModel* pTreeViewModel = new QtTreeViewModel(pTreeView);
         pTreeView->setModel(pTreeViewModel);
         pTreeView->setHeaderHidden(!extractHeadersVisible(rProps));
@@ -504,7 +704,13 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
             // if the parent is a widget, use the widget's layout, and ensure it has one set
             pParentLayout = pParentWidget->layout();
             if (!pParentLayout)
+            {
+                // implicit fallback layout: margins/spacing 0, matching the
+                // GtkBuilder container defaults like setLayoutMargins does
                 pParentLayout = new QVBoxLayout(pParentWidget);
+                pParentLayout->setContentsMargins(0, 0, 0, 0);
+                pParentLayout->setSpacing(0);
+            }
         }
 
         // add widget to parent layout if it wasn't added by Qt already
@@ -513,10 +719,64 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
 
         setWidgetAlignment(*pWidget, rProps);
 
+        // GtkWidget's hexpand/vexpand, previously untranslated -- without
+        // this, .ui files have no way at all to request growth for widgets
+        // whose Qt default size policy doesn't already expand, and the
+        // surplus-space pass in the ctor below would starve them.
+        auto aExpandIt = rProps.find(u"hexpand"_ustr);
+        const bool bHExpand = aExpandIt != rProps.end() && toBool(aExpandIt->second);
+        if (bHExpand)
+        {
+            QSizePolicy aPolicy = pWidget->sizePolicy();
+            aPolicy.setHorizontalPolicy(QSizePolicy::Expanding);
+            pWidget->setSizePolicy(aPolicy);
+        }
+        aExpandIt = rProps.find(u"vexpand"_ustr);
+        const bool bVExpand = aExpandIt != rProps.end() && toBool(aExpandIt->second);
+        if (bVExpand)
+        {
+            QSizePolicy aPolicy = pWidget->sizePolicy();
+            aPolicy.setVerticalPolicy(QSizePolicy::Expanding);
+            pWidget->setSizePolicy(aPolicy);
+        }
+
+        // Gtk hands a box's surplus only to children that *declare*
+        // expansion on the box axis; Qt distributes it across any item
+        // whose size policy can grow, and the default policies of e.g.
+        // QLineEdit (Expanding) fake an intent the .ui never stated --
+        // optionsdialog.ui: the search entry's default policy, bubbling
+        // up through its parent box, made the whole natural-width left
+        // column share the dialog's surplus width with the hexpanding
+        // page area. An explicit stretch factor on the declared children
+        // parks the surplus with them exclusively (stretch-0 siblings
+        // stay at their size hint, Gtk's natural width).
+        if (QBoxLayout* pParentBoxLayout = qobject_cast<QBoxLayout*>(pParentLayout))
+        {
+            const bool bParentVertical
+                = pParentBoxLayout->direction() == QBoxLayout::TopToBottom
+                  || pParentBoxLayout->direction() == QBoxLayout::BottomToTop;
+            if (bParentVertical ? bVExpand : bHExpand)
+                pParentBoxLayout->setStretchFactor(pWidget, 1);
+        }
+
         QtInstanceWidget::setHelpId(*pWidget, getHelpRoot() + rId);
 
         pWidget->setToolTip(toRichTextTooltip(extractTooltipText(rProps)));
-        pWidget->setVisible(extractVisible(rProps));
+
+        // only ever hide here, never show: a Qt child is shown together
+        // with its parent anyway (the deferred layout activation takes
+        // care of children inserted into an already-visible parent),
+        // while an eager setVisible(true) per inserted widget
+        // synchronously reactivates the whole window's layout chain
+        // (QWidget::setVisible -> parent QLayout::activate -> top-level
+        // setMinimumSize + resize) -- cui's Options search builds every
+        // options page into the live dialog and hides it only once
+        // built, so each half-built, eagerly-shown page momentarily
+        // entered the dialog's minimum size and ratcheted the window
+        // height up step by step (gtk masks the very same build pattern
+        // by deferring all allocation to idle).
+        if (!extractVisible(rProps))
+            pWidget->setVisible(false);
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
         // Set GtkBuilder ID as accessible ID
@@ -526,6 +786,15 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     else if (QLayout* pLayout = qobject_cast<QLayout*>(pObject))
     {
         setLayoutMargins(*pLayout, rProps);
+
+        // GtkBox "spacing": unset means 0 in GtkBuilder, while Qt would
+        // keep the style's themed default spacing between children (grids
+        // get theirs in setGridLayoutProperties instead)
+        if (QBoxLayout* pBoxLayout = qobject_cast<QBoxLayout*>(pLayout))
+        {
+            auto aSpacingIt = rProps.find(u"spacing"_ustr);
+            pBoxLayout->setSpacing(aSpacingIt != rProps.end() ? aSpacingIt->second.toInt32() : 0);
+        }
 
         // add layout to parent layout
         if (QBoxLayout* pParentBoxLayout = qobject_cast<QBoxLayout*>(pParentLayout))
@@ -587,6 +856,16 @@ void QtBuilder::tweakInsertedChild(QObject* pParent, QObject* pCurrentChild, std
         {
             // if the child provides scrolling capabilities itself, it doesn't need
             // another scroll area parent -> mark parent scroll area for removal
+            //
+            // the scroll area carries the .ui's GtkScrolledWindow
+            // shadow-type as its frame (see the GtkScrolledWindow branch in
+            // insertObject) -- hand that frame over to the child that
+            // replaces it, else the frame the .ui asked for is lost
+            pScrollArea->setFrameShape(pScrollAreaParent->frameShape());
+            pScrollArea->setFrameShadow(pScrollAreaParent->frameShadow());
+            // including the softened outline color (see the
+            // GtkScrolledWindow branch in insertObject)
+            pScrollArea->setPalette(pScrollAreaParent->palette());
             m_aWidgetReplacements.emplace_back(pScrollAreaParent, pScrollArea);
         }
         else
@@ -806,6 +1085,22 @@ void QtBuilder::applyGridPackingProperties(QWidget* pCurrentChild, QGridLayout& 
 
     rGrid.removeWidget(pCurrentChild);
     rGrid.addWidget(pCurrentChild, nRow, nColumn, nRowSpan, nColumnSpan, nAlign);
+
+    // Gtk hands a grid's surplus space to the rows/columns of its
+    // expanding children even when the child itself is aligned inside
+    // the grown cell; Qt derives row/column expansion from the layout
+    // items, and an aligned item reports none on the aligned axis. So
+    // translate the child's declared size policy into explicit
+    // row/column stretch: this is what puts an hexpand=True halign=end
+    // button at the far edge of the whole grid instead of at the edge
+    // of a natural-width column (optadvancedpage.ui).
+    const Qt::Orientations eExpand = pCurrentChild->sizePolicy().expandingDirections();
+    if (eExpand & Qt::Horizontal)
+        for (sal_Int32 i = 0; i < nColumnSpan; ++i)
+            rGrid.setColumnStretch(nColumn + i, 1);
+    if (eExpand & Qt::Vertical)
+        for (sal_Int32 i = 0; i < nRowSpan; ++i)
+            rGrid.setRowStretch(nRow + i, 1);
 }
 
 void QtBuilder::applyPackingProperties(QObject* pCurrentChild, QObject* pParent,
@@ -906,7 +1201,18 @@ void QtBuilder::addButtonToButtonBox(QAbstractButton& rButton, QWidget* pParentW
 void QtBuilder::deleteObject(QObject* pObject)
 {
     if (pObject->isWidgetType())
-        static_cast<QWidget*>(pObject)->hide();
+    {
+        QWidget* pWidget = static_cast<QWidget*>(pObject);
+        // also drop any by-id reference: an entry left in m_aWidgets
+        // would be handed out by get_by_name() as a dangling pointer
+        // after the deleteLater below -- cui's Options-dialog search
+        // crashed exactly that way, weld_label()ing a GtkFrame label
+        // child ("label1" in optuserpage.ui) that tweakInsertedChild
+        // had deleted after moving its text into QGroupBox::setTitle()
+        std::erase_if(m_aWidgets,
+                      [pWidget](const auto& rEntry) { return rEntry.second == pWidget; });
+        pWidget->hide();
+    }
     pObject->deleteLater();
 }
 
@@ -1035,19 +1341,24 @@ void QtBuilder::setItemViewProperties(const QAbstractItemView& rIconView, string
 
 static Qt::Alignment toQtAlign(std::u16string_view sValue, bool bHorizontal)
 {
-    Qt::Alignment eRet = bHorizontal ? Qt::AlignLeft : Qt::AlignTop;
-
+    // In Qt any non-zero alignment flag also means "do not stretch" --
+    // so only the three genuinely aligning GtkAlign values may map to a
+    // flag. Everything else must yield 0 (= keep stretching): "fill"
+    // (also the GtkBuilder default) obviously, but "baseline" too -- Gtk
+    // only baseline-aligns inside baseline-supporting rows and otherwise
+    // degrades it to fill, and real .ui files (e.g. cui's
+    // optionsdialog.ui options tree) carry valign="baseline" on plain
+    // scrolled windows and expect them to fill. The previous fallback of
+    // AlignLeft/AlignTop for unknown values collapsed such widgets to
+    // their size hint.
     if (sValue == u"start")
-        eRet = bHorizontal ? Qt::AlignLeft : Qt::AlignTop;
-    else if (sValue == u"end")
-        eRet = bHorizontal ? Qt::AlignRight : Qt::AlignBottom;
-    else if (sValue == u"center")
-        eRet = bHorizontal ? Qt::AlignHCenter : Qt::AlignVCenter;
-    else if (sValue == u"baseline" && !bHorizontal)
-        eRet = Qt::AlignBaseline;
-    // "fill" is not currently used
+        return bHorizontal ? Qt::AlignLeft : Qt::AlignTop;
+    if (sValue == u"end")
+        return bHorizontal ? Qt::AlignRight : Qt::AlignBottom;
+    if (sValue == u"center")
+        return bHorizontal ? Qt::AlignHCenter : Qt::AlignVCenter;
 
-    return eRet;
+    return {};
 }
 
 Qt::Alignment QtBuilder::getAlignment(stringmap& rProps)
@@ -1073,8 +1384,16 @@ void QtBuilder::setWidgetAlignment(QWidget& rWidget, stringmap& rProps)
         // Cache for later if the widget needs to be re-added to the layout
         rWidget.setProperty(PROPERTY_ALIGNMENT, QVariant::fromValue(nAlign));
 
-        if (QLayout* pLayout = rWidget.layout())
-            pLayout->setAlignment(&rWidget, nAlign);
+        // the layout CONTAINING the widget -- its parent widget's layout.
+        // (rWidget.layout() would be the widget's OWN layout, the one
+        // managing its children: asking that one to align rWidget always
+        // fails, the widget is not among its own layout's items, which
+        // silently disabled every halign/valign the .ui asked for)
+        if (QWidget* pParentWidget = rWidget.parentWidget())
+        {
+            if (QLayout* pContainingLayout = pParentWidget->layout())
+                pContainingLayout->setAlignment(&rWidget, nAlign);
+        }
     }
 }
 
@@ -1086,7 +1405,12 @@ void QtBuilder::setLayoutAlignment(QLayout& rLayout, stringmap& rProps)
         // Cache for later if the layout needs to be re-added to its parent layout
         rLayout.setProperty(PROPERTY_ALIGNMENT, QVariant::fromValue(nAlign));
 
-        if (QLayout* pParentLayout = rLayout.layout())
+        // the parent layout this one was added into via addLayout().
+        // (QLayout::layout() returns the layout ITSELF, so the previous
+        // rLayout.layout()->setAlignment(&rLayout, ...) searched the
+        // layout for itself among its own items -- a guaranteed no-op
+        // that silently disabled halign/valign for every nested box/grid)
+        if (QLayout* pParentLayout = qobject_cast<QLayout*>(rLayout.parent()))
             pParentLayout->setAlignment(&rLayout, nAlign);
     }
 }
@@ -1309,37 +1633,54 @@ QWidget* QtBuilder::windowForObject(QObject* pObject)
 
 void QtBuilder::setGridLayoutProperties(QGridLayout& rGridLayout, stringmap& rProps)
 {
+    // unset GtkGrid row-/column-spacing means 0 in GtkBuilder; leaving
+    // Qt's themed default instead would add spacing the .ui never asked
+    // for (same reasoning as setLayoutMargins above)
     auto aIt = rProps.find(u"row-spacing"_ustr);
-    if (aIt != rProps.end())
-        rGridLayout.setVerticalSpacing(aIt->second.toUInt32());
+    rGridLayout.setVerticalSpacing(aIt != rProps.end() ? aIt->second.toUInt32() : 0);
 
     aIt = rProps.find(u"column-spacing"_ustr);
-    if (aIt != rProps.end())
-        rGridLayout.setHorizontalSpacing(aIt->second.toUInt32());
+    rGridLayout.setHorizontalSpacing(aIt != rProps.end() ? aIt->second.toUInt32() : 0);
 }
 
 void QtBuilder::getMargins(stringmap& rProps, sal_Int32& nLeft, sal_Int32& nTop, sal_Int32& nRight,
                            sal_Int32& nBottom)
 {
+    // GtkContainer's border-width pads all four sides between a container
+    // and its content, the margin-* properties pad single sides outside a
+    // widget -- both end up stacked into the same Qt contentsMargins here
+    auto aBorderIt = rProps.find(u"border-width"_ustr);
+    if (aBorderIt != rProps.end())
+    {
+        const sal_Int32 nBorderWidth = aBorderIt->second.toInt32();
+        nLeft += nBorderWidth;
+        nTop += nBorderWidth;
+        nRight += nBorderWidth;
+        nBottom += nBorderWidth;
+    }
+
     for (auto const & [ rKey, rValue ] : rProps)
     {
         if (rKey == u"margin-start")
-            nLeft = rValue.toUInt32();
+            nLeft += rValue.toUInt32();
         else if (rKey == u"margin-top")
-            nTop = rValue.toUInt32();
+            nTop += rValue.toUInt32();
         else if (rKey == u"margin-end")
-            nRight = rValue.toUInt32();
+            nRight += rValue.toUInt32();
         else if (rKey == u"margin-bottom")
-            nBottom = rValue.toUInt32();
+            nBottom += rValue.toUInt32();
     }
 }
 
 void QtBuilder::setLayoutMargins(QLayout& rLayout, stringmap& rProps)
 {
-    // For QLayout and children, -1 means "unset" and allows Qt to
-    // use the system theme for that dimension. (in contrast to
-    // QWidget which uses 0...)
-    sal_Int32 nLeft = -1, nTop = -1, nRight = -1, nBottom = -1;
+    // GtkBuilder semantics: an unset margin property means 0 -- so default
+    // to 0 here, not to Qt's "unset" (-1), which would substitute the
+    // style's own themed margins (~9px per side under Breeze) that the
+    // gtk3 rendering of the very same .ui never shows; with nested boxes
+    // those phantom margins stack up, padding every welded dialog far
+    // beyond its .ui design.
+    sal_Int32 nLeft = 0, nTop = 0, nRight = 0, nBottom = 0;
 
     getMargins(rProps, nLeft, nTop, nRight, nBottom);
     rLayout.setContentsMargins(nLeft, nTop, nRight, nBottom);
