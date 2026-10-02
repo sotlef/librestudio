@@ -1669,6 +1669,16 @@ bool PushButton::set_property(const OUString &rKey, const OUString &rValue)
             nBits |= WB_DEFBUTTON;
         SetStyle(nBits);
     }
+    else if (rKey == "active")
+    {
+        // GtkToggleButton's initial pressed-in state: VclBuilder maps
+        // GtkToggleButton to a WB_TOGGLE PushButton, and GtkBuilder only
+        // emits "active" for toggleables -- without this the property was
+        // silently dropped (CheckBox::set_property below has handled its
+        // own "active" all along), so a toggle button declared active in
+        // a .ui started pressed under native gtk3 but released here
+        Check(toBool(rValue));
+    }
     else
         return Button::set_property(rKey, rValue);
     return true;
