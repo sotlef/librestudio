@@ -438,6 +438,15 @@ VclBuilder::VclBuilder(vcl::Window* pParent, std::u16string_view sUIDir, const O
                     Size aSz(rImage.GetSizePixel());
                     aSz.AdjustWidth(6);
                     aSz.AdjustHeight(6);
+                    // scale the FROZEN size with the DPI scale factor (the
+                    // image itself stays unscaled and gets centered): an
+                    // unscaled fixed button size looks lost between the
+                    // surrounding DPI-scaled widgets on a HiDPI screen --
+                    // e.g. the sidebar's "Sidebar Settings" menu button next
+                    // to its deck-switcher toolbar items
+                    const float fImageScale = pTargetButton->GetDPIScaleFactor();
+                    aSz.setWidth(aSz.Width() * fImageScale);
+                    aSz.setHeight(aSz.Height() * fImageScale);
                     if (pTargetButton->get_width_request() == -1)
                         pTargetButton->set_width_request(aSz.Width());
                     if (pTargetButton->get_height_request() == -1)
