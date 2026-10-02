@@ -43,6 +43,14 @@ template <class interface_type> class Reference;
  *
  * This enum class is used to specify the type(s) of attributes of interest.
  */
+// X11/X.h (pulled in transitively by vcl/inc/unx/sessioninhibitor.hxx on
+// USING_X11 builds, e.g. via QtFrame.hxx) #defines None as 0L; this header
+// has no X11 dependency of its own, so just locally undo that pollution
+// right before using "None" as an enumerator name.
+#ifdef None
+#undef None
+#endif
+
 enum class IA2AttributeType
 {
     None = 0x0000,

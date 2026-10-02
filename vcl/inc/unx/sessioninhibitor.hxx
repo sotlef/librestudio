@@ -12,10 +12,28 @@
 #include <config_vclplug.h>
 
 #if USING_X11
-#include <X11/Xlib.h>
-#include <X11/Xmd.h>
+// Forward-declare rather than #include <X11/Xlib.h>/<X11/Xmd.h>: this
+// header is pulled in by vcl/inc/qt5/QtFrame.hxx (included by nearly every
+// Qt vcl-plugin source file) purely for the Display*/BOOL/CARD16 types
+// below, but the real Xlib.h/X.h #define ~250 short, unnamespaced,
+// generic-word macros (None, Time, Unsorted, Above, Below, Success, ...)
+// that go on to break any later-included header using the same words as
+// identifiers (Qt's own QtCore/qdir.h's "enum SortFlag { ... Unsorted
+// ... }" among them) -- and each new Qt/Qt-adjacent header discovered to
+// collide only grows QtFrame.hxx's own #undef list further. The actual
+// X11 implementation (vcl/unx/generic/window/sessioninhibitor.cxx) already
+// #includes the real <X11/Xlib.h>/<X11/extensions/dpms.h> itself and does
+// not rely on this header for them, so nothing here actually needs the
+// real definitions -- only a pointer to an (always-incomplete-here) X11
+// Display, plus two plain integer member types matching Xmd.h's own BOOL
+// (int) and CARD16 (16-bit unsigned) that don't need Xmd.h to express.
+extern "C" {
+struct _XDisplay;
+}
+using Display = _XDisplay;
 #endif
 
+#include <sal/types.h>
 #include <vcl/dllapi.h>
 
 #include <optional>
@@ -49,10 +67,14 @@ private:
     std::optional<int> mnXScreenSaverTimeout;
 
 #if USING_X11 && !defined(__sun)
-    BOOL mbDPMSWasEnabled;
-    CARD16 mnDPMSStandbyTimeout;
-    CARD16 mnDPMSSuspendTimeout;
-    CARD16 mnDPMSOffTimeout;
+    // Deliberately bool/sal_uInt16, not Xmd.h's own BOOL/CARD16 -- see the
+    // comment above on why this header stays free of the real X11 headers;
+    // sessioninhibitor.cxx converts to/from the real DPMS API's own BOOL*/
+    // CARD16* via short-lived local variables at each call site.
+    bool mbDPMSWasEnabled;
+    sal_uInt16 mnDPMSStandbyTimeout;
+    sal_uInt16 mnDPMSSuspendTimeout;
+    sal_uInt16 mnDPMSOffTimeout;
 
     SAL_DLLPRIVATE void inhibitXScreenSaver(bool bInhibit, Display* pDisplay);
     SAL_DLLPRIVATE static void inhibitXAutoLock(bool bInhibit, Display* pDisplay);

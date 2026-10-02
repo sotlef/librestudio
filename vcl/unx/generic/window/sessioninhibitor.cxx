@@ -322,14 +322,20 @@ void SessionManagerInhibitor::inhibitDPMS( bool bInhibit, Display* pDisplay )
     if ( bInhibit )
     {
         CARD16 state; // unused by us
-        DPMSInfo( pDisplay, &state, &mbDPMSWasEnabled );
+        BOOL bWasEnabled;
+        DPMSInfo( pDisplay, &state, &bWasEnabled );
+        mbDPMSWasEnabled = bWasEnabled;
 
         if ( mbDPMSWasEnabled )
         {
+            CARD16 nStandbyTimeout, nSuspendTimeout, nOffTimeout;
             DPMSGetTimeouts( pDisplay,
-                             &mnDPMSStandbyTimeout,
-                             &mnDPMSSuspendTimeout,
-                             &mnDPMSOffTimeout );
+                             &nStandbyTimeout,
+                             &nSuspendTimeout,
+                             &nOffTimeout );
+            mnDPMSStandbyTimeout = nStandbyTimeout;
+            mnDPMSSuspendTimeout = nSuspendTimeout;
+            mnDPMSOffTimeout = nOffTimeout;
             DPMSSetTimeouts( pDisplay,
                              0,
                              0,

@@ -53,6 +53,7 @@
 #undef None
 #undef Status
 #undef Unsorted
+#undef Time
 #endif
 
 class QtDragSource;
