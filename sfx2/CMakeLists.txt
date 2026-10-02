@@ -207,6 +207,7 @@ set(SFX_SOURCES
     sfx2/source/sidebar/Deck
     sfx2/source/sidebar/DeckDescriptor
     sfx2/source/sidebar/DeckLayouter
+    sfx2/source/sidebar/DeckPanelBuilder
     sfx2/source/sidebar/DeckTitleBar
     sfx2/source/sidebar/FocusManager
     sfx2/source/sidebar/IContextChangeReceiver

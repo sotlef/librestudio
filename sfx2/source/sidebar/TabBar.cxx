@@ -22,7 +22,6 @@
 #include <sfx2/sidebar/Theme.hxx>
 #include <sidebar/Tools.hxx>
 #include <sfx2/sidebar/FocusManager.hxx>
-#include <sfx2/sidebar/SidebarController.hxx>
 
 #include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
@@ -52,7 +51,7 @@ TabBar::TabBar(vcl::Window* pParentWindow,
                const Reference<frame::XFrame>& rxFrame,
                std::function<void (const OUString&)> aDeckActivationFunctor,
                PopupMenuSignalConnectFunction aPopupMenuSignalConnectFunction,
-               SidebarController& rParentSidebarController
+               IDeckHost& rDeckHost
               )
     : InterimItemWindow(pParentWindow, u"sfx/ui/tabbar.ui"_ustr, u"TabBar"_ustr)
     , mxFrame(rxFrame)
@@ -61,7 +60,7 @@ TabBar::TabBar(vcl::Window* pParentWindow,
     , mxContents(mxAuxBuilder->weld_widget(u"TabBarContents"_ustr))
     , mxMeasureBox(mxAuxBuilder->weld_widget(u"measure"_ustr))
     , maDeckActivationFunctor(std::move(aDeckActivationFunctor))
-    , mrParentSidebarController(rParentSidebarController)
+    , mrDeckHost(rDeckHost)
 {
     set_id(u"TabBar"_ustr); // for uitest
 
@@ -131,7 +130,7 @@ void TabBar::SetDecks(const ResourceManager::DeckContextDescriptorContainer& rDe
     maItems.clear();
     for (auto const& deck : rDecks)
     {
-        std::shared_ptr<DeckDescriptor> xDescriptor = mrParentSidebarController.GetResourceManager()->GetDeckDescriptor(deck.msId);
+        std::shared_ptr<DeckDescriptor> xDescriptor = mrDeckHost.GetResourceManager()->GetDeckDescriptor(deck.msId);
         if (xDescriptor == nullptr)
         {
             OSL_ASSERT(xDescriptor!=nullptr);
@@ -157,7 +156,7 @@ void TabBar::UpdateButtonIcons()
 {
     for (auto const& item : maItems)
     {
-        std::shared_ptr<DeckDescriptor> xDeckDescriptor = mrParentSidebarController.GetResourceManager()->GetDeckDescriptor(item->msDeckId);
+        std::shared_ptr<DeckDescriptor> xDeckDescriptor = mrDeckHost.GetResourceManager()->GetDeckDescriptor(item->msDeckId);
         if (!xDeckDescriptor)
             continue;
         item->mxButton->set_item_image(u"toggle"_ustr, GetItemImage(*xDeckDescriptor));
@@ -293,13 +292,13 @@ void TabBar::ToggleHideFlag (const sal_Int32 nIndex)
 
     maItems[nIndex]->mbIsHidden = ! maItems[nIndex]->mbIsHidden;
 
-    std::shared_ptr<DeckDescriptor> xDeckDescriptor = mrParentSidebarController.GetResourceManager()->GetDeckDescriptor(maItems[nIndex]->msDeckId);
+    std::shared_ptr<DeckDescriptor> xDeckDescriptor = mrDeckHost.GetResourceManager()->GetDeckDescriptor(maItems[nIndex]->msDeckId);
     if (xDeckDescriptor)
     {
         xDeckDescriptor->mbIsEnabled = ! maItems[nIndex]->mbIsHidden;
 
         Context aContext;
-        aContext.msApplication = mrParentSidebarController.GetCurrentContext().msApplication;
+        aContext.msApplication = mrDeckHost.GetCurrentContext().msApplication;
         // leave aContext.msContext on default 'any' ... this func is used only for decks
         // and we don't have context-sensitive decks anyway
 
@@ -348,7 +347,7 @@ void TabBar::UpdateMenus()
     for (auto const& rItem : maItems)
     {
         std::shared_ptr<DeckDescriptor> xDeckDescriptor
-            = mrParentSidebarController.GetResourceManager()->GetDeckDescriptor(rItem->msDeckId);
+            = mrDeckHost.GetResourceManager()->GetDeckDescriptor(rItem->msDeckId);
 
         if (!xDeckDescriptor)
             continue;
@@ -390,7 +389,7 @@ void TabBar::UpdateMenus()
     if (!comphelper::LibreOfficeKit::isActive())
     {
         // Add entry for docking or un-docking the tool panel.
-        if (!mrParentSidebarController.IsDocked())
+        if (!mrDeckHost.IsDocked())
             bHideLock = false;
         else
             bHideUnLock = false;

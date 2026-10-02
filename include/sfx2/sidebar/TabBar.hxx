@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include <sfx2/sidebar/IDeckHost.hxx>
 #include <sfx2/sidebar/ResourceManager.hxx>
 
 #include <vcl/InterimItemWindow.hxx>
@@ -36,11 +37,10 @@ namespace weld { class Toolbar; }
 namespace sfx2::sidebar {
 
 class FocusManager;
-class SidebarController;
 
 /** The tab bar is the container for the individual tabs.
 */
-class TabBar final : public InterimItemWindow
+class SFX2_DLLPUBLIC TabBar final : public InterimItemWindow
 {
     friend class TabBarUIObject;
 public:
@@ -51,7 +51,7 @@ public:
         const css::uno::Reference<css::frame::XFrame>& rxFrame,
         ::std::function<void (const OUString& rsDeckId)> aDeckActivationFunctor,
         PopupMenuSignalConnectFunction aPopupMenuSignalConnectFunction,
-        SidebarController& rParentSidebarController);
+        IDeckHost& rDeckHost);
 
     weld::Container* GetContainer() { return m_xContainer.get(); }
 
@@ -115,7 +115,7 @@ private:
     css::uno::Reference<css::graphic::XGraphic> GetItemImage(const DeckDescriptor& rDeskDescriptor) const;
     void UpdateButtonIcons();
 
-    SidebarController& mrParentSidebarController;
+    IDeckHost& mrDeckHost;
 };
 
 

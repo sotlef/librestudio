@@ -22,11 +22,11 @@
 #include <vcl/weld/Builder.hxx>
 
 namespace tools { class Rectangle; }
+class DockingWindow;
 
 namespace sfx2::sidebar {
 
 class DeckTitleBar;
-class SidebarDockingWindow;
 
 /** Helper for layouting the direct and indirect children of a
     deck like title bars, panels, and scroll bars.
@@ -34,7 +34,7 @@ class SidebarDockingWindow;
 namespace DeckLayouter
 {
     void LayoutDeck (
-        const SidebarDockingWindow* pDockingWindow,
+        const DockingWindow* pDockingWindow,
         const tools::Rectangle& rContentArea,
         sal_Int32& rMinimalWidth,
         sal_Int32& rMinimalHeight,

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <sfx2/sidebar/Panel.hxx>
+#include <vcl/dockwin.hxx>
 #include <vcl/InterimItemWindow.hxx>
 
 namespace weld
@@ -38,18 +39,22 @@ namespace sfx2::sidebar
 {
 class DeckDescriptor;
 class DeckTitleBar;
-class SidebarDockingWindow;
 
 /** This is the parent window of the panels.
     It displays the deck title.
 
     A deck consists of multiple panels.
     E.g. Properties, Styles, Navigator.
+
+    The parent window is a plain DockingWindow so that a Deck can be
+    hosted by any docking window, not just the Sidebar's own
+    SidebarDockingWindow (see e.g. the "Code" app's bottom-only Output
+    deck, which hosts a Deck inside its own DockingWindow subclass).
 */
-class Deck final : public InterimItemWindow
+class SFX2_DLLPUBLIC Deck final : public InterimItemWindow
 {
 public:
-    Deck(const DeckDescriptor& rDeckDescriptor, SidebarDockingWindow* pParentWindow,
+    Deck(const DeckDescriptor& rDeckDescriptor, DockingWindow* pParentWindow,
          const std::function<void()>& rCloserAction);
     virtual ~Deck() override;
     virtual void dispose() override;
@@ -86,7 +91,7 @@ private:
     sal_Int32 mnMinimalHeight;
     SharedPanelContainer maPanels;
 
-    VclPtr<SidebarDockingWindow> mxParentWindow;
+    VclPtr<DockingWindow> mxParentWindow;
     std::unique_ptr<DeckTitleBar> mxTitleBar;
     std::unique_ptr<weld::ScrolledWindow> mxVerticalScrollBar;
     std::unique_ptr<weld::Box> mxContents;

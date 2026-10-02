@@ -22,11 +22,11 @@
 #include <sidebar/PanelTitleBar.hxx>
 #include <sfx2/sidebar/Panel.hxx>
 #include <sfx2/sidebar/Theme.hxx>
-#include <sfx2/sidebar/SidebarDockingWindow.hxx>
 #include <sfx2/sidebar/SidebarController.hxx>
 #include <sfx2/viewsh.hxx>
 #include <comphelper/lok.hxx>
 #include <osl/diagnose.h>
+#include <vcl/dockwin.hxx>
 #include <vcl/weld/ScrolledWindow.hxx>
 
 #include <comphelper/processfactory.hxx>
@@ -92,7 +92,7 @@ namespace {
         ::std::vector<LayoutItem>& rLayoutItems,
         const LayoutMode eMode_);
     tools::Rectangle PlaceDeckTitle (
-        const SidebarDockingWindow* pDockingWindow,
+        const DockingWindow* pDockingWindow,
         DeckTitleBar& rTitleBar,
         const tools::Rectangle& rAvailableSpace);
     tools::Rectangle PlaceVerticalScrollBar (
@@ -106,7 +106,7 @@ namespace {
 }
 
 void DeckLayouter::LayoutDeck (
-    const SidebarDockingWindow* pDockingWindow,
+    const DockingWindow* pDockingWindow,
     const tools::Rectangle& rContentArea,
     sal_Int32& rMinimalWidth,
     sal_Int32& rMinimalHeight,
@@ -488,7 +488,7 @@ void DistributeHeights (
 }
 
 tools::Rectangle PlaceDeckTitle(
-    const SidebarDockingWindow* pDockingWindow,
+    const DockingWindow* pDockingWindow,
     DeckTitleBar& rDeckTitleBar,
     const tools::Rectangle& rAvailableSpace)
 {

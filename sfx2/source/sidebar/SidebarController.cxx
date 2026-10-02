@@ -21,6 +21,7 @@
 #include <boost/property_tree/json_parser.hpp>
 
 #include <sfx2/sidebar/Deck.hxx>
+#include <sfx2/sidebar/DeckPanelBuilder.hxx>
 #include <sidebar/DeckDescriptor.hxx>
 #include <sidebar/DeckTitleBar.hxx>
 #include <sfx2/sidebar/Panel.hxx>
@@ -49,12 +50,9 @@
 #include <vcl/weld/Menu.hxx>
 #include <splitwin.hxx>
 #include <workwin.hxx>
-#include <comphelper/diagnose_ex.hxx>
 #include <tools/json_writer.hxx>
 #include <tools/link.hxx>
-#include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/lok.hxx>
 #include <sal/log.hxx>
 #include <officecfg/Office/UI/Sidebar.hxx>
@@ -65,9 +63,7 @@
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/ui/ContextChangeEventMultiplexer.hpp>
 #include <com/sun/star/ui/ContextChangeEventObject.hpp>
-#include <com/sun/star/ui/theUIElementFactoryManager.hpp>
 #include <com/sun/star/util/URL.hpp>
-#include <com/sun/star/rendering/XSpriteCanvas.hpp>
 
 #include <bitmaps.hlst>
 
@@ -762,23 +758,14 @@ void SidebarController::CreateDeck(std::u16string_view rDeckId) {
 
 void SidebarController::CreateDeck(std::u16string_view rDeckId, const Context& rContext, bool bForceCreate)
 {
-    std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rDeckId);
+    VclPtr<Deck> aDeck = DeckPanelBuilder::CreateDeck(
+        *mpResourceManager, rDeckId, mpParentWindow,
+        [this]() { return this->RequestCloseDeck(); },
+        bForceCreate);
 
-    if (!xDeckDescriptor)
+    if (!aDeck)
         return;
 
-    VclPtr<Deck> aDeck = xDeckDescriptor->mpDeck;
-    if (!aDeck || bForceCreate)
-    {
-        if (aDeck)
-            aDeck.disposeAndClear();
-
-        aDeck = VclPtr<Deck>::Create(
-                        *xDeckDescriptor,
-                        mpParentWindow,
-                        [this]() { return this->RequestCloseDeck(); });
-    }
-    xDeckDescriptor->mpDeck = std::move(aDeck);
     CreatePanels(rDeckId, rContext);
 }
 
@@ -788,71 +775,12 @@ void SidebarController::CreatePanels(std::u16string_view rDeckId, const Context&
 
     // init panels bounded to that deck, do not wait them being displayed as may be accessed through API
 
-    VclPtr<Deck> pDeck = xDeckDescriptor->mpDeck;
-
-    ResourceManager::PanelContextDescriptorContainer aPanelContextDescriptors;
-
     css::uno::Reference<css::frame::XController> xController = mxCurrentController.is() ? mxCurrentController : mxFrame->getController();
 
-    mpResourceManager->GetMatchingPanels(
-                                        aPanelContextDescriptors,
-                                        rContext,
-                                        rDeckId,
-                                        xController);
-
-    // Update the panel list.
-    const sal_Int32 nNewPanelCount (aPanelContextDescriptors.size());
-    SharedPanelContainer aNewPanels;
-    sal_Int32 nWriteIndex (0);
-
-    aNewPanels.resize(nNewPanelCount);
-
-    for (sal_Int32 nReadIndex=0; nReadIndex<nNewPanelCount; ++nReadIndex)
-    {
-        const ResourceManager::PanelContextDescriptor& rPanelContexDescriptor (
-            aPanelContextDescriptors[nReadIndex]);
-
-        // Determine if the panel can be displayed.
-        const bool bIsPanelVisible (!mbIsDocumentReadOnly || rPanelContexDescriptor.mbShowForReadOnlyDocuments);
-        if ( ! bIsPanelVisible)
-            continue;
-
-        auto xOldPanel(pDeck->GetPanel(rPanelContexDescriptor.msId));
-        if (xOldPanel)
-        {
-            xOldPanel->SetLurkMode(false);
-            aNewPanels[nWriteIndex] = xOldPanel;
-            xOldPanel->SetExpanded(rPanelContexDescriptor.mbIsInitiallyVisible);
-            ++nWriteIndex;
-        }
-        else
-        {
-            auto aPanel = CreatePanel(rPanelContexDescriptor.msId,
-                                      pDeck->GetPanelParentWindow(),
-                                      rPanelContexDescriptor.mbIsInitiallyVisible,
-                                      rContext,
-                                      pDeck);
-            if (aPanel)
-            {
-                aNewPanels[nWriteIndex] = std::move(aPanel);
-
-                // Depending on the context we have to change the command
-                // for the "more options" dialog.
-                PanelTitleBar* pTitleBar = aNewPanels[nWriteIndex]->GetTitleBar();
-                if (pTitleBar)
-                {
-                    pTitleBar->SetMoreOptionsCommand(
-                        rPanelContexDescriptor.msMenuCommand,
-                        mxFrame, xController);
-                }
-                ++nWriteIndex;
-            }
-        }
-    }
-
-    // mpCurrentPanels - may miss stuff (?)
-    aNewPanels.resize(nWriteIndex);
-    pDeck->ResetPanels(std::move(aNewPanels));
+    DeckPanelBuilder::CreatePanels(
+        *mpResourceManager, rDeckId, rContext, xDeckDescriptor->mpDeck, mxFrame, xController,
+        mbIsDocumentReadOnly, [this]() { return this->GetCurrentContext(); },
+        Reference<ui::XSidebar>(static_cast<ui::XSidebar*>(this)), &mpParentWindow->GetBindings());
 }
 
 void SidebarController::SwitchToDeck (
@@ -1002,103 +930,6 @@ void SidebarController::notifyDeckTitle(std::u16string_view targetDeckId)
         maFocusManager.SetDeck(mpCurrentDeck);
         mpTabBar->UpdateFocusManager(maFocusManager);
         UpdateTitleBarIcons();
-    }
-}
-
-std::shared_ptr<Panel> SidebarController::CreatePanel (
-    std::u16string_view rsPanelId,
-    weld::Widget* pParentWindow,
-    const bool bIsInitiallyExpanded,
-    const Context& rContext,
-    const VclPtr<Deck>& pDeck)
-{
-    std::shared_ptr<PanelDescriptor> xPanelDescriptor = mpResourceManager->GetPanelDescriptor(rsPanelId);
-
-    if (!xPanelDescriptor)
-        return nullptr;
-
-    // Create the panel which is the parent window of the UIElement.
-    auto xPanel = std::make_shared<Panel>(
-        *xPanelDescriptor,
-        pParentWindow,
-        bIsInitiallyExpanded,
-        pDeck,
-        [this]() { return this->GetCurrentContext(); },
-        mxFrame);
-
-    // Create the XUIElement.
-    Reference<ui::XUIElement> xUIElement (CreateUIElement(
-            xPanel->GetElementParentWindow(),
-            xPanelDescriptor->msImplementationURL,
-            xPanelDescriptor->mbWantsCanvas,
-            rContext));
-    if (xUIElement.is())
-    {
-        // Initialize the panel and add it to the active deck.
-        xPanel->SetUIElement(xUIElement);
-    }
-    else
-    {
-        xPanel.reset();
-    }
-
-    return xPanel;
-}
-
-Reference<ui::XUIElement> SidebarController::CreateUIElement (
-    const Reference<awt::XWindow>& rxWindow,
-    const OUString& rsImplementationURL,
-    const bool bWantsCanvas,
-    const Context& rContext)
-{
-    try
-    {
-        const Reference<XComponentContext>& xComponentContext (::comphelper::getProcessComponentContext() );
-        const Reference<ui::XUIElementFactory> xUIElementFactory =
-               ui::theUIElementFactoryManager::get( xComponentContext );
-
-       // Create the XUIElement.
-        ::comphelper::NamedValueCollection aCreationArguments;
-        aCreationArguments.put(u"Frame"_ustr, Any(mxFrame));
-        aCreationArguments.put(u"ParentWindow"_ustr, Any(rxWindow));
-        SidebarDockingWindow* pSfxDockingWindow = mpParentWindow.get();
-        if (pSfxDockingWindow != nullptr)
-            aCreationArguments.put(u"SfxBindings"_ustr, Any(reinterpret_cast<sal_uInt64>(&pSfxDockingWindow->GetBindings())));
-        aCreationArguments.put(u"Theme"_ustr, Theme::GetPropertySet());
-        aCreationArguments.put(u"Sidebar"_ustr, Any(Reference<ui::XSidebar>(static_cast<ui::XSidebar*>(this))));
-        if (bWantsCanvas)
-        {
-            Reference<rendering::XSpriteCanvas> xCanvas (VCLUnoHelper::GetWindow(rxWindow)->GetOutDev()->GetSpriteCanvas());
-            aCreationArguments.put(u"Canvas"_ustr, Any(xCanvas));
-        }
-
-        if (mxCurrentController.is())
-        {
-            OUString aModule = Tools::GetModuleName(mxCurrentController);
-            if (!aModule.isEmpty())
-                aCreationArguments.put(u"Module"_ustr, Any(aModule));
-            // See also sfx2::sidebar::GetFrame. Maybe we should always create
-            // uielements with the Controller's getFrame as the XFrame. For now
-            // set both XFrame and Controller and selectively get the XFrame
-            // from the Controller.
-            aCreationArguments.put(u"Controller"_ustr, Any(mxCurrentController));
-        }
-
-        aCreationArguments.put(u"ApplicationName"_ustr, Any(rContext.msApplication));
-        aCreationArguments.put(u"ContextName"_ustr, Any(rContext.msContext));
-
-        Reference<ui::XUIElement> xUIElement(
-            xUIElementFactory->createUIElement(
-                rsImplementationURL,
-                aCreationArguments.getPropertyValues()),
-            UNO_SET_THROW);
-
-        return xUIElement;
-    }
-    catch(const Exception&)
-    {
-        TOOLS_WARN_EXCEPTION("sfx.sidebar", "Cannot create panel " << rsImplementationURL);
-        return nullptr;
     }
 }
 

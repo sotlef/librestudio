@@ -24,6 +24,7 @@
 #include <sfx2/sidebar/AsynchronousCall.hxx>
 #include <sfx2/sidebar/Context.hxx>
 #include <sfx2/sidebar/FocusManager.hxx>
+#include <sfx2/sidebar/IDeckHost.hxx>
 #include <sfx2/sidebar/ResourceManager.hxx>
 #include <sfx2/sidebar/TabBar.hxx>
 
@@ -36,10 +37,8 @@
 #include <optional>
 #include <comphelper/compbase.hxx>
 
-namespace com::sun::star::awt { class XWindow; }
 namespace com::sun::star::beans { class XPropertySet; }
 namespace com::sun::star::frame { class XDispatch; }
-namespace com::sun::star::ui { class XUIElement; }
 namespace sfx2::sidebar { class Deck; }
 
 typedef comphelper::WeakComponentImplHelper <
@@ -61,6 +60,7 @@ class SidebarDockingWindow;
 
 class SFX2_DLLPUBLIC SidebarController final
     : public SidebarControllerInterfaceBase
+    , public IDeckHost
 {
 public:
     static rtl::Reference<SidebarController> create(SidebarDockingWindow* pParentWindow,
@@ -113,7 +113,7 @@ public:
     const static sal_Int32 SwitchFlag_ForceNewDeck = 0x02;
     const static sal_Int32 SwitchFlag_ForceNewPanels = 0x02;
 
-    bool IsDocked() const;
+    bool IsDocked() const override;
 
     void OpenThenSwitchToDeck(std::u16string_view rsDeckId);
     void OpenThenToggleDeck(const OUString& rsDeckId);
@@ -134,11 +134,11 @@ public:
 
     FocusManager& GetFocusManager() { return maFocusManager;}
 
-    ResourceManager* GetResourceManager() { return mpResourceManager.get();}
+    ResourceManager* GetResourceManager() override { return mpResourceManager.get();}
 
    // std::unique_ptr<ResourceManager> GetResourceManager() { return mpResourceManager;}
 
-    const Context& GetCurrentContext() const { return maCurrentContext;}
+    const Context& GetCurrentContext() const override { return maCurrentContext;}
     bool IsDocumentReadOnly (void) const { return mbIsDocumentReadOnly;}
 
     void SwitchToDeck(std::u16string_view rsDeckId);
@@ -267,21 +267,9 @@ private:
     */
     void UpdateConfigurations();
 
-    css::uno::Reference<css::ui::XUIElement> CreateUIElement (
-        const css::uno::Reference<css::awt::XWindow>& rxWindow,
-        const OUString& rsImplementationURL,
-        const bool bWantsCanvas,
-        const Context& rContext);
-
     void CreatePanels(
         std::u16string_view rDeckId,
         const Context& rContext);
-    std::shared_ptr<Panel> CreatePanel (
-        std::u16string_view rsPanelId,
-        weld::Widget* pParentWindow,
-        const bool bIsInitiallyExpanded,
-        const Context& rContext,
-        const VclPtr<Deck>& pDeck);
 
     void SwitchToDeck (
         const DeckDescriptor& rDeckDescriptor,

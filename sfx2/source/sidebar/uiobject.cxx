@@ -41,9 +41,14 @@ void TabBarUIObject::execute(const OUString& rAction, const StringMap& rParamete
 {
     if (rAction == "CLICK")
     {
-        if (rParameters.find(u"POS"_ustr) != rParameters.end())
-            mxTabBar->mrParentSidebarController.OpenThenToggleDeck(
-                mxTabBar->GetDeckIdForIndex(rParameters.find(u"POS"_ustr)->second.toInt32()));
+        auto it = rParameters.find(u"POS"_ustr);
+        // Tab-click-to-toggle is only meaningful for the real, left/right
+        // Sidebar (SidebarController::OpenThenToggleDeck) -- a TabBar hosted
+        // by some other IDeckHost (e.g. the "Code" app's bottom-only Output
+        // dock) simply doesn't support this UITest action yet.
+        if (it != rParameters.end())
+            if (auto* pSidebarController = dynamic_cast<SidebarController*>(&mxTabBar->mrDeckHost))
+                pSidebarController->OpenThenToggleDeck(mxTabBar->GetDeckIdForIndex(it->second.toInt32()));
     }
     else
         WindowUIObject::execute(rAction, rParameters);

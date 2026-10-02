@@ -25,7 +25,6 @@
 #include <sidebar/DeckTitleBar.hxx>
 #include <sidebar/PanelTitleBar.hxx>
 #include <sfx2/sidebar/Panel.hxx>
-#include <sfx2/sidebar/SidebarDockingWindow.hxx>
 #include <sfx2/sidebar/Theme.hxx>
 #include <sfx2/viewsh.hxx>
 
@@ -38,7 +37,7 @@ using namespace css;
 
 namespace sfx2::sidebar {
 
-Deck::Deck(const DeckDescriptor& rDeckDescriptor, SidebarDockingWindow* pParentWindow,
+Deck::Deck(const DeckDescriptor& rDeckDescriptor, DockingWindow* pParentWindow,
            const std::function<void()>& rCloserAction)
     : InterimItemWindow(pParentWindow, u"sfx/ui/deck.ui"_ustr, u"Deck"_ustr)
     , msId(rDeckDescriptor.msId)
