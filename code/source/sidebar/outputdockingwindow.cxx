@@ -33,6 +33,13 @@ OutputDockingWindow::OutputDockingWindow(SfxBindings& rBindings, SfxChildWindow&
             xFrame = pViewFrame->GetFrame().GetFrameInterface();
 
     mpOutputController = std::make_unique<OutputController>(this, rBindings, xFrame);
+
+    // default docked height for the very first start: SfxDockingWindow::
+    // Initialize() snapshots GetOutputSizePixel() as the initial splitter
+    // size, and with no persisted SfxChildWinInfo this window has never
+    // been laid out -- 0x0 -- so the bottom dock would come up as a 1px
+    // sliver the user has to drag open every session.
+    SetOutputSizePixel(Size(600, 200));
 }
 
 OutputDockingWindow::~OutputDockingWindow()
