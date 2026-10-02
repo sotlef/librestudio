@@ -1526,6 +1526,17 @@ bool ToolBox::ImplCalcItem()
                     item.mbEmptyBtn = true;
                 }
 
+                // an item with content must not come out smaller than an
+                // empty one (which gets the default image size above):
+                // undersized content (e.g. an icon smaller than the nominal
+                // icon size, or a one-character text) is centered within the
+                // default-size button instead of shrinking the button, so
+                // mixed text/image toolbars get uniform button sizes
+                if ( item.maItemSize.Width() < nDefWidth )
+                    item.maItemSize.setWidth( nDefWidth );
+                if ( item.maItemSize.Height() < nDefHeight )
+                    item.maItemSize.setHeight( nDefHeight );
+
                 // save the content size
                 item.maContentSize = item.maItemSize;
 
@@ -2681,6 +2692,11 @@ void ToolBox::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplToolItems::si
                 // add in image offset
                 if( bImage )
                     nTextOffX = nImageOffX + aImageSize.Width() + TB_IMAGETEXTOFFSET;
+                else
+                    // text-only item: center horizontally too, same as an
+                    // image-only item is centered above, else the text sticks
+                    // to the left edge of a button wider than the text
+                    nTextOffX += (nBtnWidth-(bDropDown ? aDropDownRect.getOpenWidth() : 0)+SMALLBUTTON_OFF_NORMAL_X-aTxtSize.Width())/2;
             }
             else
             {
