@@ -2758,6 +2758,19 @@ tools::Long SplitWindow::GetSplitBarSize() const
     return n;
 }
 
+void SplitWindow::SetSideBordersFlush()
+{
+    tools::Long& rSide1 = mbHorz ? mnLeftBorder : mnTopBorder;
+    tools::Long& rSide2 = mbHorz ? mnRightBorder : mnBottomBorder;
+    if ( !rSide1 && !rSide2 )
+        return;
+
+    rSide1 = 0;
+    rSide2 = 0;
+    // the item area just widened to the window edges
+    ImplUpdate();
+}
+
 void SplitWindow::SetSplitBarCoveredEnd( tools::Long nPixels )
 {
     nPixels = std::max<tools::Long>( nPixels, 0 );

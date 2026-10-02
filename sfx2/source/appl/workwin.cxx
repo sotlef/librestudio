@@ -821,6 +821,15 @@ SvBorder SfxWorkWindow::Arrange_Impl()
                 if ( pCli->eAlign == SfxChildAlignment::BOTTOM
                      && pCli->pWin->GetType() == WindowType::SPLITWINDOW )
                 {
+                    // An annexing window also wants its items flush with
+                    // its (new) side edges: its WB_BORDER left/right insets
+                    // are never painted (ImplDrawBorder() quirk), and with
+                    // the strips annexed, the separator line itself is the
+                    // spacing -- a 2px dead inset would make this window's
+                    // content read as more indented than the column's.
+                    static_cast<SplitWindow*>(pCli->pWin.get())->SetSideBordersFlush();
+
+
                     // Widen the bottom split window sideways over the
                     // already-arranged columns' splitter strips: those
                     // strips run the full window height alongside this

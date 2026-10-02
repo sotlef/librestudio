@@ -189,6 +189,13 @@ public:
     // in/out button centers itself, and is hit-tested, within the remaining
     // uncovered run of the bar only
     void                SetSplitBarCoveredEnd( tools::Long nPixels );
+    // drop the WB_BORDER side insets running along the bar (left/right for
+    // a horizontal window, top/bottom for a vertical one): ImplDrawBorder()
+    // never paints anything there, so they are reserved dead space only --
+    // a window widened sideways over its neighbours' splitter strips (see
+    // SfxWorkWindow::Arrange_Impl) wants its item area flush with the
+    // separator line on the annexed edges instead
+    void                SetSideBordersFlush();
     bool                IsFadeNoButtonMode() const { return mbFadeNoButtonMode; }
 
     void                SetSplitHdl( const Link<SplitWindow*,void>& rLink ) { maSplitHdl = rLink; }
