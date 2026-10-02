@@ -10,8 +10,8 @@
 #include "codeviewshell.hxx"
 
 #include "codedocshell.hxx"
-#include "editorarea.hxx"
-#include "outputpanel.hxx"
+#include "editormdipanel.hxx"
+#include "sidebar/outputchildwindow.hxx"
 
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
@@ -44,6 +44,12 @@ void code_Shell::InitInterface_Impl()
     // sw/source/uibase/uiview/view0.cxx makes for Writer.
     GetStaticInterface()->RegisterChildWindow(
         sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
+
+    // Same for the bottom-only Output dock (code/source/sidebar/) --
+    // the in-content OutputPanel it replaces is gone, see LayoutPanels()
+    // below.
+    GetStaticInterface()->RegisterChildWindow(
+        code::sidebar::OutputChildWindow::GetChildWindowId());
 }
 
 Shell::Shell(SfxViewFrame& rFrame, SfxViewShell* /*pOldSh*/)
@@ -68,7 +74,6 @@ Shell::Shell(SfxViewFrame& rFrame, SfxViewShell* /*pOldSh*/)
 Shell::~Shell()
 {
     mxEditorArea.disposeAndClear();
-    mxOutputPanel.disposeAndClear();
 }
 
 void Shell::InitPanels()
@@ -86,11 +91,8 @@ void Shell::InitPanels()
     // (possibly 0x0) size they had when first created.
     SetWindow(&rContentWindow);
 
-    mxEditorArea = VclPtr<EditorAreaPanel>::Create(&rContentWindow);
+    mxEditorArea = VclPtr<EditorMDIPanel>::Create(&rContentWindow);
     mxEditorArea->Show();
-
-    mxOutputPanel = VclPtr<OutputPanel>::Create(&rContentWindow);
-    mxOutputPanel->Show();
 
     LayoutPanels(Point(0, 0), rContentWindow.GetOutputSizePixel());
 }
@@ -103,17 +105,14 @@ void Shell::OuterResizePixel(const Point& rOfs, const Size& rSize)
 
 void Shell::LayoutPanels(const Point& rOfs, const Size& rSize)
 {
-    if (!mxEditorArea || !mxOutputPanel)
+    if (!mxEditorArea)
         return;
 
-    const tools::Long nOutputHeight = mxOutputPanel->IsVisible() ? rSize.Height() / 4 : 0;
-
-    mxEditorArea->SetPosSizePixel(rOfs, Size(rSize.Width(), rSize.Height() - nOutputHeight));
-
-    if (mxOutputPanel->IsVisible())
-        mxOutputPanel->SetPosSizePixel(
-            Point(rOfs.X(), rOfs.Y() + rSize.Height() - nOutputHeight),
-            Size(rSize.Width(), nOutputHeight));
+    // The Output dock (code/source/sidebar/) now lives outside this content
+    // area entirely, the same way the real Sidebar's Solution deck does --
+    // the editor simply reclaims the quarter-height strip the old, hand-docked
+    // OutputPanel used to occupy here.
+    mxEditorArea->SetPosSizePixel(rOfs, rSize);
 }
 
 void Shell::Execute(SfxRequest& rReq)

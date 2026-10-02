@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ -->
+<!DOCTYPE oor:component-schema SYSTEM "../../../../../component-schema.dtd">
+<oor:component-schema xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="CodeCommands" oor:package="org.openoffice.Office.UI" xml:lang="en-US">
+  <info>
+    <desc>Contains label text for Office commands and identifiers specific to the Code module that are used by the user interface.</desc>
+  </info>
+  <import oor:component="org.openoffice.Office.UI.Commands"/>
+  <uses oor:component="org.openoffice.Office.UI.Commands"/>
+  <templates/>
+  <component>
+    <group oor:name="UserInterface">
+      <info>
+        <desc>Contains user interface data for Office commands and identifiers that are used by the user interface."</desc>
+      </info>
+      <set oor:name="Commands" oor:node-type="LabelType" oor:component="org.openoffice.Office.UI.Commands">
+        <info>
+          <desc>Contains label text for Office commands and identifiers that are used by the user interface."</desc>
+        </info>
+      </set>
+      <set oor:name="Popups" oor:node-type="LabelType" oor:component="org.openoffice.Office.UI.Commands">
+        <info>
+          <desc>Contains label text for popup menus identifiers that are used by the user interface."</desc>
+        </info>
+      </set>
+    </group>
+  </component>
+</oor:component-schema>

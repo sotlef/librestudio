@@ -7,12 +7,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-// No new slot IDs of our own. sfx.sdi's own shared slot definitions
-// (pulled in via codeslots.sdi's "include \"sfx.sdi\"") reference IDs
-// beyond just sfx2/sfxsids.hrc's own (e.g. SID_TEMPLATE_NAME, from
-// editeng/editids.hrc) -- svx/svxids.hrc already aggregates
-// svl/solar.hrc + sfx2/sfxsids.hrc + editeng/editids.hrc, so reuse that
-// umbrella header exactly like basctl/sdi/basslots.hrc does, rather than
-// re-deriving the same list by hand.
+// sfx.sdi's own shared slot definitions (pulled in via codeslots.sdi's
+// "include \"sfx.sdi\"") reference IDs beyond just sfx2/sfxsids.hrc's own
+// (e.g. SID_TEMPLATE_NAME, from editeng/editids.hrc) -- svx/svxids.hrc
+// already aggregates svl/solar.hrc + sfx2/sfxsids.hrc + editeng/editids.hrc,
+// so reuse that umbrella header exactly like basctl/sdi/basslots.hrc does,
+// rather than re-deriving the same list by hand.
 #include <svx/svxids.hrc>
 #include <editeng/memberids.h>
+
+// Our own new slot id (SID_CODE_OUTPUT, code.sdi's ShowOutput).
+#include "codeids.hxx"

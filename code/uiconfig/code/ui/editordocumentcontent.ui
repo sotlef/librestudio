@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkTextBuffer" id="buffer"/>
+  <!-- One of these is built per open document (EditorMDIPanel::OpenDemoDocument,
+       code/source/editormdipanel.cxx) as the content of a weld::MDI page
+       (weld::MDI itself only owns the tab strip + a bare native container
+       per document, not what's inside it; same relationship
+       weld::Notebook::get_page() has to its own tab pages). -->
+  <object class="GtkScrolledWindow" id="EditorDocumentContent">
+    <property name="visible">True</property>
+    <property name="can-focus">True</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+    <property name="shadow-type">in</property>
+    <child>
+      <object class="GtkTextView" id="content">
+        <property name="visible">True</property>
+        <property name="can-focus">True</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+        <property name="editable">True</property>
+        <property name="monospace">True</property>
+        <property name="wrap-mode">none</property>
+        <property name="buffer">buffer</property>
+      </object>
+    </child>
+  </object>
+</interface>

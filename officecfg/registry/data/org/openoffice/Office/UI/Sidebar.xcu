@@ -44,6 +44,47 @@
         </prop>
       </node>
 
+      <!-- "Code"'s bottom-only Output dock (code::sidebar::OutputController,
+           not the real left/right Sidebar) reads this same Sidebar.xcu
+           through its own, separate ResourceManager instance, always asking
+           for "OutputDeck" by id directly (never through the
+           context-matching "which deck to show" path the real Sidebar
+           uses), so ContextList here plays no functional role for
+           Output itself. It would be nice to scope it to "Code" only (to
+           keep it from also matching in every other app's real left/right
+           Sidebar), but ResourceManager::ReadContextList resolves the
+           Application field only through the closed, non-extensible
+           vcl::EnumContext::Application enum (Writer/Calc/Draw/Impress/...
+           plus "any"/"none"); an unrecognized name like
+           "com.sun.star.code.CodeDocument" is silently dropped
+           (SAL_WARN + continue), leaving an *empty* context list, which is
+           exactly what broke panel matching here before this comment was
+           written. "any, any, visible" is used instead, same as
+           SolutionDeck/SolutionPanel already do just above: an existing,
+           accepted tradeoff in this tree, not a new one. -->
+      <node oor:name="OutputDeck" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Output</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>OutputDeck</value>
+        </prop>
+        <prop oor:name="IconURL" oor:type="xs:string">
+          <value>private:graphicrepository/sfx2/res/symphony/sidebar-navigator-large.png</value>
+        </prop>
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>10</value>
+        </prop>
+        <prop oor:name="HiddenInViewer" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+      </node>
+
       <node oor:name="PropertyDeck" oor:op="replace">
         <prop oor:name="Title" oor:type="xs:string">
           <value xml:lang="en-US">Properties</value>
@@ -467,6 +508,39 @@
         </prop>
         <prop oor:name="ImplementationURL" oor:type="xs:string">
           <value>private:resource/toolpanel/CodePanelFactory/SolutionPanel</value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>100</value>
+        </prop>
+        <prop oor:name="WantsAWT" oor:type="xs:boolean">
+          <value>false</value>
+        </prop>
+      </node>
+
+      <node oor:name="OutputPanel" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Build Output</value>
+        </prop>
+        <prop oor:name="TitleBarIsOptional" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>OutputPanel</value>
+        </prop>
+        <prop oor:name="DeckId" oor:type="xs:string">
+          <value>OutputDeck</value>
+        </prop>
+        <!-- "any, any, visible", not scoped to "Code"; see OutputDeck's
+             own comment above: the Application field can't express a
+             custom, non-upstream module name through
+             ResourceManager::ReadContextList's closed EnumContext enum. -->
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="ImplementationURL" oor:type="xs:string">
+          <value>private:resource/toolpanel/CodePanelFactory/OutputPanel</value>
         </prop>
         <prop oor:name="OrderIndex" oor:type="xs:int">
           <value>100</value>

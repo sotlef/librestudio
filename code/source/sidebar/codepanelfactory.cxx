@@ -9,6 +9,7 @@
 
 #include "codepanelfactory.hxx"
 
+#include "outputlogpanel.hxx"
 #include "solutionpanel.hxx"
 
 #include <com/sun/star/ui/XSidebar.hpp>
@@ -53,6 +54,8 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
 
     if (rsResourceURL.endsWith("/SolutionPanel"))
         xControl = std::make_unique<code::sidebar::SolutionPanel>(pParent, xSidebar);
+    else if (rsResourceURL.endsWith("/OutputPanel"))
+        xControl = std::make_unique<code::sidebar::OutputLogPanel>(pParent);
 
     if (xControl)
         return sfx2::sidebar::SidebarPanelBase::Create(rsResourceURL, xFrame, std::move(xControl),

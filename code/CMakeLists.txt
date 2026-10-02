@@ -26,14 +26,21 @@ librestudio_add_sdi_target(code_sdi
     SDI        "${CMAKE_SOURCE_DIR}/code/sdi/codeslots.sdi"
     EXPORTS    "${CMAKE_SOURCE_DIR}/code/sdi/code.sdi"
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/SdiTarget/code/sdi"
-    INCLUDES   "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
+    INCLUDES   "${CMAKE_SOURCE_DIR}/code/inc" "${CMAKE_SOURCE_DIR}/svx/sdi" "${CMAKE_SOURCE_DIR}/sfx2/sdi")
 
 add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeapp.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/editorarea.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/outputpanel.cxx")
+    "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
+    # The Output dock's own SfxChildWindow/SfxDockingWindow/IDeckHost
+    # trio -- unlike codesidebar's panel factory below, these are
+    # constructed directly (RegisterChildWindow/ShowChildWindow in
+    # codeapp.cxx), not UNO-discovered, so they link straight into the
+    # executable the same way codeviewshell.cxx/editorarea.cxx do.
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputchildwindow.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputcontroller.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputdockingwindow.cxx")
 
 target_compile_definitions(code PRIVATE VCL_INTERNALS)
 
@@ -66,7 +73,24 @@ add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers gcc3_
     #                   read *any* icon out of *any* icon-theme zip -- so
     #                   this one was silently breaking every icon in the
     #                   app, not just the sidebar's, the whole session
-    uui filterconfig i18nsearch vcl_uiconfig package2)
+    #  - cui:           Tools > Options (and every other cui-hosted dialog)
+    #                   -- dlopened on first use; found via a crash after a
+    #                   weld::Builder vtable change (new weld_mdi() slot)
+    #                   left a stale cui mis-dispatching virtual calls,
+    #                   because `ninja code` never rebuilt it
+    #  - vclplug_gtk3/  the actual GUI backends: dlopened by vcl at startup
+    #    vclplug_qt6:   based on SAL_USE_VCLPLUGIN/desktop detection, never
+    #                   linked -- without them here, `ninja code` happily
+    #                   reports "no work to do" after an edit inside
+    #                   vcl/qt5/ or vcl/unx/gtk3/
+    uui filterconfig i18nsearch vcl_uiconfig package2 cui)
+
+if (ENABLE_GTK3)
+    add_dependencies(code vclplug_gtk3)
+endif()
+if (ENABLE_QT6)
+    add_dependencies(code vclplug_qt6)
+endif()
 
 target_link_libraries(code PRIVATE
     comphelper cppu cppuhelper sal sfx fwk svxcore svx svl svt tk tl ucbhelper utl vcl vclmain)
@@ -89,6 +113,7 @@ install(TARGETS code RUNTIME DESTINATION program)
 # uui/filterconfig -- "code" (the executable) does not link it.
 add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputlogpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx")
 
 target_include_directories(codesidebar PRIVATE
@@ -172,6 +197,9 @@ endforeach ()
 # share/config/soffice.cfg/ -- same "<module>/ui/" convention every other
 # module's own weld .ui files use (e.g. svx/ui/sidebarempty.ui).
 set(CODE_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editordocumentcontent.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editormdi.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/outputpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
 )
 install(FILES ${CODE_UI_FILES} DESTINATION share/config/soffice.cfg/code/ui)

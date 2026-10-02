@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<!DOCTYPE oor:component-data SYSTEM "../../../../../component-update.dtd">
+<oor:component-data xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="CodeCommands" oor:package="org.openoffice.Office.UI">
+  <node oor:name="UserInterface">
+    <node oor:name="Commands">
+      <node oor:name=".uno:ShowOutput" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Output</value>
+        </prop>
+      </node>
+    </node>
+  </node>
+</oor:component-data>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <!-- GtkInstanceMDI/QtInstanceMDI (vcl/unx/gtk3/gtkinst.cxx,
+       vcl/qt5/QtInstanceMDI.cxx) build every tab header and page entirely
+       in C++; this plain GtkNotebook only needs to exist so
+       Builder::CreateInterimBuilder() has something to load and
+       weld_mdi(id) has an id to look up, the same relationship
+       solutionpanel.ui/outputpanel.ui have to their own C++-side content. -->
+  <object class="GtkNotebook" id="EditorMDI">
+    <property name="visible">True</property>
+    <property name="can-focus">True</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+  </object>
+</interface>

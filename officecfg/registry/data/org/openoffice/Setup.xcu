@@ -670,7 +670,7 @@
         <prop oor:name="ooSetupFactoryDefaultFilter" oor:finalized="true"/>
         <prop oor:name="ooSetupFactoryEmptyDocumentURL" oor:finalized="true"/>
         <prop oor:name="ooSetupFactoryCommandConfigRef">
-          <value>GenericCommands</value>
+          <value>CodeCommands</value>
         </prop>
         <prop oor:name="ooSetupFactoryShortName">
           <value>Code</value>

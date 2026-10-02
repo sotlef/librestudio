@@ -65,6 +65,7 @@
 
 #include "codedocshell.hxx"
 #include "codeviewshell.hxx"
+#include "sidebar/outputchildwindow.hxx"
 
 using namespace com::sun::star;
 
@@ -170,6 +171,23 @@ void CodeApplication::Init()
     std::set_terminate(&CodeTerminateHandler);
     Translate::SetReadStringHook(&CodeReplaceStringHookProc);
 
+    // vclplug_qt6's own QtInstance::isQtWeldingEnabled() (vcl/qt5/
+    // QtInstance.cxx) keeps real native-Qt-widget welding for
+    // InterimItemWindow-hosted content entirely opt-in behind this env var
+    // -- without it, every InterimItemWindow under Qt (including our own
+    // weld::MDI-backed EditorMDIPanel) silently falls back to the generic,
+    // non-native SalInstanceBuilder, whose weld_mdi() is a stub (see
+    // TODO.md): the whole editor area stays empty under Qt, no error. Only
+    // .ui files explicitly listed in QtInstanceBuilder.cxx's own
+    // SUPPORTED_WITH_QT_PARENT allowlist (code/ui/editormdi.ui and
+    // code/ui/editordocumentcontent.ui, added alongside weld::MDI) are
+    // actually affected by turning this on -- every other InterimItemWindow
+    // consumer (sfx2::sidebar's own Deck/TabBar, SolutionPanel,
+    // OutputLogPanel, ...) keeps using the fallback exactly as before,
+    // since their .ui files aren't on that list. 0 (don't overwrite): if
+    // the user already set this themselves, their choice wins.
+    setenv("SAL_VCL_QT_USE_WELDED_WIDGETS", "1", 0);
+
     // Unlike v1, this is no longer optional: SfxApplication and the whole
     // sfx2/framework machinery need a real UNO context to exist at all.
     uno::Reference<uno::XComponentContext> xContext =
@@ -238,6 +256,12 @@ int CodeApplication::Main()
         // saved state still wins, same as every other app. Must be called
         // before the sidebar's first ShowChildWindow() below.
         sfx2::sidebar::SidebarChildWindow::SetDefaultAlignment(SfxChildAlignment::LEFT);
+
+        // Same bVisible=true reasoning as the Sidebar's own registration
+        // above (no persisted profile, so the factory default is what
+        // actually governs whether this shows up on first run) -- v1/v2
+        // always showed Output, so default it visible too.
+        code::sidebar::OutputChildWindow::RegisterChildWindow(true, nullptr);
 
         // Also basctl's Dll::Dll(): SfxBaseModel::getSupportedServiceNames()
         // (sfx2/source/doc/sfxbasemodel.cxx) delegates to
@@ -318,6 +342,9 @@ int CodeApplication::Main()
         if (pViewFrame)
             pViewFrame->ShowChildWindow(sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
 
+        if (pViewFrame)
+            pViewFrame->ShowChildWindow(code::sidebar::OutputChildWindow::GetChildWindowId());
+
         // PropertyDeck (officecfg's Sidebar.xcu) is scoped "any, any,
         // visible" -- a generic default meant for real document modules
         // (Writer/Calc/...), not ours, and it has no content that makes
@@ -342,6 +369,22 @@ int CodeApplication::Main()
         // call it once, anywhere before the sidebar is first shown.
         sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
             u"com.sun.star.code.CodeDocument", u"PropertyDeck");
+
+        // Same story for OutputDeck (officecfg's Sidebar.xcu): it is
+        // "any, any, visible" too -- not out of genuine cross-app intent,
+        // but because ResourceManager::ReadContextList resolves the
+        // ContextList's Application field only through the closed,
+        // non-extensible vcl::EnumContext::Application enum, which has no
+        // "Code" entry to scope it to (see the long comment on OutputDeck's
+        // own ContextList in Sidebar.xcu). Without this, the real,
+        // left-docked Sidebar also picks it up as a second, redundant,
+        // empty-looking tab alongside Solution -- the actual Output content
+        // lives in the bottom dock (code::sidebar::OutputController),
+        // which never consults this hidden-deck registry at all (it builds
+        // "OutputDeck" directly by id, bypassing GetMatchingDecks()
+        // entirely), so hiding it here only affects the real Sidebar.
+        sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
+            u"com.sun.star.code.CodeDocument", u"OutputDeck");
 
         // SidebarController (sfx2/source/sidebar/SidebarController.cxx)
         // registers itself as a css::ui::XContextChangeEventListener on our
