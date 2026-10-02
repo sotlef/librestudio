@@ -404,14 +404,21 @@ void QtInstance::DestroyFrame(SalFrame* pFrame)
     }
 }
 
-SalObject* QtInstance::CreateObject(SalFrame* pParent, SystemWindowData*, bool bShow)
+SalObject* QtInstance::CreateObject(SalFrame* pParent, SystemWindowData* pWindowData, bool bShow)
 {
     SolarMutexGuard aGuard;
 
     assert(!pParent || dynamic_cast<QtFrame*>(pParent));
 
+    // same bClipUsingNativeWidget dispatch as GtkInstance::CreateObject's
+    // GtkSalObject vs GtkSalObjectWidgetClip split: a widget-subtree host
+    // (CreateInterimBuilder) needs a different kind of QtObject than a
+    // foreign video/OpenGL rendering surface
+    const bool bWidgetHost = pWindowData && pWindowData->bClipUsingNativeWidget;
+
     SalObject* pRet(nullptr);
-    RunInMainThread([&]() { pRet = new QtObject(static_cast<QtFrame*>(pParent), bShow); });
+    RunInMainThread(
+        [&]() { pRet = new QtObject(static_cast<QtFrame*>(pParent), bShow, bWidgetHost); });
     assert(pRet);
     return pRet;
 }
@@ -815,11 +822,19 @@ std::unique_ptr<QApplication> QtInstance::CreateQApplication()
     // for scaled icons in the native menus
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 #endif
-    // force Qt::HighDpiScaleFactorRoundingPolicy::Round, which is the Qt 5 default
-    // policy and prevents incorrect rendering with the Qt 6 default policy
-    // Qt::HighDpiScaleFactorRoundingPolicy::PassThrough (tdf#159915)
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-        Qt::HighDpiScaleFactorRoundingPolicy::Round);
+    // Upstream forces Qt::HighDpiScaleFactorRoundingPolicy::Round here (the
+    // Qt 5 default) because the Qt 6 default, PassThrough, broke VCL's own
+    // rendering under fractional display scaling (tdf#159915, e.g. the About
+    // dialog showing cut off at 150%) -- by the fix's own commit message a
+    // stopgap ("for now it just hard-codes the policy that is known to
+    // work"), not a design decision. The cost of Round is global and
+    // constant: at a fractional system scale like 1.5 every native Qt
+    // widget, style metric and welded control is laid out at DPR 2 while
+    // every other Qt application on the same desktop uses 1.5, so all of
+    // LibreOffice's Qt chrome runs ~33% larger than the native apps next to
+    // it. This fork keeps the Qt 6 default instead and treats whatever
+    // fractional-DPR coordinate bugs remain in QtFrame/QtGraphics as bugs
+    // to fix there, not something to paper over globally.
 
     std::unique_ptr<QApplication> pQApp
         = std::make_unique<QApplication>(m_nFakeArgc, m_pFakeArgv.get());
@@ -923,7 +938,16 @@ std::unique_ptr<weld::Builder> QtInstance::CreateInterimBuilder(vcl::Window* pPa
     if (!isQtWeldingEnabled() || !QtInstanceBuilder::IsInterimUIFileSupported(rUIFile))
         return SalInstance::CreateInterimBuilder(pParent, rUIRoot, rUIFile, bAllowCycleFocusOut);
 
-    VclPtr<SystemChildWindow> pEmbedWindow = VclPtr<SystemChildWindow>::Create(pParent, 0);
+    // bClipUsingNativeWidget selects QtObject's widget-subtree-host mode
+    // (plain child QWidget) over its default foreign-rendering-surface mode
+    // (a raw embedded QWindow that nothing ever renders into here, i.e.
+    // uninitialized garbage on screen) -- the same request
+    // GtkInstance::CreateInterimBuilder makes of GtkInstance::CreateObject
+    SystemWindowData winData = {};
+    winData.bClipUsingNativeWidget = true;
+
+    VclPtr<SystemChildWindow> pEmbedWindow
+        = VclPtr<SystemChildWindow>::Create(pParent, 0, &winData, false);
     pEmbedWindow->Show(true, ShowFlags::NoActivate);
     pEmbedWindow->set_expand(true);
 

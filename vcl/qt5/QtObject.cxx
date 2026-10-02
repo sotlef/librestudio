@@ -29,7 +29,7 @@
 #include <QtGui/QMouseEvent>
 #include <QtWidgets/QVBoxLayout>
 
-QtObject::QtObject(QtFrame* pParent, bool bShow)
+QtObject::QtObject(QtFrame* pParent, bool bShow, bool bWidgetHost)
     : m_pParent(pParent)
     , m_pQWindow(nullptr)
     , m_pQWidget(nullptr)
@@ -38,7 +38,20 @@ QtObject::QtObject(QtFrame* pParent, bool bShow)
     if (!m_pParent)
         return;
 
-    if (QLibraryInfo::version().majorVersion() > 5)
+    if (bWidgetHost)
+    {
+        // Hosting a native Qt widget subtree: a plain child QWidget is all
+        // that's needed -- the children composite into the toplevel's
+        // backing store like any other widget. The video/OpenGL branches
+        // below must NOT be used for this: createWindowContainer() embeds a
+        // raw native QWindow stacked above all sibling widget content, and
+        // with no video sink/GL context ever rendering into it, its
+        // uninitialized surface shows up as garbage covering the hosted
+        // widgets; WA_NoSystemBackground/WA_OpaquePaintEvent likewise
+        // suppress exactly the background erase a widget host needs.
+        m_pQWidget = new QtObjectWidget(*this);
+    }
+    else if (QLibraryInfo::version().majorVersion() > 5)
     {
         m_pQWindow = new QWindow;
         m_pQWidget = QWidget::createWindowContainer(m_pQWindow, &pParent->GetQWidget());
@@ -49,6 +62,11 @@ QtObject::QtObject(QtFrame* pParent, bool bShow)
         // which is not a problem with the QtMultimedia approach that the qt6 VCL plugin uses;
         // stay with the QtObjectWidget introduced in commit 4366e0605214260e55a937173b0c2e02225dc843
         m_pQWidget = new QtObjectWidget(*this);
+
+        // a foreign rendering surface owns all of its pixels, Qt must neither
+        // erase the background nor composite anything over it
+        m_pQWidget->setAttribute(Qt::WA_NoSystemBackground);
+        m_pQWidget->setAttribute(Qt::WA_OpaquePaintEvent);
 
         // invoke QWidget::winId() to ensure a native window for OpenGL rendering is available on X11,
         // don't do it on Wayland, as that breaks rendering otherwise, s.a. QtFrame::ResolveWindowHandle
@@ -105,8 +123,13 @@ void QtObject::SetPosSize(tools::Long nX, tools::Long nY, tools::Long nWidth, to
 {
     if (m_pQWidget)
     {
-        m_pQWidget->move(nX, nY);
-        m_pQWidget->setFixedSize(nWidth, nHeight);
+        // VCL talks device pixels, Qt logical ones -- same conversion every
+        // QtFrame::SetPosSize/SetMinClientSize/... geometry call does; without
+        // it everything lands at ratio-times the intended position and size
+        // under HiDPI
+        const qreal fRatio = m_pParent->devicePixelRatioF();
+        m_pQWidget->move(round(nX / fRatio), round(nY / fRatio));
+        m_pQWidget->setFixedSize(round(nWidth / fRatio), round(nHeight / fRatio));
     }
 }
 
@@ -132,8 +155,6 @@ QtObjectWidget::QtObjectWidget(QtObject& rParent)
     , m_rParent(rParent)
 {
     assert(m_rParent.frame());
-    setAttribute(Qt::WA_NoSystemBackground);
-    setAttribute(Qt::WA_OpaquePaintEvent);
 }
 
 void QtObjectWidget::focusInEvent(QFocusEvent*)

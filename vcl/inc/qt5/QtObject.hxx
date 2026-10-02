@@ -49,7 +49,11 @@ class QtObject final : public QObject, public SalObject
     bool m_bForwardKey;
 
 public:
-    QtObject(QtFrame* pParent, bool bShow);
+    // bWidgetHost: host a native Qt widget subtree (welded InterimItemWindow
+    // content, QtInstance::CreateInterimBuilder) instead of a foreign
+    // rendering surface (video/OpenGL) -- the Qt counterpart of gtk3's
+    // GtkSalObject/GtkSalObjectWidgetClip split.
+    QtObject(QtFrame* pParent, bool bShow, bool bWidgetHost = false);
     ~QtObject() override;
 
     QtFrame* frame() const { return m_pParent; }
