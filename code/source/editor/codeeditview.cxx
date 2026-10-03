@@ -239,18 +239,26 @@ tools::Long CodeEditView::GutterWidth() const
 
 void CodeEditView::ConfigureScrollBars()
 {
-    if (!m_bFontMeasured)
+    if (!m_bFontMeasured || m_bConfiguring)
         return; // the first Paint measures, and configures
+    // Configuring the bars may resize the drawing area (the Qt scrolled window
+    // sets its content to the page size), which comes back here.
+    m_bConfiguring = true;
     const Size aSize = GetOutputSizePixel();
-    const tools::Long nTextWidth = std::max<tools::Long>(0, aSize.Width() - GutterWidth());
+    const tools::Long nGutter = GutterWidth();
+    // The page is the whole area, as the toolkits want it; the gutter does not
+    // scroll, so it is part of the extent instead.
+    const tools::Long nHeight = static_cast<tools::Long>(m_aLines.size()) * m_nLineHeight;
+    const tools::Long nWidth = nGutter + (m_nMaxColumns + 1) * m_nCharWidth;
     m_xScroll->vadjustment_configure(
         std::min<tools::Long>(m_xScroll->vadjustment_get_value(),
-                              std::max<tools::Long>(0, m_aLines.size() * m_nLineHeight - aSize.Height())),
-        m_aLines.size() * m_nLineHeight, m_nLineHeight, aSize.Height() * 9 / 10, aSize.Height());
+                              std::max<tools::Long>(0, nHeight - aSize.Height())),
+        nHeight, m_nLineHeight, aSize.Height() * 9 / 10, aSize.Height());
     m_xScroll->hadjustment_configure(
         std::min<tools::Long>(m_xScroll->hadjustment_get_value(),
-                              std::max<tools::Long>(0, (m_nMaxColumns + 1) * m_nCharWidth - nTextWidth)),
-        (m_nMaxColumns + 1) * m_nCharWidth, m_nCharWidth * 4, nTextWidth * 9 / 10, nTextWidth);
+                              std::max<tools::Long>(0, nWidth - aSize.Width())),
+        nWidth, m_nCharWidth * 4, aSize.Width() * 9 / 10, aSize.Width());
+    m_bConfiguring = false;
 }
 
 void CodeEditView::Resize()

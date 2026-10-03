@@ -80,6 +80,7 @@ private:
     tools::Long m_nCharWidth = 0;
     tools::Long m_nLineHeight = 0;
     bool m_bFontMeasured = false;
+    bool m_bConfiguring = false;
 };
 }
 
