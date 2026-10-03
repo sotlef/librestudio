@@ -1990,8 +1990,22 @@ GtkFileFilter* SalGtkFilePicker::implAddFilter( const OUString& rFilter, const O
         do
         {
             OUString aToken = rType.getToken( 0, ';', nIndex );
-            // Assume all have the "*.<extn>" syntax
+            // Usually "*.<extn>", which is matched as a (case-insensitive)
+            // extension.  A token of any other shape -- a whole file name such
+            // as "CMakeLists.txt", or a pattern such as "Make*" -- is a glob on
+            // the file's name; reading it as an extension would never match.
             sal_Int32 nStarDot = aToken.lastIndexOf( "*." );
+            const bool bGlob = !aToken.isEmpty()
+                && (nStarDot != 0 || aToken.indexOf('*', 1) >= 0 || aToken.indexOf('?') >= 0
+                    || aToken.indexOf('.', 2) >= 0);
+            if (bGlob)
+            {
+                if (!aTokens.isEmpty())
+                    aTokens.append(",");
+                aTokens.append(aToken);
+                gtk_file_filter_add_pattern( filter, OUStringToOString(aToken, RTL_TEXTENCODING_UTF8).getStr() );
+                continue;
+            }
             if (nStarDot >= 0)
                 aToken = aToken.copy( nStarDot + 2 );
             if (!aToken.isEmpty())
