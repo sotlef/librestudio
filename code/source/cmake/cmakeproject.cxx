@@ -14,6 +14,7 @@
 #include "folderproject.hxx"
 
 #include <com/sun/star/code/build/XBuildable.hpp>
+#include <com/sun/star/code/build/XCompilable.hpp>
 #include <com/sun/star/code/project/ItemKind.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/TargetType.hpp>
@@ -238,6 +239,39 @@ public:
     const bool m_bGenerated;
 };
 
+// A source file the target compiles: it can be compiled on its own.  A file the
+// compiler never sees (a header, a CMake file) is a FileNode, and says nothing
+// about compiling.
+class CompilableFileNode final : public cppu::WeakImplHelper<XProjectFile, css::code::build::XCompilable>
+{
+public:
+    CompilableFileNode(uno::Reference<uno::XComponentContext> xContext, OUString aProjectUrl, OUString aTarget,
+                       const OUString& rName, const OUString& rUrl, bool bGenerated)
+        : m_xContext(std::move(xContext))
+        , m_aProjectUrl(std::move(aProjectUrl))
+        , m_aTarget(std::move(aTarget))
+        , m_aMime(codeservices::GetMimeType(rUrl))
+        , m_bGenerated(bGenerated)
+    {
+        m_aData.aName = rName;
+        m_aData.aUrl = rUrl;
+    }
+    OUString SAL_CALL getRelativePath() override { return m_aData.aName; }
+    OUString SAL_CALL getMimeType() override { return m_aMime; }
+    sal_Bool SAL_CALL getGenerated() override { return m_bGenerated; }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL compile() override
+    {
+        return StartCompile(m_xContext, m_aProjectUrl, m_aTarget, m_aData.aUrl);
+    }
+    CMAKEPROJ_ITEM_METHODS(ItemKind_FILE)
+
+    const uno::Reference<uno::XComponentContext> m_xContext;
+    const OUString m_aProjectUrl;
+    const OUString m_aTarget;
+    const OUString m_aMime;
+    const bool m_bGenerated;
+};
+
 TargetType TargetTypeOf(const std::string& rType)
 {
     if (rType == "EXECUTABLE")
@@ -335,10 +369,25 @@ Structure ReadStructure(const uno::Reference<uno::XComponentContext>& xContext, 
                         aGroupName = u"Source Files"_ustr;
 
                     rtl::Reference<GroupNode> xGroup = groupNamed(aGroupName);
-                    rtl::Reference<FileNode> xFile
-                        = new FileNode(codeservices::GetDisplayName(aUrl), aUrl, rSource.second.get<bool>("isGenerated", false));
-                    xFile->m_aData.xParent = uno::Reference<XProjectItem>(xGroup.get());
-                    xGroup->m_aData.aChildren.push_back(uno::Reference<XProjectItem>(xFile.get()));
+                    const OUString aName = codeservices::GetDisplayName(aUrl);
+                    const bool bGenerated = rSource.second.get<bool>("isGenerated", false);
+                    // cmake says which sources the compiler gets: they have a compile group
+                    ItemData* pData;
+                    uno::Reference<XProjectItem> xItem;
+                    if (rSource.second.get_child_optional("compileGroupIndex"))
+                    {
+                        auto* pFile = new CompilableFileNode(xContext, rProjectUrl, xTarget->getName(), aName, aUrl, bGenerated);
+                        xItem = pFile;
+                        pData = &pFile->m_aData;
+                    }
+                    else
+                    {
+                        auto* pFile = new FileNode(aName, aUrl, bGenerated);
+                        xItem = pFile;
+                        pData = &pFile->m_aData;
+                    }
+                    pData->xParent = uno::Reference<XProjectItem>(xGroup.get());
+                    xGroup->m_aData.aChildren.push_back(xItem);
                 }
 
             aResult.aTargets.push_back(uno::Reference<XProjectTarget>(xTarget.get()));

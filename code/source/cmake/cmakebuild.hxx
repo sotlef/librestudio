@@ -28,6 +28,13 @@ enum class BuildMode
 css::uno::Reference<css::code::core::XBackgroundJob>
 StartBuild(const css::uno::Reference<css::uno::XComponentContext>& xContext, const OUString& rProjectUrl,
            const OUString& rTarget, BuildMode eMode);
+
+/// Compiles one source file (a file URL) of the target, in the current
+/// configuration, as a background job.  Output goes to the "build" channel.
+/// @throws css::io::IOException if the project has not been configured
+css::uno::Reference<css::code::core::XBackgroundJob>
+StartCompile(const css::uno::Reference<css::uno::XComponentContext>& xContext, const OUString& rProjectUrl,
+             const OUString& rTarget, const OUString& rFileUrl);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

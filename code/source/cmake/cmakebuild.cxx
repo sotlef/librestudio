@@ -26,6 +26,7 @@
 #include <osl/file.hxx>
 #include <rtl/strbuf.hxx>
 
+#include <algorithm>
 #include <vector>
 
 using namespace css;
@@ -214,25 +215,116 @@ bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XO
     xChannel->appendLine("========== " + aVerb + " succeeded: " + aSubject + " ==========", output::OutputStream_INFO);
     return true;
 }
+
+// The object file ninja makes of rSourceUrl in rTarget: its targets are the
+// output files, "CMakeFiles/<target>.dir/<path of the source>.o".  Empty if ninja
+// has no such target.
+OUString ObjectOf(const OUString& rBuildPath, const OUString& rTarget, const OUString& rSourceUrl,
+                  const OUString& rRootUrl)
+{
+    std::vector<OUString> aTargets;
+    OUString aError;
+    codeservices::RunProcess(
+        u"ninja"_ustr, { u"-C"_ustr, rBuildPath, u"-t"_ustr, u"targets"_ustr, u"all"_ustr }, OUString(),
+        [&](bool bStderr, const OUString& rLine)
+        {
+            if (!bStderr)
+                aTargets.push_back(rLine.copy(0, std::max<sal_Int32>(rLine.lastIndexOf(':'), 0)));
+        },
+        [] { return false; }, aError);
+
+    const OUString aPrefix = "CMakeFiles/" + rTarget + ".dir/";
+    const OUString aRelative = rSourceUrl.startsWith(OUString(rRootUrl + "/")) ? rSourceUrl.copy(rRootUrl.getLength() + 1) : OUString();
+    OUString aBest;
+    for (const OUString& rCandidate : aTargets)
+    {
+        if (!rCandidate.startsWith(aPrefix) || !rCandidate.endsWith(".o"))
+            continue;
+        const OUString aPath = rCandidate.copy(aPrefix.getLength(), rCandidate.getLength() - aPrefix.getLength() - 2);
+        // the source's path from the project root, or failing that its name
+        if (!aRelative.isEmpty() && aPath.endsWith(aRelative))
+            return rCandidate;
+        if (aBest.isEmpty() && rSourceUrl.endsWith(OUString("/" + aPath.copy(aPath.lastIndexOf('/') + 1))))
+            aBest = rCandidate;
+    }
+    return aBest;
+}
+
+bool RunCompile(codeservices::BackgroundJob& rJob, const uno::Reference<output::XOutputChannel>& xChannel,
+                const project::ProjectConfiguration& rConfiguration, const OUString& rTarget,
+                const OUString& rSourceUrl, const OUString& rRootUrl)
+{
+    OUString aBuildUrl;
+    for (const beans::StringPair& rProperty : rConfiguration.Properties)
+        if (rProperty.First == "BuildDirectory")
+            aBuildUrl = rProperty.Second;
+    OUString aBuildPath;
+    if (osl::FileBase::getSystemPathFromFileURL(aBuildUrl, aBuildPath) != osl::FileBase::E_None)
+        aBuildPath = aBuildUrl;
+
+    const OUString aName = codeservices::GetDisplayName(rSourceUrl);
+    xChannel->appendLine("------ Compile started: " + aName + ", " + rConfiguration.Name + " ------",
+                         output::OutputStream_INFO);
+    rJob.SetMessage("Compiling " + aName + " (" + rConfiguration.Name + ")");
+
+    auto fail = [&](const OUString& rText)
+    {
+        xChannel->appendLine(rText, output::OutputStream_ERROR);
+        xChannel->appendLine("========== Compile failed: " + aName + " ==========", output::OutputStream_ERROR);
+        return false;
+    };
+    // cmake itself builds targets only; one file is the generator's own business
+    const OUString aGenerator = GeneratorOf(aBuildPath);
+    if (!aGenerator.startsWith("Ninja"))
+        return fail("compiling a single file is not supported for the generator \"" + aGenerator + "\"");
+    const OUString aObject = ObjectOf(aBuildPath, rTarget, rSourceUrl, rRootUrl);
+    if (aObject.isEmpty())
+        return fail("ninja has no rule to compile " + aName + " in " + rTarget);
+
+    const std::vector<OUString> aArguments{ u"-C"_ustr, aBuildPath, aObject };
+    xChannel->appendLine("ninja -C " + aBuildPath + " " + aObject, output::OutputStream_INFO);
+    OUString aStartError;
+    const sal_Int32 nExit = codeservices::RunProcess(
+        u"ninja"_ustr, aArguments, OUString(),
+        [&](bool bStderr, const OUString& rLine)
+        {
+            xChannel->appendLine(rLine, bStderr ? output::OutputStream_STDERR : output::OutputStream_STDOUT);
+            if (const sal_Int16 nProgress = ProgressOf(rLine); nProgress >= 0)
+                rJob.SetProgress(nProgress);
+        },
+        [&] { return rJob.IsCancelled(); }, aStartError);
+    if (!aStartError.isEmpty())
+        return fail(aStartError);
+    if (rJob.IsCancelled())
+    {
+        xChannel->appendLine("========== Compile cancelled ==========", output::OutputStream_WARNING);
+        return false;
+    }
+    if (nExit != 0)
+        return fail("ninja exited with " + OUString::number(nExit));
+    rJob.SetProgress(100);
+    xChannel->appendLine("========== Compile succeeded: " + aName + " ==========", output::OutputStream_INFO);
+    return true;
+}
+
+project::ProjectConfiguration CurrentConfigurationOf(const uno::Reference<uno::XComponentContext>& xContext,
+                                                     const OUString& rProjectUrl)
+{
+    // a build is in a configuration; a project that has none was never configured
+    auto xStore = project::theProjectConfigStore::get(xContext);
+    const OUString aCurrent = xStore->getCurrentConfiguration(rProjectUrl);
+    for (const project::ProjectConfiguration& rConfiguration : xStore->getConfigurations(rProjectUrl))
+        if (rConfiguration.Name == aCurrent)
+            return rConfiguration;
+    throw io::IOException("the project has not been configured: " + rProjectUrl, nullptr);
+}
 }
 
 uno::Reference<core::XBackgroundJob> StartBuild(const uno::Reference<uno::XComponentContext>& xContext,
                                                 const OUString& rProjectUrl, const OUString& rTarget,
                                                 BuildMode eMode)
 {
-    // a build is in a configuration; a project that has none was never configured
-    auto xStore = project::theProjectConfigStore::get(xContext);
-    const OUString aCurrent = xStore->getCurrentConfiguration(rProjectUrl);
-    project::ProjectConfiguration aConfiguration;
-    bool bFound = false;
-    for (const project::ProjectConfiguration& rConfiguration : xStore->getConfigurations(rProjectUrl))
-        if (rConfiguration.Name == aCurrent)
-        {
-            aConfiguration = rConfiguration;
-            bFound = true;
-        }
-    if (!bFound)
-        throw io::IOException("the project has not been configured: " + rProjectUrl, nullptr);
+    const project::ProjectConfiguration aConfiguration = CurrentConfigurationOf(xContext, rProjectUrl);
 
     uno::Reference<output::XOutputChannel> xChannel
         = output::theOutputController::get(xContext)->getOrCreateChannel(u"build"_ustr, u"Build"_ustr);
@@ -247,6 +339,21 @@ uno::Reference<core::XBackgroundJob> StartBuild(const uno::Reference<uno::XCompo
         u"cmake-build:"_ustr + rProjectUrl, aVerb + aSubject + " (" + aConfiguration.Name + ")",
         [xChannel, aProjectName, aConfiguration, rTarget, eMode](codeservices::BackgroundJob& rJob)
         { return RunBuild(rJob, xChannel, aProjectName, aConfiguration, rTarget, eMode); }));
+}
+
+uno::Reference<core::XBackgroundJob> StartCompile(const uno::Reference<uno::XComponentContext>& xContext,
+                                                  const OUString& rProjectUrl, const OUString& rTarget,
+                                                  const OUString& rFileUrl)
+{
+    const project::ProjectConfiguration aConfiguration = CurrentConfigurationOf(xContext, rProjectUrl);
+    uno::Reference<output::XOutputChannel> xChannel
+        = output::theOutputController::get(xContext)->getOrCreateChannel(u"build"_ustr, u"Build"_ustr);
+    xChannel->clear();
+    const OUString aRootUrl = codeservices::GetParentUrl(rProjectUrl);
+    return rtl::Reference<codeservices::BackgroundJob>(codeservices::BackgroundJob::Start(
+        u"cmake-compile:"_ustr + rFileUrl, "Compiling " + codeservices::GetDisplayName(rFileUrl),
+        [xChannel, aConfiguration, rTarget, rFileUrl, aRootUrl](codeservices::BackgroundJob& rJob)
+        { return RunCompile(rJob, xChannel, aConfiguration, rTarget, rFileUrl, aRootUrl); }));
 }
 }
 
