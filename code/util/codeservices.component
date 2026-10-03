@@ -49,6 +49,11 @@
       single-instance="true">
     <singleton name="com.sun.star.code.output.theOutputController"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.SemanticTokenController"
+      constructor="com_sun_star_comp_code_SemanticTokenController_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.semantic.theSemanticTokenController"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.TaskHub"
       constructor="com_sun_star_comp_code_TaskHub_get_implementation"
       single-instance="true">

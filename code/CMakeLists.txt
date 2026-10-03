@@ -194,6 +194,7 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/projectconfigstore.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectformatregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectmanager.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/semantictokencontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx")
 
 target_include_directories(codeservices PRIVATE

@@ -72,6 +72,11 @@ public:
         return m_aText;
     }
     void SAL_CALL setText(const OUString& rText) override;
+    sal_Int32 SAL_CALL getVersion() override
+    {
+        std::unique_lock aGuard(m_aMutex);
+        return m_nVersion;
+    }
     sal_Int32 SAL_CALL getLineCount() override;
     OUString SAL_CALL getLine(sal_Int32 nIndex) override;
     void SAL_CALL applyEdit(const TextEdit& rEdit) override;
@@ -97,6 +102,7 @@ private:
     const OUString m_aUrl;
     const OUString m_aMime;
     OUString m_aText;
+    sal_Int32 m_nVersion = 0;
     DocumentState m_eState = DocumentState_CLEAN;
 };
 
@@ -162,6 +168,7 @@ void TextDocument::load()
     std::unique_lock aGuard(m_aMutex);
     m_aText = OUString(aUtf8.getStr(), aUtf8.getLength(), RTL_TEXTENCODING_UTF8,
                        OSTRING_TO_OUSTRING_CVTFLAGS);
+    ++m_nVersion;
     m_eState = DocumentState_CLEAN;
 }
 
@@ -222,6 +229,7 @@ void TextDocument::setText(const OUString& rText)
         if (m_aText == rText)
             return;
         m_aText = rText;
+        ++m_nVersion;
         m_eState = DocumentState_MODIFIED;
     }
     changed(DocumentEventKind_MODIFIED);
@@ -292,6 +300,7 @@ void TextDocument::applyEdit(const TextEdit& rEdit)
             throw lang::IllegalArgumentException(u"range outside the text"_ustr, getXWeak(), 0);
 
         m_aText = m_aText.replaceAt(nFrom, nTo - nFrom, rEdit.NewText);
+        ++m_nVersion;
         m_eState = DocumentState_MODIFIED;
     }
     changed(DocumentEventKind_MODIFIED);

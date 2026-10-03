@@ -9,6 +9,7 @@
 
 #include <com/sun/star/code/core/XCode.hpp>
 #include <com/sun/star/code/core/XPlugin.hpp>
+#include <com/sun/star/code/semantic/theSemanticTokenController.hpp>
 #include <com/sun/star/container/XContentEnumerationAccess.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/lang/XMultiComponentFactory.hpp>
@@ -83,6 +84,9 @@ void Code::activatePlugins()
             return;
         m_bPluginsActivated = true;
     }
+
+    // Listens to the documents from now on; a singleton nobody has asked for yet does not exist.
+    css::code::semantic::theSemanticTokenController::get(m_xContext);
 
     uno::Reference<container::XContentEnumerationAccess> xAccess(m_xContext->getServiceManager(),
                                                                  uno::UNO_QUERY_THROW);

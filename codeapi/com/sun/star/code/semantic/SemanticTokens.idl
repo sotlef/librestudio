@@ -1,0 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module semantic {
+
+/** The tokens of a whole document, as of one version of its text.  Sorted by
+    position, not overlapping. */
+struct SemanticTokens
+{
+    /** the XTextDocument::Version these tokens were computed for, or -1 if
+        there are none yet */
+    long Version;
+    sequence< ::com::sun::star::code::semantic::SemanticToken > Tokens;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -1,0 +1,31 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module semantic {
+
+/** Keeps the semantic tokens of every open document up to date: when a document
+    is opened, edited or reloaded the provider for its MIME type is asked again
+    (after a short pause, so that typing does not start an analysis per key),
+    and listeners are told when the answer arrives. */
+interface XSemanticTokenController
+{
+    void registerProvider( [in] ::com::sun::star::code::semantic::XSemanticTokenProvider Provider );
+    void unregisterProvider( [in] string Name );
+    sequence< ::com::sun::star::code::semantic::XSemanticTokenProvider > getProviders();
+    /** The latest tokens of an open document; Version -1 and no tokens if there
+        are none (no provider for its type, or the first analysis is running).
+        They may be older than the text: compare Version with the document's. */
+    ::com::sun::star::code::semantic::SemanticTokens getSemanticTokens( [in] string Url );
+    void addSemanticTokenListener( [in] ::com::sun::star::code::semantic::XSemanticTokenListener Listener );
+    void removeSemanticTokenListener( [in] ::com::sun::star::code::semantic::XSemanticTokenListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

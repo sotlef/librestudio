@@ -1,0 +1,26 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module semantic {
+
+/** Bit flags; a token carries any combination in SemanticToken::Modifiers. */
+constants SemanticTokenModifiers
+{
+    const long DECLARATION = 1;
+    const long DEFINITION = 2;
+    const long READONLY = 4;
+    const long STATIC = 8;
+    const long DEPRECATED = 16;
+    const long ABSTRACT = 32;
+    const long DEFAULT_LIBRARY = 64;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

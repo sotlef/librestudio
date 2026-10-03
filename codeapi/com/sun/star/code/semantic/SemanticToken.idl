@@ -1,0 +1,26 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module semantic {
+
+/** One highlighted run of text.  A token never spans lines; a construct that
+    does (a block comment) is one token per line it covers.  Column and Length
+    are in UTF-16 code units, like every position of this API. */
+struct SemanticToken
+{
+    ::com::sun::star::code::core::Position Start;
+    long Length;
+    ::com::sun::star::code::semantic::SemanticTokenKind Kind;
+    /** a combination of SemanticTokenModifiers */
+    long Modifiers;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

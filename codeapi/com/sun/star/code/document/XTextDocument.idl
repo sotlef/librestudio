@@ -13,6 +13,12 @@ module com { module sun { module star { module code { module document {
 interface XTextDocument : ::com::sun::star::code::document::XDocument
 {
     [attribute] string Text;
+
+    /** Grows with every change of the text, loading and reloading included;
+        an asynchronous result computed from the text names it to
+        say which text it is about. */
+    [attribute, readonly] long Version;
+
     [attribute, readonly] long LineCount;
 
     /** the line without its line terminator */
