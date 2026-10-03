@@ -18,6 +18,8 @@
  */
 #include <sfx2/sidebar/SidebarController.hxx>
 
+#include <algorithm>
+
 #include <boost/property_tree/json_parser.hpp>
 
 #include <sfx2/sidebar/Deck.hxx>
@@ -1434,6 +1436,45 @@ void SidebarController::HideDeck(std::u16string_view rsDeckId, std::u16string_vi
 void SidebarController::RegisterHiddenDeckForApplication(std::u16string_view rsApplication, std::u16string_view rsDeckId)
 {
     GetHiddenDecksForApplicationRegistry().emplace_back(OUString(rsApplication), OUString(rsDeckId));
+}
+
+void SidebarController::SetDeckHiddenForApplication(std::u16string_view rsApplication,
+                                                    std::u16string_view rsDeckId, bool bHidden)
+{
+    auto& rRegistry = GetHiddenDecksForApplicationRegistry();
+    const auto it = std::find_if(rRegistry.begin(), rRegistry.end(),
+                                 [&](const std::pair<OUString, OUString>& rEntry)
+                                 { return rEntry.first == rsApplication && rEntry.second == rsDeckId; });
+    if (bHidden && it == rRegistry.end())
+        rRegistry.emplace_back(OUString(rsApplication), OUString(rsDeckId));
+    else if (!bHidden && it != rRegistry.end())
+        rRegistry.erase(it);
+}
+
+void SidebarController::SetDeckHidden(std::u16string_view rsDeckId, std::u16string_view rsApplication,
+                                      bool bHidden)
+{
+    SetDeckHiddenForApplication(rsApplication, rsDeckId, bHidden);
+
+    std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rsDeckId);
+    if (!xDeckDescriptor)
+        return;
+
+    if (bHidden)
+        HideDeck(rsDeckId, rsApplication);
+    else
+    {
+        // the mirror image of HideDeck()
+        xDeckDescriptor->mbIsEnabled = true;
+        Context aContext;
+        aContext.msApplication = rsApplication;
+        xDeckDescriptor->maContextList.ToggleVisibilityForContext(aContext, true);
+    }
+
+    // Run the configuration pass again: UpdateConfigurations() ignores a
+    // request that changes no context unless a switch is forced.
+    mnRequestedForceFlags |= SwitchFlag_ForceSwitch;
+    UpdateConfigurations();
 }
 
 void SidebarController::FadeOut()

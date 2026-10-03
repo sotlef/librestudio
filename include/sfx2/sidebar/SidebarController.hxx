@@ -186,6 +186,23 @@ public:
     */
     static void RegisterHiddenDeckForApplication(std::u16string_view rsApplication, std::u16string_view rsDeckId);
 
+    /** Hides or shows a deck for one application at run time, for decks whose
+        availability depends on application state (a "Solution" deck that only
+        exists once a project is configured).  Updates the same process-wide
+        registry RegisterHiddenDeckForApplication() fills -- so controllers
+        created later start out right -- and, if there is no controller yet,
+        that is all there is to do.
+    */
+    static void SetDeckHiddenForApplication(std::u16string_view rsApplication,
+                                            std::u16string_view rsDeckId, bool bHidden);
+
+    /** The same for this controller: also changes the live deck and
+        refreshes the tab bar.  If the deck that is showing disappears, the
+        first remaining one is shown instead.  Does the registry update of the
+        static overload itself.
+    */
+    void SetDeckHidden(std::u16string_view rsDeckId, std::u16string_view rsApplication, bool bHidden);
+
     void notifyDeckTitle(std::u16string_view targetDeckId);
 
     void updateModel(const css::uno::Reference<css::frame::XModel>& xModel);
