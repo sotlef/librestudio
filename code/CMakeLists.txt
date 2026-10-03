@@ -249,6 +249,44 @@ install(TARGETS cmakeproj LIBRARY DESTINATION program)
 
 add_dependencies(code cmakeproj)
 
+# --- codeclang -------------------------------------------------------------
+#
+# The semantic-token provider for C and C++, on libclang.  A library of its own
+# so that libclang is a dependency of this one plugin only, and optional: where
+# it is not found Code simply has no highlighting for C and C++.  Discovered
+# through services.rdb, like cmakeproj.
+file(GLOB _llvm_roots LIST_DIRECTORIES true "/usr/lib/llvm-*" "/usr/lib64/llvm*")
+find_path(LIBCLANG_INCLUDE_DIR clang-c/Index.h
+    HINTS ${_llvm_roots}
+    PATH_SUFFIXES include)
+find_library(LIBCLANG_LIBRARY NAMES clang libclang.so.19.1 libclang.so.20.1 libclang.so.21.1
+    HINTS ${_llvm_roots}
+    PATH_SUFFIXES lib lib64)
+if (LIBCLANG_INCLUDE_DIR AND LIBCLANG_LIBRARY)
+    add_library(codeclang SHARED
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsemantictokens.cxx")
+    target_include_directories(codeclang PRIVATE
+        "${LIBCLANG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}"
+        "${codeapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(codeclang udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
+    target_link_libraries(codeclang PRIVATE "${LIBCLANG_LIBRARY}" comphelper cppu cppuhelper sal)
+
+    librestudio_add_component(codeclang
+        COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codeclang.component"
+        LIBRARY   codeclang
+        LAYER     OOO)
+
+    librestudio_set_library_output_name(codeclang codeclang OOO)
+
+    install(TARGETS codeclang LIBRARY DESTINATION program)
+
+    add_dependencies(code codeclang)
+else()
+    message(STATUS "libclang not found: Code will not highlight C and C++")
+endif()
+
 # --- UIConfig_code -------------------------------------------------------
 #
 # Mirrors basctl/CMakeLists.txt's own UIConfig_basicide block: installs
