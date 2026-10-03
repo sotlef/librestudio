@@ -16,6 +16,7 @@
 #include <sfx2/sidebar/PanelLayout.hxx>
 
 #include <map>
+#include <set>
 #include <memory>
 
 namespace weld { class TreeView; class TreeIter; }
@@ -70,6 +71,10 @@ private:
     // Row ids are small integers; this maps them back to the items they stand for.
     std::map<OUString, css::uno::Reference<css::code::project::XProjectItem>> maItems;
     sal_Int32 mnNextId = 1;
+    // rows whose children have been read: expanding a row again (collapse, expand)
+    // must not read them a second time -- Qt does not switch a row's
+    // children-on-demand off the way GTK does, so the handler runs every time
+    std::set<OUString> maPopulated;
 
     std::shared_ptr<code::UiNotifier> mxNotifier;
     css::uno::Reference<css::code::project::XProjectListener> mxListener;

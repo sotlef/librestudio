@@ -115,6 +115,7 @@ void ProjectTreePanel::Rebuild()
     mxTree->freeze();
     mxTree->clear();
     maItems.clear();
+    maPopulated.clear();
 
     uno::Sequence<uno::Reference<XProject>> aProjects;
     try
@@ -160,8 +161,12 @@ void ProjectTreePanel::Rebuild()
 
 IMPL_LINK(ProjectTreePanel, ExpandingHdl, const weld::TreeIter&, rIter, bool)
 {
-    const auto it = maItems.find(mxTree->get_id(rIter));
+    const OUString aRowId = mxTree->get_id(rIter);
+    const auto it = maItems.find(aRowId);
     if (it == maItems.end())
+        return true;
+    // read a row's children once
+    if (!maPopulated.insert(aRowId).second)
         return true;
 
     try
