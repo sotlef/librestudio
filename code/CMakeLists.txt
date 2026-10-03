@@ -33,6 +33,7 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
     # The Output dock's own SfxChildWindow/SfxDockingWindow/IDeckHost
     # trio -- unlike codesidebar's panel factory below, these are
     # constructed directly (RegisterChildWindow/ShowChildWindow in
@@ -203,6 +204,7 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/errorlistpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/outputpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/taskspopover.ui"
 )
 install(FILES ${CODE_UI_FILES} DESTINATION share/config/soffice.cfg/code/ui)
 foreach (_code_ui_src IN LISTS CODE_UI_FILES)

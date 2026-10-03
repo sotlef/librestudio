@@ -49,6 +49,7 @@
 #include <officecfg/Setup.hxx>
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
+#include <codeids.hxx>
 #include <sfx2/app.hxx>
 #include <sfx2/chalign.hxx>
 #include <sfx2/childwin.hxx>
@@ -66,6 +67,7 @@
 #include "codedocshell.hxx"
 #include "codeviewshell.hxx"
 #include "sidebar/outputchildwindow.hxx"
+#include "tasksstatusbarcontrol.hxx"
 
 using namespace com::sun::star;
 
@@ -275,6 +277,15 @@ int CodeApplication::Main()
         // Exception&)` by the time it reaches vcl's scheduler, landing in
         // its catch (...) instead, which is an abort(), not a warning.
         code::DocShell::Factory().SetDocumentServiceName(u"com.sun.star.code.CodeDocument"_ustr);
+
+        // Status bar: the background-tasks bubble button needs its custom
+        // SfxStatusBarControl registered (app-globally, there is no "Code"
+        // SfxModule) before the LayoutManager builds the status bar from
+        // statusbar.xml during xLoader->load() below -- same timing reason
+        // the SwModule/ScModule constructors register theirs up front.
+        // (.uno:CodeStatusReady needs no registration: a plain SfxStringItem
+        // state shown by the default SfxStatusBarControl.)
+        code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
 
         xMainWindow = VclPtr<WorkWindow>::Create(nullptr,
             WB_APP | WB_STDWORK | WB_SIZEABLE | WB_CLOSEABLE | WB_CLIPCHILDREN);

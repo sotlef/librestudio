@@ -11,6 +11,47 @@ interface CodeView
 {
 }
 
+// The status bar's background-tasks bubble button (leftmost item); its
+// SfxStatusBarControl (code/source/tasksstatusbarcontrol.cxx) paints the
+// bubble and pops the "No background tasks running." popover itself, so
+// state is only needed to keep the item enabled.
+SfxVoidItem CodeBackgroundTasks SID_CODE_STATUS_TASKS
+
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::View;
+]
+
+// The status bar's "Ready" text next to the bubble button: a plain
+// SfxStringItem state (shell GetState), displayed by the default
+// SfxStatusBarControl -- same shape as sfx.sdi's StatusGetTitle.
+SfxStringItem CodeStatusReady SID_CODE_STATUS_READY
+
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::View;
+]
+
 shell code_Shell
 {
     import CodeView;
@@ -24,6 +65,16 @@ shell code_Shell
     SID_SAVEDOC
     [
         ExecMethod  = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_STATUS_TASKS
+    [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_STATUS_READY
+    [
         StateMethod = GetState;
     ]
 }

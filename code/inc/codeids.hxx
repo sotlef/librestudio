@@ -29,4 +29,12 @@
 // toggled by the View menu's .uno:ShowOutput (see code/sdi/code.sdi).
 #define SID_CODE_OUTPUT              (SID_CODE_START + 1)
 
+// Status bar items (code/uiconfig/code/statusbar/statusbar.xml):
+// the background-tasks bubble button (.uno:CodeBackgroundTasks,
+// code/source/tasksstatusbarcontrol.cxx) and the "Ready" text
+// (.uno:CodeStatusReady, plain SfxStringItem state shown by the default
+// SfxStatusBarControl).
+#define SID_CODE_STATUS_TASKS        (SID_CODE_START + 2)
+#define SID_CODE_STATUS_READY        (SID_CODE_START + 3)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

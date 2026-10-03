@@ -8,5 +8,13 @@
 -->
 <!DOCTYPE statusbar:statusbar PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "statusbar.dtd">
 <statusbar:statusbar xmlns:statusbar="http://openoffice.org/2001/statusbar" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <!-- Visual-Studio-style bottom-left corner: the background-tasks bubble
+      button (owner-drawn + popover, code/source/tasksstatusbarcontrol.cxx),
+      then the "Ready" state text. -->
+ <!-- style="flat": no 3D item frame; offset="0" on the bubble: offset is
+      the gap AFTER an item (default STATUSBAR_OFFSET), and the bubble +
+      "Ready" pair reads as one logical unit, so no gap between them -->
+ <statusbar:statusbaritem xlink:href=".uno:CodeBackgroundTasks" statusbar:align="left" statusbar:ownerdraw="true" statusbar:style="flat" statusbar:width="16" statusbar:offset="0"/>
+ <statusbar:statusbaritem xlink:href=".uno:CodeStatusReady" statusbar:align="left" statusbar:style="flat" statusbar:width="60"/>
  <statusbar:statusbaritem xlink:href=".uno:StatusGetTitle" statusbar:align="left" statusbar:autosize="true" statusbar:width="240"/>
 </statusbar:statusbar>

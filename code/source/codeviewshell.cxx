@@ -13,9 +13,12 @@
 #include "editormdipanel.hxx"
 #include "sidebar/outputchildwindow.hxx"
 
+#include <codeids.hxx>
 #include <sfx2/objface.hxx>
 #include <sfx2/request.hxx>
 #include <sfx2/sfxsids.hrc>
+#include <svl/stritem.hxx>
+#include <svl/voiditem.hxx>
 #include <sfx2/sidebar/SidebarChildWindow.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <vcl/EnumContext.hxx>
@@ -125,10 +128,18 @@ void Shell::Execute(SfxRequest& rReq)
     rReq.Done();
 }
 
-void Shell::GetState(SfxItemSet& /*rSet*/)
+void Shell::GetState(SfxItemSet& rSet)
 {
-    // Leaving the set untouched keeps both slots enabled; nothing here
-    // depends on document state yet.
+    // SID_NEWDOC/SID_SAVEDOC: leaving them untouched keeps both slots
+    // enabled; nothing here depends on document state yet.
+
+    // Status bar items. There is no real task/readiness machinery yet:
+    // "Ready" is the honest, constant idle state (like the bubble button's
+    // constant "No background tasks running." popover).
+    if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)
+        rSet.Put(SfxVoidItem(SID_CODE_STATUS_TASKS));
+    if (rSet.GetItemState(SID_CODE_STATUS_READY, false) != SfxItemState::UNKNOWN)
+        rSet.Put(SfxStringItem(SID_CODE_STATUS_READY, u"Ready"_ustr));
 }
 
 } // namespace code
