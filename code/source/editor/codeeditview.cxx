@@ -314,6 +314,8 @@ OUString CodeEditView::TextIn(const Range& rRange) const
 
 bool CodeEditView::HasSelection() const
 {
+    if (m_bRect)
+        return m_nAnchorVisual != m_nCaretVisual;
     return m_aCaret.Line != m_aAnchor.Line || m_aCaret.Column != m_aAnchor.Column;
 }
 
@@ -569,9 +571,12 @@ IMPL_LINK_NOARG(CodeEditView, BlinkHdl, Timer*, void)
     m_bCaretOn = !m_bCaretOn;
     if (!m_bFontMeasured || !GetDrawingArea())
         return;
-    // only the caret's own line
-    const tools::Long nY = m_aCaret.Line * m_nLineHeight - m_xScroll->vadjustment_get_value();
-    Invalidate(tools::Rectangle(Point(0, nY), Size(GetOutputSizePixel().Width(), m_nLineHeight)));
+    // only the caret's own line, or the lines of the rectangle
+    const sal_Int32 nFrom = m_bRect ? RectFirstLine() : m_aCaret.Line;
+    const sal_Int32 nTo = m_bRect ? RectLastLine() : m_aCaret.Line;
+    const tools::Long nY = nFrom * m_nLineHeight - m_xScroll->vadjustment_get_value();
+    Invalidate(tools::Rectangle(
+        Point(0, nY), Size(GetOutputSizePixel().Width(), (nTo - nFrom + 1) * m_nLineHeight)));
 }
 
 void CodeEditView::GetFocus()
@@ -591,6 +596,7 @@ void CodeEditView::LoseFocus()
 
 void CodeEditView::MoveCaret(Position aPosition, bool bExtend, bool bKeepWantedColumn)
 {
+    m_bRect = false;
     m_aCaret = ClampPosition(aPosition);
     if (!bExtend)
         m_aAnchor = m_aCaret;
@@ -667,7 +673,7 @@ void CodeEditView::Replace(const Range& rRange, const OUString& rNewText, bool b
     {
         m_aRedo.clear();
         bool bMerged = false;
-        if (bMerge && !m_aUndo.empty() && aOld.isEmpty() && rNewText.getLength() == 1)
+        if (bMerge && !m_bChain && !m_aUndo.empty() && aOld.isEmpty() && rNewText.getLength() == 1)
         {
             UndoStep& rLast = m_aUndo.back();
             const Position aLastEnd = EndOf(rLast.aStart, rLast.aNew);
@@ -686,7 +692,7 @@ void CodeEditView::Replace(const Range& rRange, const OUString& rNewText, bool b
         }
         if (!bMerged)
         {
-            m_aUndo.push_back({ rRange.Start, aOld, rNewText, aCaretBefore, aEndNew });
+            m_aUndo.push_back({ rRange.Start, aOld, rNewText, aCaretBefore, aEndNew, m_bChain });
             if (m_aUndo.size() > 1000)
                 m_aUndo.erase(m_aUndo.begin());
         }
@@ -702,38 +708,174 @@ void CodeEditView::Replace(const Range& rRange, const OUString& rNewText, bool b
 
 void CodeEditView::Undo()
 {
-    if (m_aUndo.empty())
-        return;
-    const UndoStep aStep = m_aUndo.back();
-    m_aUndo.pop_back();
-    Range aCurrent;
-    aCurrent.Start = aStep.aStart;
-    aCurrent.End = EndOf(aStep.aStart, aStep.aNew);
-    Replace(aCurrent, aStep.aOld, false);
-    // Replace() ends with the caret after the restored text, and keeps the
-    // outcome of Refresh() for the undo stack: ours, not "somebody else's"
-    MoveCaret(aStep.aCaretBefore, false);
-    m_aRedo.push_back(aStep);
+    // a chain of steps is one action: back to the one that began it
+    while (!m_aUndo.empty())
+    {
+        const UndoStep aStep = m_aUndo.back();
+        m_aUndo.pop_back();
+        Range aCurrent;
+        aCurrent.Start = aStep.aStart;
+        aCurrent.End = EndOf(aStep.aStart, aStep.aNew);
+        Replace(aCurrent, aStep.aOld, false);
+        // Replace() ends with the caret after the restored text, and keeps the
+        // outcome of Refresh() for the undo stack: ours, not "somebody else's"
+        MoveCaret(aStep.aCaretBefore, false);
+        m_aRedo.push_back(aStep);
+        if (!aStep.bChained)
+            break;
+    }
 }
 
 void CodeEditView::Redo()
 {
-    if (m_aRedo.empty())
+    bool bFirst = true;
+    while (!m_aRedo.empty() && (bFirst || m_aRedo.back().bChained))
+    {
+        bFirst = false;
+        const UndoStep aStep = m_aRedo.back();
+        m_aRedo.pop_back();
+        Range aCurrent;
+        aCurrent.Start = aStep.aStart;
+        aCurrent.End = EndOf(aStep.aStart, aStep.aOld);
+        Replace(aCurrent, aStep.aNew, false);
+        MoveCaret(aStep.aCaretAfter, false);
+        m_aUndo.push_back(aStep);
+    }
+}
+
+// ---- the rectangular selection ----------------------------------------------
+
+tools::Long CodeEditView::VisualX(sal_Int32 nVisual) const
+{
+    return GutterWidth() + Padding + nVisual * m_nCharWidth - m_xScroll->hadjustment_get_value();
+}
+
+sal_Int32 CodeEditView::VisualAt(const Point& rPoint) const
+{
+    if (!m_bFontMeasured)
+        return 0;
+    const tools::Long nX = rPoint.X() - GutterWidth() - Padding + m_xScroll->hadjustment_get_value();
+    return static_cast<sal_Int32>(std::max<tools::Long>(0, (nX + m_nCharWidth / 2) / m_nCharWidth));
+}
+
+sal_Int32 CodeEditView::RectFirstLine() const { return std::min(m_aAnchor.Line, m_aCaret.Line); }
+sal_Int32 CodeEditView::RectLastLine() const { return std::max(m_aAnchor.Line, m_aCaret.Line); }
+sal_Int32 CodeEditView::RectLeft() const { return std::min(m_nAnchorVisual, m_nCaretVisual); }
+sal_Int32 CodeEditView::RectRight() const { return std::max(m_nAnchorVisual, m_nCaretVisual); }
+
+void CodeEditView::BeginRect()
+{
+    if (m_bRect)
         return;
-    const UndoStep aStep = m_aRedo.back();
-    m_aRedo.pop_back();
-    Range aCurrent;
-    aCurrent.Start = aStep.aStart;
-    aCurrent.End = EndOf(aStep.aStart, aStep.aOld);
-    Replace(aCurrent, aStep.aNew, false);
-    MoveCaret(aStep.aCaretAfter, false);
-    m_aUndo.push_back(aStep);
+    m_nAnchorVisual = VisualColumn(m_aLines[m_aAnchor.Line], m_aAnchor.Column);
+    m_nCaretVisual = VisualColumn(m_aLines[m_aCaret.Line], m_aCaret.Column);
+    m_bRect = true;
+}
+
+void CodeEditView::MoveRect(sal_Int32 nLine, sal_Int32 nVisual)
+{
+    nLine = std::clamp<sal_Int32>(nLine, 0, m_aLines.size() - 1);
+    m_nCaretVisual = std::max<sal_Int32>(0, nVisual);
+    m_aCaret = { nLine, ColumnOfVisual(m_aLines[nLine], m_nCaretVisual) };
+    m_nWantedColumn = m_nCaretVisual;
+    ScrollInto({ nLine, m_aCaret.Column }, false);
+    ResetBlink();
+    Invalidate();
+}
+
+void CodeEditView::CollapseRect()
+{
+    if (!m_bRect)
+        return;
+    m_bRect = false;
+    m_aAnchor = m_aCaret;
+}
+
+OUString CodeEditView::RectText() const
+{
+    OUStringBuffer aText;
+    for (sal_Int32 nLine = RectFirstLine(); nLine <= RectLastLine(); ++nLine)
+    {
+        if (nLine != RectFirstLine())
+            aText.append('\n');
+        const OUString& rLine = m_aLines[nLine];
+        const sal_Int32 nFrom = ColumnOfVisual(rLine, RectLeft());
+        const sal_Int32 nTo = ColumnOfVisual(rLine, RectRight());
+        aText.append(rLine.subView(nFrom, std::max<sal_Int32>(0, nTo - nFrom)));
+    }
+    return aText.makeStringAndClear();
+}
+
+void CodeEditView::RectReplace(sal_Int32 nVLow, sal_Int32 nVHigh,
+                               const std::vector<OUString>& rTexts, sal_Int32 nNewVisual)
+{
+    const sal_Int32 nFirst = RectFirstLine();
+    const sal_Int32 nLast = RectLastLine();
+    const sal_Int32 nAnchorLine = m_aAnchor.Line;
+    const sal_Int32 nCaretLine = m_aCaret.Line;
+    const Position aCaretBefore = m_aCaret;
+    m_bChain = false;
+    // from the bottom up: an edit leaves the lines above it where they are
+    for (sal_Int32 nLine = nLast; nLine >= nFirst; --nLine)
+    {
+        const OUString& rLine = m_aLines[nLine];
+        OUString aText = rTexts.size() == 1 ? rTexts[0] : rTexts[nLine - nFirst];
+        const sal_Int32 nStart = ColumnOfVisual(rLine, nVLow);
+        const sal_Int32 nEnd = nVHigh > nVLow ? ColumnOfVisual(rLine, nVHigh) : nStart;
+        // a line too short to reach the rectangle is padded out to it
+        const sal_Int32 nLength = VisualColumn(rLine, rLine.getLength());
+        if (!aText.isEmpty() && nLength < nVLow)
+        {
+            OUStringBuffer aPad;
+            for (sal_Int32 n = nLength; n < nVLow; ++n)
+                aPad.append(' ');
+            aText = aPad.makeStringAndClear() + aText;
+        }
+        if (nStart == nEnd && aText.isEmpty())
+            continue;
+        m_aCaret = aCaretBefore;
+        Replace(Range{ { nLine, nStart }, { nLine, nEnd } }, aText, true);
+        m_bChain = true; // the rest of the lines undo together with the first edit
+    }
+    m_bChain = false;
+    m_bRect = true;
+    m_nAnchorVisual = m_nCaretVisual = std::max<sal_Int32>(0, nNewVisual);
+    m_aAnchor = { nAnchorLine, ColumnOfVisual(m_aLines[nAnchorLine], m_nCaretVisual) };
+    m_aCaret = { nCaretLine, ColumnOfVisual(m_aLines[nCaretLine], m_nCaretVisual) };
+    m_nWantedColumn = m_nCaretVisual;
+    ScrollInto(m_aCaret, false);
+    ResetBlink();
+    Invalidate();
 }
 
 void CodeEditView::InsertText(const OUString& rText, bool bTyping)
 {
     // one kind of line break inside: what the document's own lines are split at
     OUString aText = rText.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    if (m_bRect)
+    {
+        std::vector<OUString> aTexts;
+        for (sal_Int32 nStart = 0;;)
+        {
+            const sal_Int32 nEol = aText.indexOf('\n', nStart);
+            aTexts.push_back(aText.copy(nStart, nEol < 0 ? aText.getLength() - nStart : nEol - nStart));
+            if (nEol < 0)
+                break;
+            nStart = nEol + 1;
+        }
+        const size_t nLines = RectLastLine() - RectFirstLine() + 1;
+        if (aTexts.size() == 1 || aTexts.size() == nLines)
+        {
+            sal_Int32 nWidth = 0;
+            for (const OUString& rPart : aTexts)
+                nWidth = std::max(nWidth, VisualColumn(rPart, rPart.getLength()));
+            // one text for every line, or one per line (a rectangle pasted into one)
+            RectReplace(RectLeft(), RectRight(), aTexts, RectLeft() + nWidth);
+            return;
+        }
+        // text that fits no rectangle goes where the caret is
+        CollapseRect();
+    }
     if (aText.isEmpty() && !HasSelection())
         return;
     const bool bSelection = HasSelection();
@@ -743,6 +885,12 @@ void CodeEditView::InsertText(const OUString& rText, bool bTyping)
 
 void CodeEditView::InsertNewLine()
 {
+    if (m_bRect)
+    {
+        if (HasSelection())
+            RectReplace(RectLeft(), RectRight(), { OUString() }, RectLeft());
+        CollapseRect();
+    }
     const OUString& rLine = m_aLines[Selection().Start.Line];
     const sal_Int32 nColumn = Selection().Start.Column;
     sal_Int32 nIndent = 0;
@@ -761,6 +909,14 @@ void CodeEditView::InsertNewLine()
 
 void CodeEditView::DeleteBackward(bool bWord)
 {
+    if (m_bRect)
+    {
+        if (HasSelection())
+            RectReplace(RectLeft(), RectRight(), { OUString() }, RectLeft());
+        else if (RectLeft() > 0)
+            RectReplace(RectLeft() - 1, RectLeft(), { OUString() }, RectLeft() - 1);
+        return;
+    }
     if (HasSelection())
     {
         Replace(Selection(), OUString(), true);
@@ -776,6 +932,14 @@ void CodeEditView::DeleteBackward(bool bWord)
 
 void CodeEditView::DeleteForward(bool bWord)
 {
+    if (m_bRect)
+    {
+        if (HasSelection())
+            RectReplace(RectLeft(), RectRight(), { OUString() }, RectLeft());
+        else
+            RectReplace(RectLeft(), RectLeft() + 1, { OUString() }, RectLeft());
+        return;
+    }
     if (HasSelection())
     {
         Replace(Selection(), OUString(), true);
@@ -795,7 +959,7 @@ void CodeEditView::Copy()
         return;
     try
     {
-        vcl::unohelper::TextDataObject::CopyStringTo(TextIn(Selection()),
+        vcl::unohelper::TextDataObject::CopyStringTo(m_bRect ? RectText() : TextIn(Selection()),
                                                      GetDrawingArea()->get_clipboard());
     }
     catch (const uno::Exception& rException)
@@ -809,7 +973,10 @@ void CodeEditView::Cut()
     if (!HasSelection())
         return;
     Copy();
-    Replace(Selection(), OUString(), true);
+    if (m_bRect)
+        RectReplace(RectLeft(), RectRight(), { OUString() }, RectLeft());
+    else
+        Replace(Selection(), OUString(), true);
 }
 
 void CodeEditView::Paste()
@@ -849,8 +1016,38 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
     const sal_uInt16 nKey = rCode.GetCode();
     const bool bShift = rCode.IsShift();
     const bool bCtrl = rCode.IsMod1();
-    if (rCode.IsMod2()) // Alt: the menu's
-        return false;
+    // Alt+Shift+arrows grow a rectangular selection; any other Alt is the menu's
+    if (rCode.IsMod2())
+    {
+        if (!bShift || (nKey != KEY_LEFT && nKey != KEY_RIGHT && nKey != KEY_UP && nKey != KEY_DOWN))
+            return false;
+        BeginRect();
+        const sal_Int32 nLine = m_aCaret.Line;
+        if (nKey == KEY_LEFT)
+            MoveRect(nLine, std::max<sal_Int32>(0, m_nCaretVisual - 1));
+        else if (nKey == KEY_RIGHT)
+            MoveRect(nLine, m_nCaretVisual + 1);
+        else
+            MoveRect(nLine + (nKey == KEY_UP ? -1 : 1), m_nCaretVisual);
+        return true;
+    }
+    // moving the caret ends a rectangular selection, where the caret is
+    if (m_bRect)
+        switch (nKey)
+        {
+            case KEY_LEFT:
+            case KEY_RIGHT:
+            case KEY_UP:
+            case KEY_DOWN:
+            case KEY_PAGEUP:
+            case KEY_PAGEDOWN:
+            case KEY_HOME:
+            case KEY_END:
+                CollapseRect();
+                break;
+            default:
+                break;
+        }
 
     const sal_Int32 nPage
         = std::max<sal_Int32>(1, GetOutputSizePixel().Height() / std::max<tools::Long>(1, m_nLineHeight) - 1);
@@ -943,7 +1140,9 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
                 return true;
             }
             // to the next tab stop
-            const sal_Int32 nVisual = VisualColumn(m_aLines[Selection().Start.Line], Selection().Start.Column);
+            const sal_Int32 nVisual
+                = m_bRect ? RectLeft()
+                          : VisualColumn(m_aLines[Selection().Start.Line], Selection().Start.Column);
             InsertText(u"    "_ustr.copy(0, TabWidth - nVisual % TabWidth), false);
             return true;
         }
@@ -956,6 +1155,7 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
         switch (nKey)
         {
             case KEY_A:
+                m_bRect = false;
                 m_aAnchor = { 0, 0 };
                 MoveCaret({ static_cast<sal_Int32>(m_aLines.size()) - 1, m_aLines.back().getLength() },
                           true);
@@ -1002,10 +1202,22 @@ bool CodeEditView::KeyInput(const KeyEvent& rEvent) { return HandleKey(rEvent); 
 
 bool CodeEditView::MouseButtonDown(const MouseEvent& rEvent)
 {
-    if (!rEvent.IsLeft())
+    if (!rEvent.IsLeft() && !rEvent.IsMiddle())
         return false;
     GrabFocus();
     const Position aPosition = PositionAt(rEvent.GetPosPixel());
+    // Alt+click, or the middle button: drag out a rectangle
+    if (rEvent.IsMiddle() || rEvent.IsMod2())
+    {
+        m_aAnchor = m_aCaret = aPosition;
+        m_bRect = true;
+        m_nAnchorVisual = m_nCaretVisual = VisualAt(rEvent.GetPosPixel());
+        m_nWantedColumn = m_nCaretVisual;
+        m_bDragging = true;
+        ResetBlink();
+        Invalidate();
+        return true;
+    }
     if (rEvent.GetClicks() == 2)
         SelectWordAt(aPosition);
     else if (rEvent.GetClicks() >= 3)
@@ -1030,7 +1242,10 @@ bool CodeEditView::MouseMove(const MouseEvent& rEvent)
 {
     if (!m_bDragging)
         return false;
-    MoveCaret(PositionAt(rEvent.GetPosPixel()), true);
+    if (m_bRect)
+        MoveRect(PositionAt(rEvent.GetPosPixel()).Line, VisualAt(rEvent.GetPosPixel()));
+    else
+        MoveCaret(PositionAt(rEvent.GetPosPixel()), true);
     return true;
 }
 
@@ -1074,7 +1289,23 @@ void CodeEditView::Paint(vcl::RenderContext& rRenderContext, const tools::Rectan
                                                 (nTop + aSize.Height()) / m_nLineHeight);
 
     // the selection, under the text
-    if (HasSelection())
+    if (m_bRect)
+    {
+        if (HasSelection())
+        {
+            Color aSelection = rStyle.GetHighlightColor();
+            aSelection.Merge(rStyle.GetFieldColor(), m_bFocused ? 110 : 60);
+            rRenderContext.SetFillColor(aSelection);
+            const tools::Long nX = std::max(VisualX(RectLeft()), nGutter);
+            const tools::Long nRight = VisualX(RectRight());
+            if (nRight > nX)
+                for (sal_Int32 nLine = std::max(nFirst, RectFirstLine());
+                     nLine <= std::min(nLast, RectLastLine()); ++nLine)
+                    rRenderContext.DrawRect(tools::Rectangle(
+                        Point(nX, nLine * m_nLineHeight - nTop), Size(nRight - nX, m_nLineHeight)));
+        }
+    }
+    else if (HasSelection())
     {
         Color aSelection = rStyle.GetHighlightColor();
         aSelection.Merge(rStyle.GetFieldColor(), m_bFocused ? 110 : 60);
@@ -1128,8 +1359,20 @@ void CodeEditView::Paint(vcl::RenderContext& rRenderContext, const tools::Rectan
         drawRun(nDone, rLine.getLength(), rStyle.GetFieldTextColor());
     }
 
-    // the caret
-    if (m_bFocused && m_bCaretOn && m_aCaret.Line >= nFirst && m_aCaret.Line <= nLast)
+    // the caret; a rectangle has one on each of its lines
+    if (m_bRect)
+    {
+        if (m_bFocused && m_bCaretOn)
+        {
+            rRenderContext.SetFillColor(rStyle.GetFieldTextColor());
+            for (sal_Int32 nLine = std::max(nFirst, RectFirstLine());
+                 nLine <= std::min(nLast, RectLastLine()); ++nLine)
+                rRenderContext.DrawRect(tools::Rectangle(
+                    Point(VisualX(m_nCaretVisual), nLine * m_nLineHeight - nTop),
+                    Size(2, m_nLineHeight)));
+        }
+    }
+    else if (m_bFocused && m_bCaretOn && m_aCaret.Line >= nFirst && m_aCaret.Line <= nLast)
     {
         const tools::Long nX = ColumnX(m_aLines[m_aCaret.Line], m_aCaret.Column);
         rRenderContext.SetFillColor(rStyle.GetFieldTextColor());

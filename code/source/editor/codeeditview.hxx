@@ -82,6 +82,9 @@ private:
         OUString aNew; // what is there now
         Position aCaretBefore;
         Position aCaretAfter;
+        // Part of the same user action as the step before it (one edit per line
+        // of a rectangular selection): undone and redone together with it.
+        bool bChained = false;
     };
 
     DECL_LINK(ScrollHdl, weld::ScrolledWindow&, void);
@@ -130,6 +133,25 @@ private:
     void Paste();
     bool HandleKey(const KeyEvent& rEvent);
 
+    // The rectangular selection: the lines between the anchor's and the caret's,
+    // in the columns (visual, so beyond the end of short lines too) between
+    // m_nAnchorVisual and m_nCaretVisual.  Whatever is typed, pasted or deleted
+    // is done on every one of its lines, as one undo step.
+    tools::Long VisualX(sal_Int32 nVisual) const;
+    sal_Int32 VisualAt(const Point& rPoint) const;
+    sal_Int32 RectFirstLine() const;
+    sal_Int32 RectLastLine() const;
+    sal_Int32 RectLeft() const;
+    sal_Int32 RectRight() const;
+    void BeginRect();
+    void MoveRect(sal_Int32 nLine, sal_Int32 nVisual);
+    void CollapseRect();
+    // Replaces, on each line, the cells nVLow..nVHigh by the text for that line
+    // (one text: the same on all), and leaves a zero-width rectangle at nNewVisual.
+    void RectReplace(sal_Int32 nVLow, sal_Int32 nVHigh, const std::vector<OUString>& rTexts,
+                     sal_Int32 nNewVisual);
+    OUString RectText() const;
+
     css::uno::Reference<css::code::document::XTextDocument> m_xDocument;
     std::unique_ptr<weld::ScrolledWindow> m_xScroll;
     std::unique_ptr<weld::CustomWeld> m_xDrawing;
@@ -146,6 +168,10 @@ private:
     Position m_aCaret;
     Position m_aAnchor; // the other end of the selection; equal to the caret if none
     sal_Int32 m_nWantedColumn = 0; // visual, kept over up and down
+    bool m_bRect = false;
+    sal_Int32 m_nAnchorVisual = 0;
+    sal_Int32 m_nCaretVisual = 0;
+    bool m_bChain = false; // the next recorded undo step belongs to the one before
     bool m_bDragging = false;
     bool m_bFocused = false;
     bool m_bCaretOn = true;
