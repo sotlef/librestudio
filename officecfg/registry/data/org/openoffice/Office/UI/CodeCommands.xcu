@@ -10,9 +10,19 @@
 <oor:component-data xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="CodeCommands" oor:package="org.openoffice.Office.UI">
   <node oor:name="UserInterface">
     <node oor:name="Commands">
+      <node oor:name=".uno:CodeOpenMenu" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Open</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeOpenProject" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Project...</value>
+        </prop>
+      </node>
       <node oor:name=".uno:CodeOpenFolder" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
-          <value xml:lang="en-US">Open ~Folder...</value>
+          <value xml:lang="en-US">~Folder...</value>
         </prop>
       </node>
       <node oor:name=".uno:CodeSaveAll" oor:op="replace">

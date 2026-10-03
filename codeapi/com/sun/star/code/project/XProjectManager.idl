@@ -14,6 +14,15 @@ interface XProjectManager
     /** Opens a project through the reader that XProjectFormatRegistry finds;
         a directory with no matching reader is opened as a plain folder.
         Opening an already open project returns it.
+
+        A project of a format that has to be configured (see
+        XConfigurableProjectFormat) that has never been configured is first
+        configured by the user, through the front end; the answer is
+        remembered in XProjectConfigStore, and the format's configuration
+        step is started as a background job (its output is in an output
+        channel); the project opens without waiting for it.  If the user cancels that, nothing
+        is opened and null is returned.  With no front end to ask, such a
+        project cannot be opened and an IOException is raised.
      */
     ::com::sun::star::code::project::XProject openProject( [in] string Url )
         raises( ::com::sun::star::io::IOException );

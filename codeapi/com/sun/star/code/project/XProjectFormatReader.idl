@@ -16,6 +16,11 @@ interface XProjectFormatReader
 {
     [attribute, readonly] string FormatKind;
     [attribute, readonly] string DisplayName;
+    /** The names of the project or solution files this format is stored in,
+        as file-dialog patterns: "*.sln", "*.kdev4", "CMakeLists.txt".  They
+        are what File > Open > Project offers in its file dialog; canRead()
+        accepts at least the files they match. */
+    [attribute, readonly] sequence< string > FilePatterns;
     /** When several readers accept the same URL, the one with the greatest
         priority wins. */
     [attribute, readonly] long Priority;

@@ -70,6 +70,24 @@ SfxVoidItem CodeOpenFolder SID_CODE_OPENFOLDER
     GroupId = SfxGroupId::Application;
 ]
 
+// File > Open > Project...: a project or solution file, through the readers.
+SfxVoidItem CodeOpenProject SID_CODE_OPENPROJECT
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // File > Save All: saves every document with unsaved changes.
 SfxVoidItem CodeSaveAll SID_CODE_SAVEALL
 ()
@@ -105,6 +123,11 @@ shell code_Shell
     ]
 
     SID_CODE_OPENFOLDER
+    [
+        ExecMethod = Execute;
+    ]
+
+    SID_CODE_OPENPROJECT
     [
         ExecMethod = Execute;
     ]

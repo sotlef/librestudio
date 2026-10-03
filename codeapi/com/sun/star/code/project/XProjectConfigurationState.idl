@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** A capability of a project whose format has to be configured: whether that
+    has been done, so that the structure the configuration step produces
+    (targets and their files) is available.  A project of such a format that
+    is not configured yet has only its plain file tree.
+
+    A project that implements this and changes state also implements
+    ::com::sun::star::util::XModifyBroadcaster and calls its listeners when
+    that happens; XProjectManager passes that on as a ProjectEvent of kind
+    ITEMS_CHANGED.
+ */
+interface XProjectConfigurationState
+{
+    [attribute, readonly] boolean Configured;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

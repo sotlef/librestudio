@@ -9,49 +9,27 @@
 
 #pragma once
 
-#include <com/sun/star/code/project/XProjectItem.hpp>
-#include <com/sun/star/code/project/XProjectListener.hpp>
-#include <com/sun/star/ui/XSidebar.hpp>
-#include <sfx2/sidebar/PanelLayout.hxx>
-
-#include <map>
-#include <memory>
-
-namespace weld { class TreeView; class TreeIter; }
-
-namespace code { class UiNotifier; }
+#include "projecttreepanel.hxx"
 
 namespace code::sidebar
 {
 
-// Solution Explorer: one root row per open project (theProjectManager), its
-// file tree below it, read lazily -- a folder's children are asked for when
-// the row is first expanded.  Double-clicking a file opens it in the editor.
-// Rebuilt whenever a project is opened, closed or activated.
-class SolutionPanel final : public PanelLayout
+// Solution Explorer: the structure the project's format describes -- the
+// solution, its targets, their source groups and files -- as opposed to Folder
+// View's plain directory tree.  A project whose format has no structure (an
+// opened folder) shows its directory tree here too, so that the panel is never
+// empty while Folder View is not.
+class SolutionPanel final : public ProjectTreePanel
 {
 public:
-    SolutionPanel(weld::Widget* pParent,
-        css::uno::Reference<css::ui::XSidebar> xSidebar);
-    virtual ~SolutionPanel() override;
+    SolutionPanel(weld::Widget* pParent, css::uno::Reference<css::ui::XSidebar> xSidebar);
 
-private:
-    void Rebuild();
-    void InsertItem(const weld::TreeIter* pParent, const css::uno::Reference<css::code::project::XProjectItem>& xItem,
-                    const OUString& rLabel);
-
-    DECL_LINK(ExpandingHdl, const weld::TreeIter&, bool);
-    DECL_LINK(ActivatedHdl, const weld::TreeIter&, bool);
-
-    std::unique_ptr<weld::TreeView> mxTree;
-    css::uno::Reference<css::ui::XSidebar> mxSidebar;
-
-    // Row ids are small integers; this maps them back to the items they stand for.
-    std::map<OUString, css::uno::Reference<css::code::project::XProjectItem>> maItems;
-    sal_Int32 mnNextId = 1;
-
-    std::shared_ptr<::code::UiNotifier> mxNotifier;
-    css::uno::Reference<css::code::project::XProjectListener> mxListener;
+protected:
+    virtual css::uno::Reference<css::code::project::XProjectItem>
+    RootOf(const css::uno::Reference<css::code::project::XProject>& xProject) override;
+    virtual OUString EmptyText() const override;
+    virtual OUString LabelOf(const css::uno::Reference<css::code::project::XProject>& xProject,
+                             const css::uno::Reference<css::code::project::XProjectItem>& xRoot) const override;
 };
 
 } // namespace code::sidebar

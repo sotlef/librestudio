@@ -10,8 +10,10 @@
 #pragma once
 
 #include <com/sun/star/code/core/Position.hpp>
+#include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/core/XBackgroundJobListener.hpp>
 #include <com/sun/star/code/frontend/XDialogs.hpp>
+#include <com/sun/star/code/project/XProjectListener.hpp>
 #include <com/sun/star/code/frontend/XEditorHost.hpp>
 #include <com/sun/star/code/frontend/XNotificationSink.hpp>
 #include <com/sun/star/code/frontend/XStatusBar.hpp>
@@ -98,7 +100,11 @@ public:
     // XDialogs
     css::code::frontend::SaveChoice SAL_CALL askSaveChanges(const OUString& rDocumentName) override;
     OUString SAL_CALL pickFolder(const OUString& rTitle) override;
-    OUString SAL_CALL pickFile(const OUString& rTitle) override;
+    sal_Bool SAL_CALL configureProject(
+        const OUString& rConfiguratorService, const OUString& rProjectUrl,
+        css::uno::Sequence<css::code::project::ProjectConfiguration>& rConfigurations) override;
+    OUString SAL_CALL pickFile(const OUString& rTitle,
+                                const css::uno::Sequence<css::code::frontend::FileFilter>& rFilters) override;
 
 private:
     DECL_LINK(StatusTimeoutHdl, Timer*, void);
@@ -112,6 +118,14 @@ private:
     std::shared_ptr<UiNotifier> m_xJobNotifier;
     css::uno::Reference<css::code::core::XBackgroundJobListener> m_xJobListener;
     void InvalidateStatus();
+
+    // Solution Explorer exists only while some open project has a structure to
+    // show: a project of a format that must be configured counts only once it
+    // is; one that needs no configuration (an opened folder) always does.  The
+    // deck is hidden or shown as projects open, close and change.
+    void UpdateSolutionDeck();
+    std::shared_ptr<UiNotifier> m_xProjectNotifier;
+    css::uno::Reference<css::code::project::XProjectListener> m_xProjectListener;
 
     // Both only touched with the solar mutex held.
     OUString m_aStatusText;

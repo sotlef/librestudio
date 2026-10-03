@@ -24,6 +24,11 @@
       single-instance="true">
     <singleton name="com.sun.star.code.project.theProjectFormatRegistry"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.ProjectConfigStore"
+      constructor="com_sun_star_comp_code_ProjectConfigStore_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.project.theProjectConfigStore"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.ProjectManager"
       constructor="com_sun_star_comp_code_ProjectManager_get_implementation"
       single-instance="true">

@@ -16,7 +16,12 @@
 #include <com/sun/star/code/core/theCode.hpp>
 #include <com/sun/star/code/document/XDocumentManager.hpp>
 #include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <com/sun/star/code/frontend/FileFilter.hpp>
 #include <com/sun/star/code/frontend/XDialogs.hpp>
+#include <com/sun/star/code/project/XProjectFormatReader.hpp>
+#include <com/sun/star/code/project/XProjectFormatRegistry.hpp>
+#include <com/sun/star/code/project/theProjectFormatRegistry.hpp>
+#include <comphelper/sequence.hxx>
 #include <com/sun/star/code/frontend/XWorkbench.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
@@ -25,6 +30,7 @@
 
 #include <codeids.hxx>
 #include <sfx2/objface.hxx>
+#include <vector>
 #include <sfx2/request.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svl/stritem.hxx>
@@ -137,6 +143,47 @@ void Shell::Execute(SfxRequest& rReq)
 {
     switch (rReq.GetSlot())
     {
+        case SID_CODE_OPENPROJECT:
+        {
+            uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+            try
+            {
+                uno::Reference<css::code::frontend::XWorkbench> xWorkbench
+                    = css::code::core::theCode::get(xContext)->getWorkbench();
+                if (!xWorkbench.is() || !xWorkbench->getDialogs().is())
+                    break;
+
+                // One filter per format the registered readers know, and in front
+                // of them the union of all: "every project or solution I can open".
+                const uno::Sequence<uno::Reference<css::code::project::XProjectFormatReader>> aReaders
+                    = css::code::project::theProjectFormatRegistry::get(xContext)->getReaders();
+                std::vector<css::code::frontend::FileFilter> aFilters;
+                std::vector<OUString> aAll;
+                for (const auto& xReader : aReaders)
+                {
+                    const uno::Sequence<OUString> aPatterns = xReader->getFilePatterns();
+                    if (!aPatterns.hasElements())
+                        continue;
+                    aFilters.push_back({ xReader->getDisplayName(), aPatterns });
+                    aAll.insert(aAll.end(), aPatterns.begin(), aPatterns.end());
+                }
+                aFilters.insert(aFilters.begin(),
+                                { u"All supported project and solution formats"_ustr,
+                                  comphelper::containerToSequence(aAll) });
+
+                const OUString aUrl = xWorkbench->getDialogs()->pickFile(
+                    u"Open Project"_ustr, comphelper::containerToSequence(aFilters));
+                if (aUrl.isEmpty())
+                    break;
+                css::code::project::theProjectManager::get(xContext)->openProject(aUrl);
+            }
+            catch (const uno::Exception& rException)
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->showMessage(u"Cannot open project: "_ustr + rException.Message, 8000);
+            }
+            break;
+        }
         case SID_CODE_OPENFOLDER:
         {
             // The project manager decides what a folder is (a registered reader

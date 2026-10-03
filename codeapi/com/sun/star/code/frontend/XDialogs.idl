@@ -15,8 +15,19 @@ interface XDialogs
     ::com::sun::star::code::frontend::SaveChoice askSaveChanges( [in] string DocumentName );
     /** lets the user pick a directory; returns its URL, or empty if cancelled */
     string pickFolder( [in] string Title );
-    /** lets the user pick a file; returns its URL, or empty if cancelled */
-    string pickFile( [in] string Title );
+    /** Lets the user pick a file; returns its URL, or empty if cancelled.
+        With filters, the dialog offers each as a choice; the first is
+        selected when the dialog opens.  Without, every file is shown. */
+    string pickFile( [in] string Title,
+        [in] sequence< ::com::sun::star::code::frontend::FileFilter > Filters );
+
+    /** Lets the user configure a project: shows the panel of the named
+        service in a modal dialog.  Configurations holds what to start with
+        and, if true is returned, what the user chose; false means the user
+        cancelled and Configurations is untouched.  The panel service is the
+        format's (XConfigurableProjectFormat::ConfiguratorServiceName). */
+    boolean configureProject( [in] string ConfiguratorService, [in] string ProjectUrl,
+        [inout] sequence< ::com::sun::star::code::project::ProjectConfiguration > Configurations );
 };
 
 }; }; }; }; };

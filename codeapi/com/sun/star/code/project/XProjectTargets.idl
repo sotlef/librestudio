@@ -12,6 +12,12 @@ module com { module sun { module star { module code { module project {
 /** Capability of a project: it builds one or more targets. */
 interface XProjectTargets
 {
+    // A target is also an XProjectItem (kind TARGET): its children are its
+    // XSourceGroup items (kind GROUP, also XProjectItem), and theirs its files
+    // (kind FILE, XProjectFile).  A client that wants the tree below a target
+    // asks it for XProjectItem; this is the logical structure of the project,
+    // as opposed to XProjectFiles' directory tree.  A project not configured
+    // yet has no targets.
     [attribute, readonly] sequence< ::com::sun::star::code::project::XProjectTarget > Targets;
 };
 

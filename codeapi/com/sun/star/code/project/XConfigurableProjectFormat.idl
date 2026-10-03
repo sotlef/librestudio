@@ -1,0 +1,40 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** A capability of a project-format reader: the format has to be configured
+    before its projects can be built (CMake, autotools).  A client that found a
+    reader asks it for this interface with queryInterface; a reader that does
+    not need configuring simply does not have it.
+ */
+interface XConfigurableProjectFormat
+{
+    /** The name of the service that implements XProjectConfigurationPanel
+        for this format. */
+    [attribute, readonly] string ConfiguratorServiceName;
+
+    /** What the configuration panel starts with for a project that has none
+        yet, e.g. a Debug and a Release configuration with build directories
+        next to the project. */
+    sequence< ::com::sun::star::code::project::ProjectConfiguration > getDefaultConfigurations( [in] string ProjectUrl );
+
+    /** Runs the format's configuration step (cmake, ./configure) for each of
+        the configurations, one after the other, as a background job; returns
+        at once.  What the tool prints goes to an output channel of the
+        format's own, which is created before the first line, so that it is
+        there for the Output window to show.  The caller registers the job
+        with XJobRegistry if the user is to see it in the status bar. */
+    ::com::sun::star::code::core::XBackgroundJob configure( [in] string ProjectUrl,
+        [in] sequence< ::com::sun::star::code::project::ProjectConfiguration > Configurations );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

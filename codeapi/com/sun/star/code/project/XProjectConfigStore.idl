@@ -1,0 +1,30 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** The configurations the user chose for projects, remembered so that a
+    project that was configured once opens without asking again.  They are
+    kept in a file in the project's own directory (.librestudio/), in a format
+    of this IDE's own.
+ */
+interface XProjectConfigStore
+{
+    /** the remembered configurations; none at all means the project has never
+        been configured */
+    sequence< ::com::sun::star::code::project::ProjectConfiguration > getConfigurations( [in] string ProjectUrl );
+
+    void setConfigurations( [in] string ProjectUrl,
+        [in] sequence< ::com::sun::star::code::project::ProjectConfiguration > Configurations )
+        raises( ::com::sun::star::io::IOException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

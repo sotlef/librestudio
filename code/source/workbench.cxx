@@ -9,13 +9,21 @@
 
 #include "workbench.hxx"
 
+#include "configureprojectdialog.hxx"
+
 #include <codeids.hxx>
+
+#include <com/sun/star/code/project/XProjectConfigurationState.hpp>
+#include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/theProjectManager.hpp>
+#include <sfx2/sidebar/SidebarController.hxx>
 
 #include <com/sun/star/code/core/XBackgroundJob.hpp>
 #include <com/sun/star/code/core/XJobRegistry.hpp>
 #include <com/sun/star/code/core/theJobRegistry.hpp>
 #include <sal/log.hxx>
 
+#include <com/sun/star/code/frontend/FileFilter.hpp>
 #include <com/sun/star/code/frontend/Notification.hpp>
 #include <com/sun/star/code/frontend/SaveChoice.hpp>
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
@@ -56,6 +64,18 @@ Workbench::Workbench(uno::Reference<uno::XComponentContext> xContext)
     m_aStatusTimer.SetInvokeHandler(LINK(this, Workbench, StatusTimeoutHdl));
     s_pInstance = this;
 
+    m_xProjectNotifier = std::make_shared<UiNotifier>([this] { UpdateSolutionDeck(); });
+    m_xProjectListener = new ServiceListener(m_xProjectNotifier);
+    try
+    {
+        css::code::project::theProjectManager::get(m_xContext)->addProjectListener(m_xProjectListener);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "the sidebar cannot follow the projects: " << rException.Message);
+    }
+    UpdateSolutionDeck();
+
     m_xJobNotifier = std::make_shared<UiNotifier>([this] { InvalidateStatus(); });
     m_xJobListener = new ServiceListener(m_xJobNotifier);
     try
@@ -70,6 +90,14 @@ Workbench::Workbench(uno::Reference<uno::XComponentContext> xContext)
 
 Workbench::~Workbench()
 {
+    m_xProjectNotifier->Detach();
+    try
+    {
+        css::code::project::theProjectManager::get(m_xContext)->removeProjectListener(m_xProjectListener);
+    }
+    catch (const uno::Exception&)
+    {
+    }
     m_xJobNotifier->Detach();
     try
     {
@@ -141,6 +169,38 @@ OUString Workbench::GetJobsText() const
     {
     }
     return aText.isEmpty() ? u"No background tasks running."_ustr : aText;
+}
+
+void Workbench::UpdateSolutionDeck()
+{
+    bool bAvailable = false;
+    try
+    {
+        for (const auto& xProject : css::code::project::theProjectManager::get(m_xContext)->getOpenProjects())
+        {
+            uno::Reference<css::code::project::XProjectConfigurationState> xState(xProject, uno::UNO_QUERY);
+            if (!xState.is() || xState->getConfigured())
+            {
+                bAvailable = true;
+                break;
+            }
+        }
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot tell whether Solution Explorer has anything to show: " << rException.Message);
+    }
+
+    static constexpr std::u16string_view aApplication = u"com.sun.star.code.CodeDocument";
+    static constexpr std::u16string_view aDeck = u"SolutionDeck";
+    SfxViewFrame* pFrame = SfxViewFrame::Current();
+    sfx2::sidebar::SidebarController* pController
+        = pFrame ? sfx2::sidebar::SidebarController::GetSidebarControllerForView(pFrame->GetViewShell())
+                 : nullptr;
+    if (pController)
+        pController->SetDeckHidden(aDeck, aApplication, !bAvailable);
+    else // no sidebar yet: it will start out right
+        sfx2::sidebar::SidebarController::SetDeckHiddenForApplication(aApplication, aDeck, !bAvailable);
 }
 
 void Workbench::InvalidateStatus()
@@ -277,12 +337,39 @@ OUString Workbench::pickFolder(const OUString& rTitle)
     return xPicker->getDirectory();
 }
 
-OUString Workbench::pickFile(const OUString& rTitle)
+sal_Bool Workbench::configureProject(const OUString& rConfiguratorService, const OUString& rProjectUrl,
+                                     uno::Sequence<css::code::project::ProjectConfiguration>& rConfigurations)
+{
+    SolarMutexGuard aGuard;
+    rtl::Reference<ConfigureProjectDialog> xDialog = new ConfigureProjectDialog(
+        m_xContext, DialogParent(), rConfiguratorService, rProjectUrl, rConfigurations);
+    xDialog->setTitle(u"Configure Project"_ustr);
+    if (xDialog->execute() != ui::dialogs::ExecutableDialogResults::OK)
+        return false;
+    rConfigurations = xDialog->GetConfigurations();
+    return true;
+}
+
+OUString Workbench::pickFile(const OUString& rTitle, const uno::Sequence<cf::FileFilter>& rFilters)
 {
     SolarMutexGuard aGuard;
     uno::Reference<ui::dialogs::XFilePicker3> xPicker = ui::dialogs::FilePicker::createWithMode(
         m_xContext, ui::dialogs::TemplateDescription::FILEOPEN_SIMPLE);
     xPicker->setTitle(rTitle);
+
+    // The dialog's filter list, in the order given; the first one is shown
+    // when it opens.  A filter's patterns go in as the dialog's own
+    // "*.a;*.b" syntax.
+    for (const cf::FileFilter& rFilter : rFilters)
+    {
+        OUString aPatterns;
+        for (const OUString& rPattern : rFilter.Patterns)
+            aPatterns += (aPatterns.isEmpty() ? u""_ustr : u";"_ustr) + rPattern;
+        xPicker->appendFilter(rFilter.Title, aPatterns);
+    }
+    if (rFilters.hasElements())
+        xPicker->setCurrentFilter(rFilters[0].Title);
+
     if (xPicker->execute() != ui::dialogs::ExecutableDialogResults::OK)
         return OUString();
     const uno::Sequence<OUString> aFiles = xPicker->getSelectedFiles();

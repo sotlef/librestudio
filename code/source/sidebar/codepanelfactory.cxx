@@ -10,6 +10,7 @@
 #include "codepanelfactory.hxx"
 
 #include "errorlistpanel.hxx"
+#include "folderviewpanel.hxx"
 #include "outputlogpanel.hxx"
 #include "solutionpanel.hxx"
 
@@ -60,7 +61,9 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
     // vertical scrollbar and narrows the panel by a scrollbar's width.
     ui::LayoutSize aLayoutSize(0, -1, -1);
 
-    if (rsResourceURL.endsWith("/SolutionPanel"))
+    if (rsResourceURL.endsWith("/FolderViewPanel"))
+        xControl = std::make_unique<::code::sidebar::FolderViewPanel>(pParent, xSidebar);
+    else if (rsResourceURL.endsWith("/SolutionPanel"))
         xControl = std::make_unique<::code::sidebar::SolutionPanel>(pParent, xSidebar);
     else if (rsResourceURL.endsWith("/OutputPanel"))
         xControl = std::make_unique<::code::sidebar::OutputLogPanel>(pParent);

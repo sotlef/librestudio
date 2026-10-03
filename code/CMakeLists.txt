@@ -30,6 +30,7 @@ librestudio_add_sdi_target(code_sdi
 
 add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeapp.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/configureprojectdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
@@ -119,6 +120,8 @@ add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/errorlistpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputlogpanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/folderviewpanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/projecttreepanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx"
     # The panels listen to the services through the same UI bridge the exe
     # uses; a second copy here (rather than a shared library) because it is
@@ -159,15 +162,31 @@ add_dependencies(code codesidebar)
 # are small, share common.cxx, and unlike deepcode's library-per-service
 # layout nothing here is meant to be loaded on its own. Like codesidebar it is
 # discovered through services.rdb, never linked by "code".
+# The helpers every backend library needs (URL handling, MIME types, the
+# folder project): one static library linked into each, so that the format
+# plugins can live in libraries of their own.
+add_library(codecommon STATIC
+    "${CMAKE_SOURCE_DIR}/code/source/services/backgroundjob.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/common.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/folderproject.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/process.cxx")
+set_target_properties(codecommon PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(codecommon PUBLIC
+    "${CMAKE_SOURCE_DIR}/code/source/services"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${codeapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(codecommon udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
+target_link_libraries(codecommon PUBLIC comphelper cppu cppuhelper sal)
+
 add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/services/common.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/services/folderproject.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/jobregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/outputcontroller.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/projectconfigstore.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectformatregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx")
@@ -180,7 +199,7 @@ target_include_directories(codeservices PRIVATE
 add_dependencies(codeservices udkapi_normal_headers offapi_normal_headers
     codeapi_normal_headers)
 
-target_link_libraries(codeservices PRIVATE comphelper cppu cppuhelper sal)
+target_link_libraries(codeservices PRIVATE codecommon comphelper cppu cppuhelper sal)
 
 librestudio_add_component(codeservices
     COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codeservices.component"
@@ -194,6 +213,34 @@ install(TARGETS codeservices LIBRARY DESTINATION program)
 # Runtime-only, like codesidebar: building "code" must also build the services
 # it asks for by name, and install the registry that names their types.
 add_dependencies(code codeservices program_codeapi_rdb)
+
+# --- cmakeproj -------------------------------------------------------------
+#
+# Everything that is CMake in "Code", in one library: the project-format
+# reader (a plugin that registers itself with the format registry) and the
+# panel in which a CMake project is configured. Kept out of codeservices
+# because the panel is VCL user interface, and codeservices has no GUI
+# dependency (the headless tests use it). Like codesidebar this is discovered
+# through services.rdb, never linked by "code". Autotools will get a library
+# of its own the same way.
+add_library(cmakeproj SHARED
+    "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeconfigpanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeformatreader.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeproject.cxx")
+
+target_include_directories(cmakeproj PRIVATE "${CMAKE_SOURCE_DIR}/code/source/cmake")
+target_link_libraries(cmakeproj PRIVATE codecommon comphelper cppu cppuhelper sal tl vcl)
+
+librestudio_add_component(cmakeproj
+    COMPONENT "${CMAKE_SOURCE_DIR}/code/util/cmakeproj.component"
+    LIBRARY   cmakeproj
+    LAYER     OOO)
+
+librestudio_set_library_output_name(cmakeproj cmakeproj OOO)
+
+install(TARGETS cmakeproj LIBRARY DESTINATION program)
+
+add_dependencies(code cmakeproj)
 
 # --- UIConfig_code -------------------------------------------------------
 #
@@ -252,9 +299,12 @@ endforeach ()
 # share/config/soffice.cfg/ -- same "<module>/ui/" convention every other
 # module's own weld .ui files use (e.g. svx/ui/sidebarempty.ui).
 set(CODE_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/cmakeconfigpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configureprojectdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editordocumentcontent.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editormdi.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/errorlistpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/folderviewpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/outputpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/taskspopover.ui"

@@ -1,0 +1,34 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** The panel in which the user states how a project of one format is to be
+    configured.  It is an embeddable piece of user interface, not a window of
+    its own: whoever shows it (today only the modal dialog of the front end)
+    gives it a parent when creating it.
+
+    Created with createInstanceWithArguments(); the arguments are named values
+      ParentWindow    com.sun.star.awt.XWindow  the window to build the panel in
+      ProjectUrl      string                    the project being configured
+      Configurations  sequence< ProjectConfiguration >  what to start with
+ */
+interface XProjectConfigurationPanel
+{
+    /** what the panel shows now */
+    [attribute, readonly] sequence< ::com::sun::star::code::project::ProjectConfiguration > Configurations;
+
+    /** Checks the entries; returns what is wrong in words the user can act
+        on, or an empty string if the configuration is acceptable. */
+    string validate();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

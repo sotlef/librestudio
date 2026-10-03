@@ -43,4 +43,8 @@
 #define SID_CODE_OPENFOLDER          (SID_CODE_START + 4)
 #define SID_CODE_SAVEALL             (SID_CODE_START + 5)
 
+// File > Open > Project... (.uno:CodeOpenProject): asks for a project or
+// solution file in any format a registered project-format reader knows.
+#define SID_CODE_OPENPROJECT         (SID_CODE_START + 6)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

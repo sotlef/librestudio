@@ -19,6 +19,18 @@ namespace codeservices
 /// @throws css::io::IOException if the URL is not a readable directory
 css::uno::Reference<css::code::project::XProject> CreateFolderProject(const OUString& rUrl);
 
+/// A project whose tree is that of a directory but whose identity is another
+/// URL -- a project file (CMakeLists.txt) living in that directory -- and which
+/// reports rFormatKind.  For readers of formats that, in this first wave, only
+/// need to say "this directory is a project of this kind".
+/// @throws css::io::IOException if rRootUrl is not a readable directory
+css::uno::Reference<css::code::project::XProject>
+CreateFileTreeProject(const OUString& rRootUrl, const OUString& rIdentityUrl,
+                      const OUString& rFormatKind);
+
+/// the URL of the directory a file URL lies in
+OUString GetParentUrl(const OUString& rUrl);
+
 /// true if the URL names an existing directory
 bool IsDirectory(const OUString& rUrl);
 

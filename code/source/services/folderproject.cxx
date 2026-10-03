@@ -172,16 +172,17 @@ uno::Sequence<uno::Reference<XProjectItem>> FolderNode::getChildren()
 class FolderProject final : public comphelper::WeakComponentImplHelper<XProject, XProjectFiles>
 {
 public:
-    FolderProject(const OUString& rUrl)
-        : m_aUrl(rUrl)
-        , m_xRoot(new FolderNode(NodeData{ {}, GetDisplayName(rUrl), rUrl, OUString() }))
+    FolderProject(const OUString& rRootUrl, const OUString& rIdentityUrl, const OUString& rKind)
+        : m_aUrl(rIdentityUrl)
+        , m_aKind(rKind)
+        , m_xRoot(new FolderNode(NodeData{ {}, GetDisplayName(rRootUrl), rRootUrl, OUString() }))
     {
     }
 
     // XProject
     OUString SAL_CALL getName() override { return m_xRoot->getName(); }
     OUString SAL_CALL getUrl() override { return m_aUrl; }
-    OUString SAL_CALL getFormatKind() override { return u"folder"_ustr; }
+    OUString SAL_CALL getFormatKind() override { return m_aKind; }
     uno::Sequence<beans::PropertyValue> SAL_CALL getProperties() override { return {}; }
 
     // XProjectFiles
@@ -194,6 +195,7 @@ private:
     }
 
     const OUString m_aUrl;
+    const OUString m_aKind;
     uno::Reference<XProjectItem> m_xRoot;
 };
 }
@@ -203,7 +205,22 @@ uno::Reference<XProject> CreateFolderProject(const OUString& rUrl)
     const OUString aUrl = NormalizeUrl(rUrl);
     if (!IsDirectory(aUrl))
         throw io::IOException("not a directory: " + aUrl);
-    return new FolderProject(aUrl);
+    return new FolderProject(aUrl, aUrl, u"folder"_ustr);
+}
+
+uno::Reference<XProject> CreateFileTreeProject(const OUString& rRootUrl, const OUString& rIdentityUrl,
+                                               const OUString& rFormatKind)
+{
+    const OUString aRoot = NormalizeUrl(rRootUrl);
+    if (!IsDirectory(aRoot))
+        throw io::IOException("not a directory: " + aRoot);
+    return new FolderProject(aRoot, NormalizeUrl(rIdentityUrl), rFormatKind);
+}
+
+OUString GetParentUrl(const OUString& rUrl)
+{
+    const OUString aUrl = NormalizeUrl(rUrl);
+    return aUrl.copy(0, std::max<sal_Int32>(aUrl.lastIndexOf('/'), 0));
 }
 }
 

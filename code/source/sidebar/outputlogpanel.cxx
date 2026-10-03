@@ -133,13 +133,23 @@ void OutputLogPanel::Refresh()
         mxSource->clear();
         for (const auto& rDisplayName : aDisplayNames)
             mxSource->append_text(rDisplayName);
-        maChannelNames = aNames;
 
+        // A channel that was not there before is one that has just started
+        // producing output (a build, a configure run): show it, as Visual
+        // Studio switches "Show output from:" to the tool that is running.
+        // The very first fill is not such a case.
+        const auto itNew = std::find_if(aNames.begin(), aNames.end(), [&](const OUString& rName)
+                                        { return std::find(maChannelNames.begin(), maChannelNames.end(), rName)
+                                                 == maChannelNames.end(); });
+        // (maChannelNames still holds the previous list here)
         const auto it = std::find(aNames.begin(), aNames.end(), aKeep);
-        if (it != aNames.end())
+        if (!maChannelNames.empty() && itNew != aNames.end())
+            mxSource->set_active(static_cast<int>(itNew - aNames.begin()));
+        else if (it != aNames.end())
             mxSource->set_active(static_cast<int>(it - aNames.begin()));
         else if (!aNames.empty())
             mxSource->set_active(0);
+        maChannelNames = aNames;
     }
 
     UpdateLogText();

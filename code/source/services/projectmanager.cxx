@@ -10,7 +10,17 @@
 #include "common.hxx"
 #include "folderproject.hxx"
 
+#include <com/sun/star/code/core/XBackgroundJob.hpp>
+#include <com/sun/star/code/core/XJobRegistry.hpp>
+#include <com/sun/star/code/core/theCode.hpp>
+#include <com/sun/star/code/core/theJobRegistry.hpp>
+#include <com/sun/star/code/frontend/XDialogs.hpp>
+#include <com/sun/star/code/frontend/XWorkbench.hpp>
+#include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/ProjectEvent.hpp>
+#include <com/sun/star/code/project/XConfigurableProjectFormat.hpp>
+#include <com/sun/star/code/project/XProjectConfigStore.hpp>
+#include <com/sun/star/code/project/theProjectConfigStore.hpp>
 #include <com/sun/star/code/project/XProjectFormatReader.hpp>
 #include <com/sun/star/code/project/XProjectListener.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
@@ -18,15 +28,19 @@
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/util/XModifyBroadcaster.hpp>
+#include <com/sun/star/util/XModifyListener.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <comphelper/compbase.hxx>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/supportsservice.hxx>
+#include <sal/log.hxx>
 
 #include <algorithm>
 #include <vector>
 
 using namespace css;
+using namespace css::code;
 using namespace css::code::project;
 
 namespace codeservices
@@ -37,7 +51,8 @@ namespace
 // table by URI but looked projects up by a separate id, so closing one by id
 // never matched.
 class ProjectManager final
-    : public comphelper::WeakComponentImplHelper<XProjectManager, lang::XServiceInfo>
+    : public comphelper::WeakComponentImplHelper<XProjectManager, util::XModifyListener,
+                                                 lang::XServiceInfo>
 {
 public:
     explicit ProjectManager(uno::Reference<uno::XComponentContext> xContext)
@@ -55,6 +70,20 @@ public:
     void SAL_CALL addProjectListener(const uno::Reference<XProjectListener>& xListener) override;
     void SAL_CALL removeProjectListener(const uno::Reference<XProjectListener>& xListener) override;
 
+    // XModifyListener: a project that can change (a CMake project whose
+    // configure run has ended) says so; listeners of the manager hear it as
+    // ITEMS_CHANGED, the one event every project-showing panel already handles.
+    void SAL_CALL modified(const lang::EventObject& rEvent) override
+    {
+        uno::Reference<XProject> xProject(rEvent.Source, uno::UNO_QUERY);
+        if (!xProject.is())
+            return;
+        const OUString aUrl = xProject->getUrl();
+        std::unique_lock aGuard(m_aMutex);
+        fire(aGuard, xProject, ProjectEventKind_ITEMS_CHANGED, aUrl);
+    }
+    void SAL_CALL disposing(const lang::EventObject&) override {}
+
     // XServiceInfo
     OUString SAL_CALL getImplementationName() override
     {
@@ -71,6 +100,8 @@ private:
     void fire(std::unique_lock<std::mutex>& rGuard, const uno::Reference<XProject>& xProject,
               ProjectEventKind eKind, const OUString& rProjectUrl);
     uno::Reference<XProject> find(const OUString& rUrl) const; // lock held
+    // false if the user cancelled the configuration
+    bool ensureConfigured(const uno::Reference<XProjectFormatReader>& xReader, const OUString& rUrl);
 
     uno::Reference<uno::XComponentContext> m_xContext;
     std::vector<uno::Reference<XProject>> m_aProjects; // in opening order
@@ -102,6 +133,45 @@ uno::Reference<XProject> ProjectManager::find(const OUString& rUrl) const
     return {};
 }
 
+bool ProjectManager::ensureConfigured(const uno::Reference<XProjectFormatReader>& xReader,
+                                      const OUString& rUrl)
+{
+    uno::Reference<XConfigurableProjectFormat> xFormat(xReader, uno::UNO_QUERY);
+    if (!xFormat.is())
+        return true; // nothing to configure
+
+    auto xStore = theProjectConfigStore::get(m_xContext);
+    if (xStore->getConfigurations(rUrl).hasElements())
+        return true; // configured before
+
+    uno::Reference<frontend::XWorkbench> xWorkbench = core::theCode::get(m_xContext)->getWorkbench();
+    uno::Reference<frontend::XDialogs> xDialogs
+        = xWorkbench.is() ? xWorkbench->getDialogs() : uno::Reference<frontend::XDialogs>();
+    if (!xDialogs.is())
+        throw io::IOException(
+            "the project must be configured first, and there is no user interface to do it in", getXWeak());
+
+    uno::Sequence<ProjectConfiguration> aConfigurations = xFormat->getDefaultConfigurations(rUrl);
+    if (!xDialogs->configureProject(xFormat->getConfiguratorServiceName(), rUrl, aConfigurations))
+        return false;
+    xStore->setConfigurations(rUrl, aConfigurations);
+
+    // The configuration step runs in the background, its output in a channel
+    // of the format's; the project opens without waiting for it.  A failure to
+    // start it is reported, not allowed to stop the project from opening.
+    try
+    {
+        uno::Reference<core::XBackgroundJob> xJob = xFormat->configure(rUrl, aConfigurations);
+        if (xJob.is())
+            core::theJobRegistry::get(m_xContext)->registerJob(xJob);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code.services", "cannot configure " << rUrl << ": " << rException.Message);
+    }
+    return true;
+}
+
 uno::Reference<XProject> ProjectManager::openProject(const OUString& rUrl)
 {
     const OUString aUrl = NormalizeUrl(rUrl);
@@ -117,7 +187,15 @@ uno::Reference<XProject> ProjectManager::openProject(const OUString& rUrl)
     uno::Reference<XProjectFormatReader> xReader
         = theProjectFormatRegistry::get(m_xContext)->findReader(aUrl);
     if (xReader.is())
+    {
+        // A format that has to be configured is, the first time, configured
+        // by the user before the project is opened; what was chosen is
+        // remembered next to the project, and a project that has been
+        // configured opens without asking.
+        if (!ensureConfigured(xReader, aUrl))
+            return {}; // the user cancelled the configuration
         xProject = xReader->read(aUrl);
+    }
     else if (IsDirectory(aUrl))
         xProject = CreateFolderProject(aUrl);
     else
@@ -134,6 +212,8 @@ uno::Reference<XProject> ProjectManager::openProject(const OUString& rUrl)
         return xRaced;
     }
     m_aProjects.push_back(xProject);
+    if (uno::Reference<util::XModifyBroadcaster> xBroadcaster{ xProject, uno::UNO_QUERY })
+        xBroadcaster->addModifyListener(this);
     fire(aGuard, xProject, ProjectEventKind_OPENED, aUrl);
     if (!m_xActive.is())
     {
@@ -153,6 +233,8 @@ void ProjectManager::closeProject(const OUString& rUrl)
         if (!xProject.is())
             return;
         std::erase(m_aProjects, xProject);
+        if (uno::Reference<util::XModifyBroadcaster> xBroadcaster{ xProject, uno::UNO_QUERY })
+            xBroadcaster->removeModifyListener(this);
         fire(aGuard, xProject, ProjectEventKind_CLOSED, aUrl);
 
         if (m_xActive == xProject)
