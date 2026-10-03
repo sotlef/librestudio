@@ -13,6 +13,7 @@
 #include "folderproject.hxx"
 #include "process.hxx"
 
+#include <rtl/ustrbuf.hxx>
 #include <com/sun/star/code/core/XPlugin.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/XBuildableProjectFormat.hpp>
@@ -39,6 +40,38 @@ namespace codeservices
 {
 namespace
 {
+// Splits a command-line-like string at blanks; double quotes keep blanks in one argument.
+std::vector<OUString> SplitOptions(const OUString& rText)
+{
+    std::vector<OUString> aResult;
+    OUStringBuffer aCurrent;
+    bool bQuoted = false;
+    bool bHave = false;
+    for (sal_Int32 i = 0; i < rText.getLength(); ++i)
+    {
+        const sal_Unicode c = rText[i];
+        if (c == '"')
+        {
+            bQuoted = !bQuoted;
+            bHave = true;
+        }
+        else if (!bQuoted && (c == ' ' || c == '\t' || c == '\n'))
+        {
+            if (bHave)
+                aResult.push_back(aCurrent.makeStringAndClear());
+            bHave = false;
+        }
+        else
+        {
+            aCurrent.append(c);
+            bHave = true;
+        }
+    }
+    if (bHave)
+        aResult.push_back(aCurrent.makeStringAndClear());
+    return aResult;
+}
+
 // Configures each configuration in turn, writing cmake's output to the channel.
 // True only if every one succeeded.
 bool RunConfigure(codeservices::BackgroundJob& rJob,
@@ -74,6 +107,8 @@ bool RunConfigure(codeservices::BackgroundJob& rJob,
         const OUString aBuildType = property(rConfiguration, u"BuildType"_ustr);
         if (!aBuildType.isEmpty())
             aArguments.push_back("-DCMAKE_BUILD_TYPE=" + aBuildType);
+        for (OUString& rOption : SplitOptions(property(rConfiguration, u"CMakeOptions"_ustr)))
+            aArguments.push_back(std::move(rOption));
 
         OUString aCommandLine = u"cmake"_ustr;
         for (const OUString& rArgument : aArguments)

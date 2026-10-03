@@ -40,6 +40,7 @@ namespace
 {
 constexpr OUString BuildType = u"BuildType"_ustr;
 constexpr OUString BuildDirectory = u"BuildDirectory"_ustr;
+constexpr OUString CMakeOptions = u"CMakeOptions"_ustr;
 
 OUString PropertyOf(const ProjectConfiguration& rConfiguration, const OUString& rName)
 {
@@ -83,6 +84,7 @@ public:
         m_xRemove.reset();
         m_xName.reset();
         m_xBuildType.reset();
+        m_xCMakeOptions.reset();
         m_xBuildDir.reset();
         m_xConfigs.reset();
         m_xRoot.reset();
@@ -106,6 +108,7 @@ private:
     std::unique_ptr<weld::Button> m_xRemove;
     std::unique_ptr<weld::Entry> m_xName;
     std::unique_ptr<weld::Entry> m_xBuildType;
+    std::unique_ptr<weld::Entry> m_xCMakeOptions;
     std::unique_ptr<weld::Entry> m_xBuildDir;
 
     std::vector<ProjectConfiguration> m_aConfigurations;
@@ -134,6 +137,7 @@ void CMakeConfigurationPanel::initialize(const uno::Sequence<uno::Any>& rArgumen
     m_xRemove = m_xBuilder->weld_button(u"remove"_ustr);
     m_xName = m_xBuilder->weld_entry(u"name"_ustr);
     m_xBuildType = m_xBuilder->weld_entry(u"buildtype"_ustr);
+    m_xCMakeOptions = m_xBuilder->weld_entry(u"cmakeoptions"_ustr);
     m_xBuildDir = m_xBuilder->weld_entry(u"builddir"_ustr);
 
     m_xConfigs->connect_changed(LINK(this, CMakeConfigurationPanel, SelectHdl));
@@ -161,17 +165,20 @@ void CMakeConfigurationPanel::ShowCurrent()
     const bool bHave = m_nCurrent >= 0;
     m_xName->set_sensitive(bHave);
     m_xBuildType->set_sensitive(bHave);
+    m_xCMakeOptions->set_sensitive(bHave);
     m_xBuildDir->set_sensitive(bHave);
     if (!bHave)
     {
         m_xName->set_text(OUString());
         m_xBuildType->set_text(OUString());
+        m_xCMakeOptions->set_text(OUString());
         m_xBuildDir->set_text(OUString());
         return;
     }
     const ProjectConfiguration& rConfiguration = m_aConfigurations[m_nCurrent];
     m_xName->set_text(rConfiguration.Name);
     m_xBuildType->set_text(PropertyOf(rConfiguration, BuildType));
+    m_xCMakeOptions->set_text(PropertyOf(rConfiguration, CMakeOptions));
     m_xBuildDir->set_text(PropertyOf(rConfiguration, BuildDirectory));
 }
 
@@ -182,6 +189,7 @@ void CMakeConfigurationPanel::StoreCurrent()
     ProjectConfiguration& rConfiguration = m_aConfigurations[m_nCurrent];
     rConfiguration.Name = m_xName->get_text();
     rConfiguration.Properties = { { BuildType, m_xBuildType->get_text() },
+                                  { CMakeOptions, m_xCMakeOptions->get_text() },
                                   { BuildDirectory, m_xBuildDir->get_text() } };
 }
 
@@ -199,6 +207,7 @@ IMPL_LINK_NOARG(CMakeConfigurationPanel, AddHdl, weld::Button&, void)
     ProjectConfiguration aNew;
     aNew.Name = u"Configuration "_ustr + OUString::number(m_aConfigurations.size() + 1);
     aNew.Properties = { { BuildType, u"Debug"_ustr },
+                        { CMakeOptions, OUString() },
                         { BuildDirectory, OUString() } };
     m_aConfigurations.push_back(std::move(aNew));
     RefillList(static_cast<int>(m_aConfigurations.size()) - 1);
