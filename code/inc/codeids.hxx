@@ -51,4 +51,8 @@
 // code/source/configurationcontrol.cxx).
 #define SID_CODE_CONFIGURATION       (SID_CODE_START + 7)
 
+// Build > Build Solution (.uno:CodeBuild) and Build > Cancel (.uno:CodeCancelBuild).
+#define SID_CODE_BUILD               (SID_CODE_START + 8)
+#define SID_CODE_CANCELBUILD         (SID_CODE_START + 9)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

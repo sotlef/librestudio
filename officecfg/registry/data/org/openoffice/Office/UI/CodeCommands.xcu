@@ -10,6 +10,21 @@
 <oor:component-data xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="CodeCommands" oor:package="org.openoffice.Office.UI">
   <node oor:name="UserInterface">
     <node oor:name="Commands">
+      <node oor:name=".uno:CodeBuildMenu" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Build</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeBuild" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Build Solution</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeCancelBuild" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Cancel Build</value>
+        </prop>
+      </node>
       <node oor:name=".uno:CodeConfiguration" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">Solution Configuration</value>

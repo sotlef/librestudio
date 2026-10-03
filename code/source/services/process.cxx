@@ -14,12 +14,89 @@
 #include <osl/security.h>
 #include <rtl/strbuf.hxx>
 
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <thread>
+
+#include <map>
+#include <vector>
+
+#if defined(__linux__)
+#include <csignal>
+#include <dirent.h>
+#include <fstream>
+#include <sys/types.h>
+#endif
 
 namespace codeservices
 {
 namespace
 {
+#if defined(__linux__)
+// Every process below rPid, found from /proc (osl starts a program without a
+// process group of its own, so there is no group to signal).  The tree has to
+// be walked: "cmake --build" is only the root of ninja and the compilers it
+// runs, and killing the root alone leaves them running, holding the pipes.
+std::vector<pid_t> DescendantsOf(pid_t nRoot)
+{
+    std::map<pid_t, std::vector<pid_t>> aChildren;
+    if (DIR* pDir = opendir("/proc"))
+    {
+        while (const dirent* pEntry = readdir(pDir))
+        {
+            const pid_t nPid = static_cast<pid_t>(atoi(pEntry->d_name));
+            if (nPid <= 0)
+                continue;
+            std::ifstream aStat(std::string("/proc/") + pEntry->d_name + "/stat");
+            std::string aLine;
+            if (!std::getline(aStat, aLine))
+                continue;
+            // "pid (comm) state ppid ...": comm may hold spaces and parentheses
+            const size_t nClose = aLine.rfind(')');
+            if (nClose == std::string::npos)
+                continue;
+            char cState = 0;
+            int nParent = 0;
+            if (sscanf(aLine.c_str() + nClose + 1, " %c %d", &cState, &nParent) == 2)
+                aChildren[static_cast<pid_t>(nParent)].push_back(nPid);
+        }
+        closedir(pDir);
+    }
+
+    std::vector<pid_t> aResult;
+    std::vector<pid_t> aPending{ nRoot };
+    while (!aPending.empty())
+    {
+        const pid_t nPid = aPending.back();
+        aPending.pop_back();
+        for (const pid_t nChild : aChildren[nPid])
+        {
+            aResult.push_back(nChild);
+            aPending.push_back(nChild);
+        }
+    }
+    return aResult;
+}
+#endif
+
+// Ends the program and everything it started.
+void TerminateTree(oslProcess hProcess)
+{
+#if defined(__linux__)
+    oslProcessInfo aInfo;
+    aInfo.Size = sizeof aInfo;
+    if (osl_getProcessInfo(hProcess, osl_Process_IDENTIFIER, &aInfo) == osl_Process_E_None)
+    {
+        // SIGTERM, not SIGKILL: ninja then stops its jobs and removes what they
+        // half-wrote; the compilers do the same for their temporary files.
+        for (const pid_t nPid : DescendantsOf(static_cast<pid_t>(aInfo.Ident)))
+            kill(nPid, SIGTERM);
+    }
+#endif
+    osl_terminateProcess(hProcess);
+}
+
 // Reads one pipe to its end, calling rSink for every complete line.  A line
 // ends at \n; a \r before it is dropped.  Output that does not end in a
 // newline still counts as a line when the pipe closes.
@@ -103,7 +180,7 @@ sal_Int32 RunProcess(const OUString& rProgram, const std::vector<OUString>& rArg
             break;
         if (!bTerminated && rIsCancelled())
         {
-            osl_terminateProcess(hProcess);
+            TerminateTree(hProcess);
             bTerminated = true;
         }
     }

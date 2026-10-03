@@ -107,6 +107,42 @@ SfxVoidItem CodeConfiguration SID_CODE_CONFIGURATION
     GroupId = SfxGroupId::Application;
 ]
 
+// Build > Build Solution: builds the active project in its current configuration.
+SfxVoidItem CodeBuild SID_CODE_BUILD
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
+// Build > Cancel: stops the running build.
+SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // File > Save All: saves every document with unsaved changes.
 SfxVoidItem CodeSaveAll SID_CODE_SAVEALL
 ()
@@ -153,6 +189,18 @@ shell code_Shell
 
     SID_CODE_CONFIGURATION
     [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_BUILD
+    [
+        ExecMethod = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_CANCELBUILD
+    [
+        ExecMethod = Execute;
         StateMethod = GetState;
     ]
 

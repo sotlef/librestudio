@@ -13,6 +13,9 @@
 #include "editormdipanel.hxx"
 #include "workbench.hxx"
 
+#include <com/sun/star/code/build/XBuildController.hpp>
+#include <com/sun/star/code/build/theBuildController.hpp>
+#include <com/sun/star/code/core/XBackgroundJob.hpp>
 #include <com/sun/star/code/core/theCode.hpp>
 #include <com/sun/star/code/document/XDocumentManager.hpp>
 #include <com/sun/star/code/document/theDocumentManager.hpp>
@@ -143,6 +146,38 @@ void Shell::Execute(SfxRequest& rReq)
 {
     switch (rReq.GetSlot())
     {
+        case SID_CODE_BUILD:
+        {
+            uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+            try
+            {
+                auto xProject = css::code::project::theProjectManager::get(xContext)->getActiveProject();
+                if (!xProject.is())
+                {
+                    if (Workbench* pWorkbench = Workbench::Instance())
+                        pWorkbench->showMessage(u"Open a project to build."_ustr, 6000);
+                    break;
+                }
+                // what is on disk is what gets built
+                css::code::document::theDocumentManager::get(xContext)->saveAll();
+                css::code::build::theBuildController::get(xContext)->buildProject(xProject->getUrl());
+            }
+            catch (const uno::Exception& rException)
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->showMessage(u"Cannot build: "_ustr + rException.Message, 8000);
+            }
+            break;
+        }
+        case SID_CODE_CANCELBUILD:
+            try
+            {
+                css::code::build::theBuildController::get(comphelper::getProcessComponentContext())->cancelBuild();
+            }
+            catch (const uno::Exception&)
+            {
+            }
+            break;
         case SID_CODE_OPENPROJECT:
         {
             uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
@@ -247,6 +282,26 @@ void Shell::GetState(SfxItemSet& rSet)
     // (XStatusBar::showMessage, notifications), "Ready" when it has none; the
     // workbench invalidates this slot whenever that changes. The bubble
     // button's popover is still the constant "No background tasks running."
+    // Build is possible with a project open and nothing building; Cancel only while one runs.
+    if (rSet.GetItemState(SID_CODE_BUILD, false) != SfxItemState::UNKNOWN
+        || rSet.GetItemState(SID_CODE_CANCELBUILD, false) != SfxItemState::UNKNOWN)
+    {
+        bool bProject = false;
+        bool bBuilding = false;
+        try
+        {
+            auto xContext = comphelper::getProcessComponentContext();
+            bProject = css::code::project::theProjectManager::get(xContext)->getActiveProject().is();
+            bBuilding = css::code::build::theBuildController::get(xContext)->getRunningBuild().is();
+        }
+        catch (const uno::Exception&)
+        {
+        }
+        if (rSet.GetItemState(SID_CODE_BUILD, false) != SfxItemState::UNKNOWN && (!bProject || bBuilding))
+            rSet.DisableItem(SID_CODE_BUILD);
+        if (rSet.GetItemState(SID_CODE_CANCELBUILD, false) != SfxItemState::UNKNOWN && !bBuilding)
+            rSet.DisableItem(SID_CODE_CANCELBUILD);
+    }
     if (rSet.GetItemState(SID_CODE_CONFIGURATION, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_CONFIGURATION));
     if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)

@@ -14,6 +14,11 @@
       single-instance="true">
     <singleton name="com.sun.star.code.core.theCode"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.BuildController"
+      constructor="com_sun_star_comp_code_BuildController_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.build.theBuildController"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.JobRegistry"
       constructor="com_sun_star_comp_code_JobRegistry_get_implementation"
       single-instance="true">

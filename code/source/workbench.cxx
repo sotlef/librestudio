@@ -209,6 +209,8 @@ void Workbench::InvalidateStatus()
     {
         pFrame->GetBindings().Invalidate(SID_CODE_STATUS_READY);
         pFrame->GetBindings().Invalidate(SID_CODE_STATUS_TASKS);
+        pFrame->GetBindings().Invalidate(SID_CODE_BUILD);
+        pFrame->GetBindings().Invalidate(SID_CODE_CANCELBUILD);
     }
 }
 

@@ -15,6 +15,7 @@
 
 #include <com/sun/star/code/core/XPlugin.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
+#include <com/sun/star/code/project/XBuildableProjectFormat.hpp>
 #include <com/sun/star/code/project/XConfigurableProjectFormat.hpp>
 #include <com/sun/star/code/project/XProjectFormatReader.hpp>
 #include <com/sun/star/code/project/theProjectFormatRegistry.hpp>
@@ -27,6 +28,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <osl/file.hxx>
 
+#include <algorithm>
 #include <vector>
 #include <cppuhelper/supportsservice.hxx>
 
@@ -122,12 +124,102 @@ bool RunConfigure(codeservices::BackgroundJob& rJob,
     return bAllSucceeded;
 }
 
+// The "[12/40]" at the start of a line of ninja's (and make's "[ 30%]") says how
+// far the build is; -1 for a line that does not say.
+sal_Int16 ProgressOf(const OUString& rLine)
+{
+    if (rLine.getLength() < 5 || rLine[0] != '[')
+        return -1;
+    const sal_Int32 nEnd = rLine.indexOf(']');
+    if (nEnd < 0)
+        return -1;
+    const OUString aInside = rLine.copy(1, nEnd - 1).trim();
+    if (const sal_Int32 nSlash = aInside.indexOf('/'); nSlash > 0) // ninja: done/total
+    {
+        const sal_Int32 nTotal = aInside.copy(nSlash + 1).toInt32();
+        return nTotal > 0 ? static_cast<sal_Int16>(std::min<sal_Int32>(aInside.toInt32() * 100 / nTotal, 100)) : -1;
+    }
+    if (aInside.endsWith("%")) // make: percent
+        return static_cast<sal_Int16>(std::min<sal_Int32>(aInside.toInt32(), 100));
+    return -1;
+}
+
+// cmake --build <build directory> [--config <type>], its output to the channel.
+bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XOutputChannel>& xChannel,
+              const OUString& rProjectName, const project::ProjectConfiguration& rConfiguration)
+{
+    OUString aBuildUrl;
+    OUString aBuildType;
+    for (const beans::StringPair& rProperty : rConfiguration.Properties)
+    {
+        if (rProperty.First == "BuildDirectory")
+            aBuildUrl = rProperty.Second;
+        else if (rProperty.First == "BuildType")
+            aBuildType = rProperty.Second;
+    }
+    OUString aBuildPath;
+    if (osl::FileBase::getSystemPathFromFileURL(aBuildUrl, aBuildPath) != osl::FileBase::E_None)
+        aBuildPath = aBuildUrl;
+
+    std::vector<OUString> aArguments{ u"--build"_ustr, aBuildPath };
+    // only a multi-configuration generator (Visual Studio, Xcode) looks at this;
+    // for a single-configuration one the build type was fixed when configuring
+    if (!aBuildType.isEmpty())
+    {
+        aArguments.push_back(u"--config"_ustr);
+        aArguments.push_back(aBuildType);
+    }
+
+    OUString aCommandLine = u"cmake"_ustr;
+    for (const OUString& rArgument : aArguments)
+        aCommandLine += " " + rArgument;
+    xChannel->appendLine("------ Build started: " + rProjectName + ", " + rConfiguration.Name + " ------",
+                         output::OutputStream_INFO);
+    xChannel->appendLine(aCommandLine, output::OutputStream_INFO);
+
+    rJob.SetMessage("Building " + rProjectName + " (" + rConfiguration.Name + ")");
+    OUString aStartError;
+    const sal_Int32 nExit = codeservices::RunProcess(
+        u"cmake"_ustr, aArguments, OUString(),
+        [&](bool bStderr, const OUString& rLine)
+        {
+            // stderr is where compilers write diagnostics, but not everything on
+            // it is one: the stream only says where it came from
+            xChannel->appendLine(rLine, bStderr ? output::OutputStream_STDERR : output::OutputStream_STDOUT);
+            if (const sal_Int16 nProgress = ProgressOf(rLine); nProgress >= 0)
+                rJob.SetProgress(nProgress);
+        },
+        [&] { return rJob.IsCancelled(); }, aStartError);
+
+    if (!aStartError.isEmpty())
+    {
+        xChannel->appendLine(aStartError, output::OutputStream_ERROR);
+        return false;
+    }
+    if (rJob.IsCancelled())
+    {
+        xChannel->appendLine(u"========== Build cancelled =========="_ustr, output::OutputStream_WARNING);
+        return false;
+    }
+    if (nExit != 0)
+    {
+        xChannel->appendLine("========== Build failed: " + rProjectName + " (cmake exited with "
+                                 + OUString::number(nExit) + ") ==========",
+                             output::OutputStream_ERROR);
+        return false;
+    }
+    rJob.SetProgress(100);
+    xChannel->appendLine("========== Build succeeded: " + rProjectName + " ==========", output::OutputStream_INFO);
+    return true;
+}
+
 // A CMake project is the directory of its top-level CMakeLists.txt.  This
 // first reader only recognises the format and shows the directory's tree
 // under the project's own name and kind; reading targets and sources out of
 // the CMake files is the format's own, later work.
 class CMakeFormatReader final
-    : public cppu::WeakImplHelper<project::XProjectFormatReader, project::XConfigurableProjectFormat>
+    : public cppu::WeakImplHelper<project::XProjectFormatReader, project::XConfigurableProjectFormat,
+                                  project::XBuildableProjectFormat>
 {
 public:
     explicit CMakeFormatReader(uno::Reference<uno::XComponentContext> xContext)
@@ -172,6 +264,21 @@ public:
             return aConfiguration;
         };
         return { make(u"Debug"_ustr, u"debug"_ustr), make(u"Release"_ustr, u"release"_ustr) };
+    }
+
+    // XBuildableProjectFormat
+    uno::Reference<core::XBackgroundJob>
+        SAL_CALL build(const OUString& rProjectUrl, const project::ProjectConfiguration& rConfiguration) override
+    {
+        uno::Reference<output::XOutputChannel> xChannel
+            = output::theOutputController::get(m_xContext)->getOrCreateChannel(u"build"_ustr, u"Build"_ustr);
+        xChannel->clear();
+
+        const OUString aProjectName = GetDisplayName(GetParentUrl(rProjectUrl));
+        return rtl::Reference<codeservices::BackgroundJob>(codeservices::BackgroundJob::Start(
+            u"cmake-build:"_ustr + rProjectUrl, "Building " + aProjectName + " (" + rConfiguration.Name + ")",
+            [xChannel, aProjectName, rConfiguration](codeservices::BackgroundJob& rJob)
+            { return RunBuild(rJob, xChannel, aProjectName, rConfiguration); }));
     }
 
     // cmake -S <project> -B <build directory> -DCMAKE_BUILD_TYPE=<type>, once

@@ -181,6 +181,7 @@ add_dependencies(codecommon udkapi_normal_headers offapi_normal_headers codeapi_
 target_link_libraries(codecommon PUBLIC comphelper cppu cppuhelper sal)
 
 add_library(codeservices SHARED
+    "${CMAKE_SOURCE_DIR}/code/source/services/buildcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"

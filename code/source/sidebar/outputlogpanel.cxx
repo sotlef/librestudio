@@ -44,11 +44,25 @@ uno::Reference<uno::XComponentContext> Context() { return comphelper::getProcess
 // "14:32:01.153" -- the time of day only, like Visual Studio's timestamps
 OUString FormatTime(const util::DateTime& rTime)
 {
-    auto two = [](sal_Int32 n) { return (n < 10 ? u"0"_ustr : u""_ustr) + OUString::number(n); };
-    const sal_Int32 nMilli = rTime.NanoSeconds / 1000000;
-    return two(rTime.Hours) + ":" + two(rTime.Minutes) + ":" + two(rTime.Seconds) + "."
-           + (nMilli < 100 ? (nMilli < 10 ? u"00"_ustr : u"0"_ustr) : u""_ustr)
-           + OUString::number(nMilli);
+    // Built piece by piece: a single long "a + b + c" of temporaries is an
+    // rtl::StringConcat expression that holds references into them, and it
+    // crashed when evaluated here.
+    OUStringBuffer aTime;
+    auto pad = [&aTime](sal_Int32 nValue, int nDigits)
+    {
+        const OUString aNumber = OUString::number(nValue);
+        for (int i = aNumber.getLength(); i < nDigits; ++i)
+            aTime.append('0');
+        aTime.append(aNumber);
+    };
+    pad(rTime.Hours, 2);
+    aTime.append(':');
+    pad(rTime.Minutes, 2);
+    aTime.append(':');
+    pad(rTime.Seconds, 2);
+    aTime.append('.');
+    pad(rTime.NanoSeconds / 1000000, 3);
+    return aTime.makeStringAndClear();
 }
 }
 

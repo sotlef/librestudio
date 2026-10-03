@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** A capability of a project-format reader: projects of the format can be
+    built.  Found with queryInterface on the reader, as
+    XConfigurableProjectFormat is.
+ */
+interface XBuildableProjectFormat
+{
+    /** Builds the project in one of its configurations, as a background job;
+        returns at once.  What the build tool prints goes to the output channel
+        "build", which is cleared first and exists before the first line.  The
+        job's progress is that of the build as far as the tool reports it. */
+    ::com::sun::star::code::core::XBackgroundJob build( [in] string ProjectUrl,
+        [in] ::com::sun::star::code::project::ProjectConfiguration Configuration );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -11,12 +11,16 @@
 
 #include "uibridge.hxx"
 
+#include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
+#include <com/sun/star/frame/XLayoutManager.hpp>
 #include <com/sun/star/code/project/XProject.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
 #include <comphelper/processfactory.hxx>
 #include <sal/log.hxx>
+#include <sfx2/frame.hxx>
+#include <sfx2/viewfrm.hxx>
 #include <svl/voiditem.hxx>
 #include <algorithm>
 #include <vcl/InterimItemWindow.hxx>
@@ -136,14 +140,45 @@ private:
         // choose between; for one that has none (an opened folder, a format
         // that needs no configuring) the whole toolbar item is hidden, not
         // merely disabled.
-        if (m_pToolBox)
-            m_pToolBox->ShowItem(m_nItemId, m_xCombo->get_count() > 0);
+        const bool bShow = m_xCombo->get_count() > 0;
+        if (m_pToolBox && bShow != m_bShown)
+        {
+            m_bShown = bShow;
+            m_pToolBox->ShowItem(m_nItemId, bShow);
+            // The layout manager sized the docked toolbar once, for the items
+            // that were showing; an item that appears later has no room, and
+            // falls into the overflow menu (">>").  Make the toolbar as wide as
+            // its items now want, and lay the frame out again.
+            // Ask for the item's rectangle first: that makes the toolbox lay
+            // its items out again with this one showing (and sized), which
+            // CalcWindowSizePixel() alone does not -- it measured the stale
+            // layout, left no room for the box, and the box went into the
+            // overflow menu.
+            (void)m_pToolBox->GetItemRect(m_nItemId);
+            m_pToolBox->SetSizePixel(m_pToolBox->CalcWindowSizePixel());
+            if (SfxViewFrame* pFrame = SfxViewFrame::Current())
+            {
+                uno::Reference<beans::XPropertySet> xFrame(pFrame->GetFrame().GetFrameInterface(), uno::UNO_QUERY);
+                try
+                {
+                    uno::Reference<frame::XLayoutManager> xLayout;
+                    if (xFrame.is() && (xFrame->getPropertyValue(u"LayoutManager"_ustr) >>= xLayout) && xLayout.is())
+                        xLayout->doLayout();
+                }
+                catch (const uno::Exception&)
+                {
+                }
+            }
+        }
     }
 
     DECL_LINK(SelectHdl, weld::ComboBox&, void);
 
     std::unique_ptr<weld::ComboBox> m_xCombo;
     ToolBox* m_pToolBox;
+    // whether the toolbar item is showing; it starts hidden-by-default only
+    // in the sense that nothing has said otherwise yet
+    bool m_bShown = true;
     ToolBoxItemId m_nItemId;
     OUString m_aProjectUrl;
     // set while the box is filled, so that filling it is not mistaken for a choice
