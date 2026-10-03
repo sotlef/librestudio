@@ -103,13 +103,20 @@ void RecentProjectsMenuController::fill(const uno::Reference<awt::XPopupMenu>& x
     for (size_t i = 0; i < m_aProjects.size(); ++i)
     {
         // "1. name", with the number as an accelerator; the tenth is "0"
+        // The file name alone does not tell projects apart (every CMake project is
+        // "CMakeLists.txt"), so the directory follows it, as an absolute path.
         const INetURLObject aUrl(m_aProjects[i]);
         const OUString aName = aUrl.GetLastName(INetURLObject::DecodeMechanism::WithCharset);
+        INetURLObject aDirectory(aUrl);
+        aDirectory.removeSegment();
+        OUString aDirectoryPath = aDirectory.getFSysPath(FSysStyle::Detect);
+        if (aDirectoryPath.isEmpty()) // not a file URL
+            aDirectoryPath = aDirectory.GetMainURL(INetURLObject::DecodeMechanism::Unambiguous);
         OUString aLabel;
         if (i < 9)
-            aLabel = "~" + OUString::number(i + 1) + ". " + aName;
+            aLabel = "~" + OUString::number(i + 1) + ". " + aName + " (" + aDirectoryPath + ")";
         else
-            aLabel = "1~0. " + aName;
+            aLabel = "1~0. " + aName + " (" + aDirectoryPath + ")";
 
         const sal_uInt16 nId = static_cast<sal_uInt16>(i + 1);
         xMenu->insertItem(nId, aLabel, 0, -1);
