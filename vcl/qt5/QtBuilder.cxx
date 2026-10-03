@@ -122,6 +122,23 @@ public:
     QSize sizeHint() const override { return this->minimumSizeHint(); }
 };
 
+// A scroll area's frame is softened through its palette's WindowText, which
+// the bars inherit, and Breeze and Fusion take the colour of a bar's handle
+// from it: the bars came out pale.  An explicit WindowText on the bars (a
+// copy of the palette alone would not do, the parent's wins over a role that
+// was never set) keeps their handle as it would be without the frame.
+static void keepWindowText(QAbstractScrollArea* pArea, const QColor& rColor)
+{
+    for (QScrollBar* pBar : { pArea->horizontalScrollBar(), pArea->verticalScrollBar() })
+    {
+        if (!pBar)
+            continue;
+        QPalette aPalette = pBar->palette();
+        aPalette.setColor(QPalette::WindowText, rColor);
+        pBar->setPalette(aPalette);
+    }
+}
+
 // The other half of the Gtk no-slack geometry: GtkEntry's minimum width
 // IS its natural width (a Gtk layout can never squeeze an entry below
 // its ~150px natural), while QLineEdit's minimumSizeHint() is only a
@@ -547,7 +564,11 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
                                   (3 * aWindow.green() + aText.green()) / 4,
                                   (3 * aWindow.blue() + aText.blue()) / 4);
             aPal.setColor(QPalette::WindowText, aOutline);
+            // the bars take their handle's colour from WindowText as well, and
+            // must keep the real one: only the frame is meant to be soft
+            const QColor aBarText = pScrollArea->palette().color(QPalette::WindowText);
             pScrollArea->setPalette(aPal);
+            keepWindowText(pScrollArea, aBarText);
         }
         else
             pScrollArea->setFrameShape(QFrame::NoFrame);
@@ -866,7 +887,10 @@ void QtBuilder::tweakInsertedChild(QObject* pParent, QObject* pCurrentChild, std
             pScrollArea->setFrameShadow(pScrollAreaParent->frameShadow());
             // including the softened outline color (see the
             // GtkScrolledWindow branch in insertObject)
+            // (the child's own bars keep their colours, as above)
+            const QColor aBarText = pScrollArea->palette().color(QPalette::WindowText);
             pScrollArea->setPalette(pScrollAreaParent->palette());
+            keepWindowText(pScrollArea, aBarText);
             m_aWidgetReplacements.emplace_back(pScrollAreaParent, pScrollArea);
         }
         else
