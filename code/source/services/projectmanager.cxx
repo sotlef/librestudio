@@ -19,6 +19,7 @@
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/ProjectEvent.hpp>
 #include <com/sun/star/code/project/XConfigurableProjectFormat.hpp>
+#include <com/sun/star/code/project/XProjectConfigurationState.hpp>
 #include <com/sun/star/code/project/XProjectConfigStore.hpp>
 #include <com/sun/star/code/project/theProjectConfigStore.hpp>
 #include <com/sun/star/code/project/XProjectFormatReader.hpp>
@@ -67,6 +68,9 @@ public:
     uno::Reference<XProject> SAL_CALL getProject(const OUString& rUrl) override;
     uno::Reference<XProject> SAL_CALL getActiveProject() override;
     void SAL_CALL setActiveProject(const uno::Reference<XProject>& xProject) override;
+    uno::Sequence<ProjectConfiguration> SAL_CALL getConfigurations(const OUString& rUrl) override;
+    OUString SAL_CALL getCurrentConfiguration(const OUString& rUrl) override;
+    void SAL_CALL setCurrentConfiguration(const OUString& rUrl, const OUString& rName) override;
     void SAL_CALL addProjectListener(const uno::Reference<XProjectListener>& xListener) override;
     void SAL_CALL removeProjectListener(const uno::Reference<XProjectListener>& xListener) override;
 
@@ -155,6 +159,9 @@ bool ProjectManager::ensureConfigured(const uno::Reference<XProjectFormatReader>
     if (!xDialogs->configureProject(xFormat->getConfiguratorServiceName(), rUrl, aConfigurations))
         return false;
     xStore->setConfigurations(rUrl, aConfigurations);
+    // the first configuration is the current one until the user picks another
+    if (aConfigurations.hasElements())
+        xStore->setCurrentConfiguration(rUrl, aConfigurations[0].Name);
 
     // The configuration step runs in the background, its output in a channel
     // of the format's; the project opens without waiting for it.  A failure to
@@ -275,6 +282,36 @@ void ProjectManager::setActiveProject(const uno::Reference<XProject>& xProject)
         return;
     m_xActive = xProject;
     fire(aGuard, xProject, ProjectEventKind_ACTIVATED, xProject.is() ? xProject->getUrl() : OUString());
+}
+
+uno::Sequence<ProjectConfiguration> ProjectManager::getConfigurations(const OUString& rUrl)
+{
+    return theProjectConfigStore::get(m_xContext)->getConfigurations(NormalizeUrl(rUrl));
+}
+
+OUString ProjectManager::getCurrentConfiguration(const OUString& rUrl)
+{
+    return theProjectConfigStore::get(m_xContext)->getCurrentConfiguration(NormalizeUrl(rUrl));
+}
+
+void ProjectManager::setCurrentConfiguration(const OUString& rUrl, const OUString& rName)
+{
+    const OUString aUrl = NormalizeUrl(rUrl);
+    if (getCurrentConfiguration(aUrl) == rName)
+        return;
+    theProjectConfigStore::get(m_xContext)->setCurrentConfiguration(aUrl, rName);
+
+    uno::Reference<XProject> xProject;
+    {
+        std::unique_lock aGuard(m_aMutex);
+        xProject = find(aUrl);
+        if (xProject.is())
+            fire(aGuard, xProject, ProjectEventKind_CONFIGURATION_CHANGED, aUrl);
+    }
+    // what the project reads its structure from depends on the configuration;
+    // it tells its listeners (ITEMS_CHANGED, through modified()) if it changed
+    if (uno::Reference<XProjectConfigurationState> xState{ xProject, uno::UNO_QUERY })
+        xState->reload();
 }
 
 void ProjectManager::addProjectListener(const uno::Reference<XProjectListener>& xListener)

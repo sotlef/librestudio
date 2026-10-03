@@ -40,6 +40,21 @@ interface XProjectManager
         set raises( ::com::sun::star::lang::IllegalArgumentException );
     };
 
+    /** The configurations (Debug, Release, ...) of a project that has been
+        configured; none for one that has not, or that needs none. */
+    sequence< ::com::sun::star::code::project::ProjectConfiguration > getConfigurations( [in] string Url );
+
+    /** the name of the configuration that is current for the project; empty if none */
+    string getCurrentConfiguration( [in] string Url );
+
+    /** Makes another of the project's configurations current and remembers it.
+        The project reads its structure again (a CMake project's targets come
+        from the build directory of the current configuration), and listeners
+        hear a CONFIGURATION_CHANGED event, then an ITEMS_CHANGED one.  */
+    void setCurrentConfiguration( [in] string Url, [in] string Name )
+        raises( ::com::sun::star::lang::IllegalArgumentException,
+                ::com::sun::star::io::IOException );
+
     void addProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
     void removeProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
 };

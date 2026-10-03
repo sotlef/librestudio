@@ -385,7 +385,11 @@ public:
         m_aModifyListeners.removeInterface(aGuard, xListener);
     }
 
-    /// cmake has run: forget what was read and tell the listeners
+    // XProjectConfigurationState
+    void SAL_CALL reload() override { Reload(); }
+
+    /// cmake has run, or another configuration was made current: forget what
+    /// was read and tell the listeners
     void Reload()
     {
         std::unique_lock aGuard(m_aMutex);
@@ -407,13 +411,16 @@ private:
         OUString aBuildUrl;
         try
         {
-            const uno::Sequence<ProjectConfiguration> aConfigurations
-                = theProjectConfigStore::get(m_xContext)->getConfigurations(m_aUrl);
-            // the first configuration stands for all: targets do not differ
-            if (aConfigurations.hasElements())
-                for (const beans::StringPair& rProperty : aConfigurations[0].Properties)
-                    if (rProperty.First == "BuildDirectory")
-                        aBuildUrl = rProperty.Second;
+            // The structure is read from the build directory of the current
+            // configuration: each configuration has a build tree of its own,
+            // and CMake's reply lives in it.
+            auto xStore = theProjectConfigStore::get(m_xContext);
+            const OUString aCurrent = xStore->getCurrentConfiguration(m_aUrl);
+            for (const ProjectConfiguration& rConfiguration : xStore->getConfigurations(m_aUrl))
+                if (rConfiguration.Name == aCurrent)
+                    for (const beans::StringPair& rProperty : rConfiguration.Properties)
+                        if (rProperty.First == "BuildDirectory")
+                            aBuildUrl = rProperty.Second;
         }
         catch (const uno::Exception&)
         {

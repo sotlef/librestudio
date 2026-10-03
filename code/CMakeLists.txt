@@ -30,6 +30,7 @@ librestudio_add_sdi_target(code_sdi
 
 add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeapp.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/configurationcontrol.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/configureprojectdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
@@ -300,6 +301,7 @@ endforeach ()
 # module's own weld .ui files use (e.g. svx/ui/sidebarempty.ui).
 set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/cmakeconfigpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configurationbox.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configureprojectdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editordocumentcontent.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editormdi.ui"

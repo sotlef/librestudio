@@ -16,7 +16,9 @@ enum ProjectEventKind
     ACTIVATED,
     /** items were added to, removed from or renamed in the project tree */
     ITEMS_CHANGED,
-    PROPERTIES_CHANGED
+    PROPERTIES_CHANGED,
+    /** the project's configurations were set, or another one was made current */
+    CONFIGURATION_CHANGED
 };
 
 }; }; }; }; };

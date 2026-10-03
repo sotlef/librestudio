@@ -20,9 +20,20 @@ interface XProjectConfigStore
         been configured */
     sequence< ::com::sun::star::code::project::ProjectConfiguration > getConfigurations( [in] string ProjectUrl );
 
+    /** Replaces the remembered configurations.  The current one stays current
+        if it is still among them. */
     void setConfigurations( [in] string ProjectUrl,
         [in] sequence< ::com::sun::star::code::project::ProjectConfiguration > Configurations )
         raises( ::com::sun::star::io::IOException );
+
+    /** The name of the configuration the project is built in just now: the one
+        last chosen, or the first if none was or the chosen one is gone.  Empty
+        if the project has no configurations. */
+    string getCurrentConfiguration( [in] string ProjectUrl );
+
+    void setCurrentConfiguration( [in] string ProjectUrl, [in] string Name )
+        raises( ::com::sun::star::lang::IllegalArgumentException,
+                ::com::sun::star::io::IOException );
 };
 
 }; }; }; }; };

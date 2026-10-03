@@ -47,4 +47,8 @@
 // solution file in any format a registered project-format reader knows.
 #define SID_CODE_OPENPROJECT         (SID_CODE_START + 6)
 
+// The toolbar's configuration combo box (.uno:CodeConfiguration,
+// code/source/configurationcontrol.cxx).
+#define SID_CODE_CONFIGURATION       (SID_CODE_START + 7)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

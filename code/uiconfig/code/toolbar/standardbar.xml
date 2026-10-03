@@ -15,4 +15,6 @@
  <toolbar:toolbaritem xlink:href=".uno:Cut"/>
  <toolbar:toolbaritem xlink:href=".uno:Copy"/>
  <toolbar:toolbaritem xlink:href=".uno:Paste"/>
+ <toolbar:toolbarseparator/>
+ <toolbar:toolbaritem xlink:href=".uno:CodeConfiguration"/>
 </toolbar:toolbar>

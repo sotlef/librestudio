@@ -247,6 +247,8 @@ void Shell::GetState(SfxItemSet& rSet)
     // (XStatusBar::showMessage, notifications), "Ready" when it has none; the
     // workbench invalidates this slot whenever that changes. The bubble
     // button's popover is still the constant "No background tasks running."
+    if (rSet.GetItemState(SID_CODE_CONFIGURATION, false) != SfxItemState::UNKNOWN)
+        rSet.Put(SfxVoidItem(SID_CODE_CONFIGURATION));
     if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_STATUS_TASKS));
     if (rSet.GetItemState(SID_CODE_STATUS_READY, false) != SfxItemState::UNKNOWN)

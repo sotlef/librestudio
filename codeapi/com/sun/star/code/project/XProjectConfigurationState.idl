@@ -22,6 +22,11 @@ module com { module sun { module star { module code { module project {
 interface XProjectConfigurationState
 {
     [attribute, readonly] boolean Configured;
+
+    /** Reads the structure again, from where the project's format now keeps it
+        -- after another configuration was made current -- and tells the
+        listeners if it changed. */
+    void reload();
 };
 
 }; }; }; }; };

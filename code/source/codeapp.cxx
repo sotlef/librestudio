@@ -51,6 +51,7 @@
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
 #include <codeids.hxx>
+#include "configurationcontrol.hxx"
 #include "workbench.hxx"
 #include <sfx2/app.hxx>
 #include <sfx2/chalign.hxx>
@@ -288,6 +289,7 @@ int CodeApplication::Main()
         // (.uno:CodeStatusReady needs no registration: a plain SfxStringItem
         // state shown by the default SfxStatusBarControl.)
         ::code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
+        ::code::ConfigurationControl::RegisterControl(SID_CODE_CONFIGURATION, nullptr);
 
         xMainWindow = VclPtr<WorkWindow>::Create(nullptr,
             WB_APP | WB_STDWORK | WB_SIZEABLE | WB_CLOSEABLE | WB_CLIPCHILDREN);

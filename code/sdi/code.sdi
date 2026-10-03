@@ -88,6 +88,25 @@ SfxVoidItem CodeOpenProject SID_CODE_OPENPROJECT
     GroupId = SfxGroupId::Application;
 ]
 
+// The toolbar's Debug/Release/... combo box: a custom item window, so the slot
+// only keeps the item enabled.
+SfxVoidItem CodeConfiguration SID_CODE_CONFIGURATION
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // File > Save All: saves every document with unsaved changes.
 SfxVoidItem CodeSaveAll SID_CODE_SAVEALL
 ()
@@ -130,6 +149,11 @@ shell code_Shell
     SID_CODE_OPENPROJECT
     [
         ExecMethod = Execute;
+    ]
+
+    SID_CODE_CONFIGURATION
+    [
+        StateMethod = GetState;
     ]
 
     SID_CODE_SAVEALL
