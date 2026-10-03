@@ -19,7 +19,9 @@
 #include <set>
 #include <memory>
 
-namespace weld { class TreeView; class TreeIter; }
+class CommandEvent;
+namespace weld { class TreeView; class TreeIter; class Widget; }
+namespace tools { class Rectangle; }
 
 namespace code { class UiNotifier; }
 
@@ -55,6 +57,11 @@ protected:
     virtual OUString LabelOf(const css::uno::Reference<css::code::project::XProject>& xProject,
                              const css::uno::Reference<css::code::project::XProjectItem>& xRoot) const;
 
+    /// A context menu was asked for on rItem; show it at rArea of rParent and
+    /// return true, or return false if there is none for this item.
+    virtual bool ShowContextMenu(const css::uno::Reference<css::code::project::XProjectItem>& xItem,
+                                 weld::Widget& rParent, const tools::Rectangle& rArea);
+
     void Rebuild();
 
 private:
@@ -64,6 +71,7 @@ private:
 
     DECL_LINK(ExpandingHdl, const weld::TreeIter&, bool);
     DECL_LINK(ActivatedHdl, const weld::TreeIter&, bool);
+    DECL_LINK(CommandHdl, const CommandEvent&, bool);
 
     std::unique_ptr<weld::TreeView> mxTree;
     css::uno::Reference<css::ui::XSidebar> mxSidebar;

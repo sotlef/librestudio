@@ -27,6 +27,8 @@ public:
 protected:
     virtual css::uno::Reference<css::code::project::XProjectItem>
     RootOf(const css::uno::Reference<css::code::project::XProject>& xProject) override;
+    virtual bool ShowContextMenu(const css::uno::Reference<css::code::project::XProjectItem>& xItem,
+                                 weld::Widget& rParent, const tools::Rectangle& rArea) override;
     virtual OUString EmptyText() const override;
     virtual OUString LabelOf(const css::uno::Reference<css::code::project::XProject>& xProject,
                              const css::uno::Reference<css::code::project::XProjectItem>& xRoot) const override;

@@ -23,6 +23,7 @@
 #include <sal/log.hxx>
 #include <svtools/imagemgr.hxx>
 #include <tools/urlobj.hxx>
+#include <vcl/commandevent.hxx>
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/TreeView.hxx>
 #include <vcl/weld/Widget.hxx>
@@ -54,6 +55,7 @@ ProjectTreePanel::ProjectTreePanel(weld::Widget* pParent, const OUString& rPanel
 {
     mxTree->connect_expanding(LINK(this, ProjectTreePanel, ExpandingHdl));
     mxTree->connect_item_activated(LINK(this, ProjectTreePanel, ActivatedHdl));
+    mxTree->connect_command(LINK(this, ProjectTreePanel, CommandHdl));
 }
 
 ProjectTreePanel::~ProjectTreePanel()
@@ -179,6 +181,32 @@ IMPL_LINK(ProjectTreePanel, ExpandingHdl, const weld::TreeIter&, rIter, bool)
         SAL_WARN("code", "cannot list " << it->second->getName() << ": " << rException.Message);
     }
     return true;
+}
+
+bool ProjectTreePanel::ShowContextMenu(const uno::Reference<XProjectItem>&, weld::Widget&,
+                                       const tools::Rectangle&)
+{
+    return false;
+}
+
+IMPL_LINK(ProjectTreePanel, CommandHdl, const CommandEvent&, rEvent, bool)
+{
+    if (rEvent.GetCommand() != CommandEventId::ContextMenu)
+        return false;
+    // a keyboard-invoked menu has no position: use the cursor row
+    std::unique_ptr<weld::TreeIter> xRow = rEvent.IsMouseEvent()
+        ? mxTree->get_dest_row_at_pos(rEvent.GetMousePosPixel(), false, false)
+        : mxTree->get_cursor();
+    if (!xRow)
+        return false;
+    const auto it = maItems.find(mxTree->get_id(*xRow));
+    if (it == maItems.end())
+        return false;
+    mxTree->select(*xRow);
+    const tools::Rectangle aArea = rEvent.IsMouseEvent()
+                                       ? tools::Rectangle(rEvent.GetMousePosPixel(), Size(1, 1))
+                                       : mxTree->get_row_area(*xRow);
+    return ShowContextMenu(it->second, *mxTree, aArea);
 }
 
 IMPL_LINK(ProjectTreePanel, ActivatedHdl, const weld::TreeIter&, rIter, bool)

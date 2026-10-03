@@ -14,6 +14,16 @@
 #include <com/sun/star/code/project/XProjectTargets.hpp>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
+#include <vcl/svapp.hxx>
+#include <vcl/weld/Builder.hxx>
+#include <vcl/weld/Menu.hxx>
+#include <vcl/weld/Widget.hxx>
+#include <com/sun/star/code/build/XBuildController.hpp>
+#include <com/sun/star/code/build/theBuildController.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
 #include <vector>
 
 using namespace css;
@@ -30,12 +40,15 @@ namespace
 class SolutionItem final : public cppu::WeakImplHelper<XProjectItem>
 {
 public:
-    SolutionItem(OUString aName, const uno::Sequence<uno::Reference<XProjectTarget>>& rTargets)
+    SolutionItem(OUString aName, OUString aProjectUrl, const uno::Sequence<uno::Reference<XProjectTarget>>& rTargets)
         : m_aName(std::move(aName))
+        , m_aProjectUrl(std::move(aProjectUrl))
     {
         for (const auto& xTarget : rTargets)
             m_aChildren.push_back(uno::Reference<XProjectItem>(xTarget, uno::UNO_QUERY));
     }
+
+    const OUString& GetProjectUrl() const { return m_aProjectUrl; }
 
     OUString SAL_CALL getName() override { return m_aName; }
     ItemKind SAL_CALL getKind() override { return ItemKind_FOLDER; }
@@ -48,6 +61,7 @@ public:
 
 private:
     const OUString m_aName;
+    const OUString m_aProjectUrl;
     std::vector<uno::Reference<XProjectItem>> m_aChildren;
 };
 }
@@ -65,12 +79,54 @@ uno::Reference<XProjectItem> SolutionPanel::RootOf(const uno::Reference<XProject
     {
         const uno::Sequence<uno::Reference<XProjectTarget>> aTargets = xTargets->getTargets();
         if (aTargets.hasElements())
-            return new SolutionItem(xProject->getName(), aTargets);
+            return new SolutionItem(xProject->getName(), xProject->getUrl(), aTargets);
     }
     // ... otherwise the directory tree
     if (uno::Reference<XProjectFiles> xFiles{ xProject, uno::UNO_QUERY })
         return xFiles->getRootItem();
     return {};
+}
+
+bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, weld::Widget& rParent,
+                                    const tools::Rectangle& rArea)
+{
+    const SolutionItem* pSolution = dynamic_cast<SolutionItem*>(xItem.get());
+    if (!pSolution)
+        return false;
+    std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(&rParent, u"code/ui/solutionpanel.ui"_ustr));
+    std::unique_ptr<weld::Menu> xMenu = xBuilder->weld_menu(u"solutionmenu"_ustr);
+    // one build at a time: while one runs, none of the actions can start
+    try
+    {
+        if (css::code::build::theBuildController::get(comphelper::getProcessComponentContext())->getRunningBuild().is())
+            for (const OUString& rIdent : { u"build"_ustr, u"rebuild"_ustr, u"clean"_ustr })
+                xMenu->set_sensitive(rIdent, false);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot ask for the running build: " << rException.Message);
+    }
+    const OUString aCommand = xMenu->popup_at_rect(&rParent, rArea);
+    if (aCommand.isEmpty())
+        return true;
+    try
+    {
+        const uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+        // what is on disk is what gets built
+        css::code::document::theDocumentManager::get(xContext)->saveAll();
+        auto xBuild = css::code::build::theBuildController::get(xContext);
+        if (aCommand == "rebuild")
+            xBuild->rebuildProject(pSolution->GetProjectUrl());
+        else if (aCommand == "clean")
+            xBuild->cleanProject(pSolution->GetProjectUrl());
+        else
+            xBuild->buildProject(pSolution->GetProjectUrl());
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "solution command failed: " << rException.Message);
+    }
+    return true;
 }
 
 OUString SolutionPanel::EmptyText() const { return u"No project open (File > Open > Project)"_ustr; }
