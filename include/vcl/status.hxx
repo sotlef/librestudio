@@ -81,6 +81,7 @@ private:
     bool                mbProgressMode;
     bool                mbInUserDraw;
     bool                mbAdjustHiDPI;
+    bool                mbSeparatorsVisible = true;
     Link<StatusBar*,void>  maClickHdl;
     Link<StatusBar*,void>  maDoubleClickHdl;
 
@@ -168,6 +169,13 @@ public:
     const OUString&     GetQuickHelpText( sal_uInt16 nItemId ) const;
 
     void                SetHelpId( sal_uInt16 nItemId, const OUString& rHelpId );
+
+    /** Whether the vertical separator line left of every item (except the
+        first) is drawn at all. ImplDrawItem() draws it unconditionally,
+        independent of the items' In/Out/Flat bits -- a Visual-Studio-style
+        status bar (code's TasksStatusBarControl host) wants none. Default
+        true: no change for any other status bar. */
+    void                SetSeparatorsVisible( bool bVisible );
 
     void                StartProgressMode( const OUString& rText );
     void                SetProgressValue( sal_uInt16 nPercent );

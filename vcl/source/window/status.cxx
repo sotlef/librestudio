@@ -457,7 +457,7 @@ void StatusBar::ImplDrawItem(vcl::RenderContext& rRenderContext, bool bOffScreen
     else
         rRenderContext.SetClipRegion();
 
-    if (nPos != ImplGetFirstVisiblePos())
+    if (mbSeparatorsVisible && nPos != ImplGetFirstVisiblePos())
     {
         // draw separator
         Point aFrom(aRect.TopLeft());
@@ -1339,6 +1339,15 @@ void StatusBar::SetHelpId( sal_uInt16 nItemId, const OUString& rHelpId )
 
     if ( nPos != STATUSBAR_ITEM_NOTFOUND )
         mvItemList[ nPos ]->maHelpId = rHelpId;
+}
+
+void StatusBar::SetSeparatorsVisible( bool bVisible )
+{
+    if ( mbSeparatorsVisible != bVisible )
+    {
+        mbSeparatorsVisible = bVisible;
+        Invalidate();
+    }
 }
 
 void StatusBar::StartProgressMode( const OUString& rText )
