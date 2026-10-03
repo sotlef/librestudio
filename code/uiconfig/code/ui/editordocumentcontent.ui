@@ -8,8 +8,7 @@
 -->
 <interface domain="code">
   <requires lib="gtk+" version="3.24"/>
-  <object class="GtkTextBuffer" id="buffer"/>
-  <!-- One of these is built per open document (EditorMDIPanel::OpenDemoDocument,
+  <!-- One of these is built per open document (EditorMDIPanel::ShowDocument,
        code/source/editormdipanel.cxx) as the content of a weld::MDI page
        (weld::MDI itself only owns the tab strip + a bare native container
        per document, not what's inside it; same relationship
@@ -21,15 +20,16 @@
     <property name="vexpand">True</property>
     <property name="shadow-type">in</property>
     <child>
-      <object class="GtkTextView" id="content">
+      <object class="GtkViewport">
         <property name="visible">True</property>
-        <property name="can-focus">True</property>
-        <property name="hexpand">True</property>
-        <property name="vexpand">True</property>
-        <property name="editable">True</property>
-        <property name="monospace">True</property>
-        <property name="wrap-mode">none</property>
-        <property name="buffer">buffer</property>
+        <property name="can-focus">False</property>
+        <child>
+          <object class="GtkDrawingArea" id="editview">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="events">GDK_BUTTON_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK | GDK_STRUCTURE_MASK | GDK_SCROLL_MASK</property>
+          </object>
+        </child>
       </object>
     </child>
   </object>

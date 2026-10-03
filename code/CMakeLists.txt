@@ -34,6 +34,7 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/configureprojectdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/editor/codeeditview.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/recentprojects.cxx"

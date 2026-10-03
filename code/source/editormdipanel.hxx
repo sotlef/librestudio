@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "editor/codeeditview.hxx"
 #include "workbench.hxx"
 
 #include <com/sun/star/code/document/XDocumentListener.hpp>
@@ -22,9 +23,7 @@
 
 namespace code { class UiNotifier; }
 namespace weld { class Builder; }
-namespace weld { class TextWidget; }
 namespace weld { class MDI; }
-namespace weld { class TextView; }
 namespace weld { class Widget; }
 
 // The editor area's MDI widget host: a real weld::MDI (include/vcl/weld/MDI.hxx,
@@ -50,21 +49,15 @@ public:
 private:
     // weld::MDI itself only owns the tab strip and a bare native container
     // per document (the same relationship weld::Notebook::get_page() has
-    // to its tab pages) -- the actual content widget, and the builder that
+    // to its tab pages) -- the content widget, and the builder that
     // constructed it, are this class' own to keep alive.
     struct DocumentContent
     {
         std::unique_ptr<weld::Builder> mxBuilder;
-        // The .ui's own root widget ("EditorDocumentContent", a
-        // GtkScrolledWindow) -- looking it up is what actually attaches it
-        // into the MDI page (Builder::weld_X() parents whatever it looks
-        // up if that object is still parentless; "content", the nested
-        // GtkTextView below it in the same .ui, is never parentless to
-        // begin with, so asking for that alone leaves the whole subtree
-        // unattached). Kept alive alongside mxView, never otherwise used.
-        std::unique_ptr<weld::Widget> mxRoot;
-        std::unique_ptr<weld::TextView> mxView;
-        // empty for the demo documents, which belong to no file
+        // looking up the .ui's root widget is what attaches it into the MDI page
+        // (Builder::weld_X() parents whatever it looks up if that object is
+        // still parentless); the view does that when it takes its scrolled window
+        std::unique_ptr<::code::CodeEditView> mxView;
         OUString msUrl;
     };
 
@@ -72,14 +65,9 @@ private:
     void SyncWithDocuments();
 
     DECL_LINK(CloseRequestHdl, int, void);
-    DECL_LINK(TextChangedHdl, weld::TextWidget&, void);
 
     std::unique_ptr<weld::MDI> mxMDI;
     std::map<int, DocumentContent> maDocumentContents;
-    // set while the view is being filled from the document, so that filling it
-    // is not mistaken for typing
-    bool mbSyncing = false;
-
     std::shared_ptr<::code::UiNotifier> mxNotifier;
     css::uno::Reference<css::code::document::XDocumentListener> mxListener;
 };

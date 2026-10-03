@@ -26,8 +26,6 @@
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/Container.hxx>
 #include <vcl/weld/MDI.hxx>
-#include <vcl/weld/TextView.hxx>
-#include <vcl/weld/TextWidget.hxx>
 #include <vcl/weld/Widget.hxx>
 
 #include <algorithm>
@@ -138,11 +136,8 @@ void EditorMDIPanel::ShowDocument(const OUString& rUrl, const css::code::core::P
         DocumentContent aContent;
         aContent.mxBuilder
             = Application::CreateBuilder(pPage, u"code/ui/editordocumentcontent.ui"_ustr);
-        aContent.mxRoot = aContent.mxBuilder->weld_widget(u"EditorDocumentContent"_ustr);
-        aContent.mxView = aContent.mxBuilder->weld_text_view(u"content"_ustr);
-        aContent.mxView->set_text(xDocument->getText());
+        aContent.mxView = std::make_unique<::code::CodeEditView>(*aContent.mxBuilder, xDocument);
         aContent.msUrl = rUrl;
-        aContent.mxView->connect_changed(LINK(this, EditorMDIPanel, TextChangedHdl));
         maDocumentContents[nDocId] = std::move(aContent);
         mxMDI->set_document_dirty(nDocId, xDocument->getState() == css::code::document::DocumentState_MODIFIED);
     }
@@ -150,25 +145,7 @@ void EditorMDIPanel::ShowDocument(const OUString& rUrl, const css::code::core::P
     mxMDI->set_current_document(nDocId);
 
     if (pPosition)
-    {
-        weld::TextView& rView = *maDocumentContents[nDocId].mxView;
-        // Position is (line, column); the view wants a character offset.
-        const OUString aText = rView.get_text();
-        sal_Int32 nOffset = 0;
-        for (sal_Int32 nLine = pPosition->Line; nLine > 0; --nLine)
-        {
-            const sal_Int32 nEol = aText.indexOf('\n', nOffset);
-            if (nEol < 0)
-            {
-                nOffset = aText.getLength();
-                break;
-            }
-            nOffset = nEol + 1;
-        }
-        nOffset = std::min(nOffset + pPosition->Column, aText.getLength());
-        rView.set_position(nOffset);
-        rView.grab_focus();
-    }
+        maDocumentContents[nDocId].mxView->RevealPosition(*pPosition);
 }
 
 bool EditorMDIPanel::SaveCurrentDocument()
@@ -200,32 +177,6 @@ uno::Reference<css::code::document::XTextDocument> EditorMDIPanel::DocumentOf(co
     }
 }
 
-// What the user types goes into the document model, which owns the text and
-// knows it is modified.  Loading text into the view fires this too; the
-// document sees the same text it already has and stays clean.
-IMPL_LINK(EditorMDIPanel, TextChangedHdl, weld::TextWidget&, rView, void)
-{
-    if (mbSyncing)
-        return;
-    for (const auto& [nId, rContent] : maDocumentContents)
-    {
-        if (rContent.mxView.get() != &rView)
-            continue;
-        if (auto xDocument = DocumentOf(rContent.msUrl))
-        {
-            try
-            {
-                xDocument->setText(rView.get_text());
-            }
-            catch (const uno::Exception& rException)
-            {
-                SAL_WARN("code", "cannot store the edit: " << rException.Message);
-            }
-        }
-        return;
-    }
-}
-
 // The tabs' view of the documents: dirty marks, tabs of closed documents, and
 // the text of documents read again from disk.
 void EditorMDIPanel::SyncWithDocuments()
@@ -244,13 +195,7 @@ void EditorMDIPanel::SyncWithDocuments()
         mxMDI->set_document_dirty(nId, xDocument->getState() == css::code::document::DocumentState_MODIFIED);
 
         // Reloaded or edited elsewhere: show what the document says now.
-        const OUString aText = xDocument->getText();
-        if (rContent.mxView->get_text() != aText)
-        {
-            mbSyncing = true;
-            rContent.mxView->set_text(aText);
-            mbSyncing = false;
-        }
+        rContent.mxView->Refresh();
     }
     for (int nId : aGone)
     {
