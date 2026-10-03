@@ -43,6 +43,8 @@
     <menu:menu menu:id=".uno:CodeBuildMenu">
         <menu:menupopup>
             <menu:menuitem menu:id=".uno:CodeBuild"/>
+            <menu:menuitem menu:id=".uno:CodeRebuild"/>
+            <menu:menuitem menu:id=".uno:CodeClean"/>
             <menu:menuitem menu:id=".uno:CodeCancelBuild"/>
         </menu:menupopup>
     </menu:menu>

@@ -169,9 +169,15 @@ void OutputLogPanel::Refresh()
     UpdateLogText();
 }
 
-void OutputLogPanel::UpdateLogText()
+void OutputLogPanel::UpdateLogText(bool bRebuild, bool bToEnd)
 {
+    const std::vector<OutputLine> aOld = std::move(maLines);
     maLines.clear();
+
+    OUString aChannel;
+    if (const int nActive = mxSource->get_active();
+        nActive >= 0 && o3tl::make_unsigned(nActive) < maChannelNames.size())
+        aChannel = maChannelNames[nActive];
     if (auto xChannel = CurrentChannel())
     {
         try
@@ -188,31 +194,99 @@ void OutputLogPanel::UpdateLogText()
     if (mnCurrentMessage >= static_cast<int>(maLines.size()))
         mnCurrentMessage = static_cast<int>(maLines.size()) - 1;
 
-    OUStringBuffer aText;
-    for (size_t i = 0; i < maLines.size(); ++i)
+    auto lineText = [this](const OutputLine& rLine)
     {
-        if (i > 0)
-            aText.append('\n');
+        OUString aText = rLine.Text;
         if (mbShowTimestamps)
-            aText.append(FormatTime(maLines[i].Time) + " ");
-        aText.append(maLines[i].Text);
-    }
-    mxLog->set_text(aText.makeStringAndClear());
+            aText = FormatTime(rLine.Time) + " " + aText;
+        return aText;
+    };
 
-    // Re-highlight the current message (if any) in the freshly set text --
-    // selection does not survive set_text().
+    // Another channel, or other timestamps, is another text.
+    if (aChannel != maShownChannel)
+    {
+        bRebuild = true;
+        bToEnd = true; // as Visual Studio does when "Show output from" changes
+    }
+    if (mbShowTimestamps != mbShownTimestamps)
+        bRebuild = true;
+
+    // The same text with lines added at the end?  (The channel keeps only its
+    // latest lines, so once it is full the front drops off and this is false.)
+    // an emptied channel is a new text, not an addition
+    if (maLines.size() < aOld.size())
+        bRebuild = true;
+    const bool bAppend = !bRebuild && !aOld.empty() && maLines.size() >= aOld.size()
+                         && maLines.front() == aOld.front() && maLines[aOld.size() - 1] == aOld.back();
+
+    // Visual Studio's rule: if the caret stands after the last character the
+    // window follows new output; if it stands anywhere else the window stays
+    // put and only its scroll bar adjusts.
+    const int nCaret = mxLog->get_position();
+    const bool bFollow = bToEnd || nCaret >= mnTextLength;
+    const int nScroll = mxLog->vadjustment_get_value();
+
+    if (bAppend)
+    {
+        if (maLines.size() == aOld.size())
+            return; // nothing new
+        OUStringBuffer aAdded;
+        for (size_t i = aOld.size(); i < maLines.size(); ++i)
+        {
+            aAdded.append('\n');
+            aAdded.append(lineText(maLines[i]));
+        }
+        int nSelStart = 0;
+        int nSelEnd = 0;
+        const bool bSelection = mxLog->get_selection_bounds(nSelStart, nSelEnd);
+
+        // insert at the end without touching the rest of the text
+        mxLog->set_position(mnTextLength);
+        mxLog->replace_selection(aAdded.toString());
+        mnTextLength += aAdded.getLength();
+
+        if (bFollow)
+            mxLog->select_region(mnTextLength, mnTextLength); // caret to the end, scrolled there
+        else
+        {
+            if (bSelection)
+                mxLog->select_region(nSelStart, nSelEnd);
+            else
+                mxLog->set_position(nCaret);
+            mxLog->vadjustment_set_value(nScroll);
+        }
+    }
+    else
+    {
+        OUStringBuffer aText;
+        for (size_t i = 0; i < maLines.size(); ++i)
+        {
+            if (i > 0)
+                aText.append('\n');
+            aText.append(lineText(maLines[i]));
+        }
+        mnTextLength = aText.getLength();
+        mxLog->set_text(aText.makeStringAndClear());
+
+        if (bFollow)
+            mxLog->select_region(mnTextLength, mnTextLength);
+        else
+        {
+            mxLog->set_position(std::min(nCaret, mnTextLength));
+            mxLog->vadjustment_set_value(nScroll);
+        }
+    }
+    maShownChannel = aChannel;
+    mbShownTimestamps = mbShowTimestamps;
+
+    // Re-highlight the current message (if any): "Go to Previous/Next Message"
+    // selects it, which also moves the caret off the end, so the window stops following.
     if (mnCurrentMessage < 0)
         return;
     int nStart = 0;
     for (int i = 0; i < mnCurrentMessage; ++i)
-    {
-        nStart += maLines[i].Text.getLength() + 1; // + '\n'
-        if (mbShowTimestamps)
-            nStart += FormatTime(maLines[i].Time).getLength() + 1; // + ' '
-    }
-    int nEnd = nStart + maLines[mnCurrentMessage].Text.getLength();
-    if (mbShowTimestamps)
-        nEnd += FormatTime(maLines[mnCurrentMessage].Time).getLength() + 1;
+        nStart += lineText(maLines[i]).getLength() + 1; // + '\n'
+    const int nEnd = nStart + lineText(maLines[mnCurrentMessage]).getLength();
     mxLog->select_region(nStart, nEnd);
 }
 
@@ -220,7 +294,7 @@ IMPL_LINK_NOARG(OutputLogPanel, SourceChangedHdl, weld::ComboBox&, void)
 {
     // The message cursor belongs to one channel's lines.
     mnCurrentMessage = -1;
-    UpdateLogText();
+    UpdateLogText(true, true);
 }
 
 // "Find Message in Code": the highlighted line is searched for among the
@@ -261,14 +335,14 @@ IMPL_LINK(OutputLogPanel, ToolbarClickHdl, const OUString&, rIdent, void)
         if (nLines == 0)
             return;
         mnCurrentMessage = (mnCurrentMessage <= 0) ? 0 : mnCurrentMessage - 1;
-        UpdateLogText();
+        UpdateLogText(true);
     }
     else if (rIdent == "next")
     {
         if (nLines == 0)
             return;
         mnCurrentMessage = (mnCurrentMessage < 0) ? 0 : std::min(mnCurrentMessage + 1, nLines - 1);
-        UpdateLogText();
+        UpdateLogText(true);
     }
     else if (rIdent == "clear")
     {
@@ -294,7 +368,7 @@ IMPL_LINK(OutputLogPanel, ToolbarClickHdl, const OUString&, rIdent, void)
     else if (rIdent == "timestamp")
     {
         mbShowTimestamps = mxToolbar->get_item_active(u"timestamp"_ustr);
-        UpdateLogText();
+        UpdateLogText(true);
     }
 }
 

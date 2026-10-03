@@ -48,7 +48,18 @@ public:
     }
 
     // XBuildController
-    uno::Reference<core::XBackgroundJob> SAL_CALL buildProject(const OUString& rProjectUrl) override;
+    uno::Reference<core::XBackgroundJob> SAL_CALL buildProject(const OUString& rProjectUrl) override
+    {
+        return start(rProjectUrl, Action::Build);
+    }
+    uno::Reference<core::XBackgroundJob> SAL_CALL rebuildProject(const OUString& rProjectUrl) override
+    {
+        return start(rProjectUrl, Action::Rebuild);
+    }
+    uno::Reference<core::XBackgroundJob> SAL_CALL cleanProject(const OUString& rProjectUrl) override
+    {
+        return start(rProjectUrl, Action::Clean);
+    }
     uno::Reference<core::XBackgroundJob> SAL_CALL getRunningBuild() override;
     void SAL_CALL cancelBuild() override;
 
@@ -64,6 +75,14 @@ public:
     uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override { return {}; }
 
 private:
+    enum class Action
+    {
+        Build,
+        Rebuild,
+        Clean
+    };
+    uno::Reference<core::XBackgroundJob> start(const OUString& rProjectUrl, Action eAction);
+
     uno::Reference<uno::XComponentContext> m_xContext;
     std::mutex m_aMutex;
     uno::Reference<core::XBackgroundJob> m_xRunning;
@@ -83,7 +102,7 @@ void BuildController::cancelBuild()
         xJob->cancel();
 }
 
-uno::Reference<core::XBackgroundJob> BuildController::buildProject(const OUString& rProjectUrl)
+uno::Reference<core::XBackgroundJob> BuildController::start(const OUString& rProjectUrl, Action eAction)
 {
     const OUString aUrl = NormalizeUrl(rProjectUrl);
 
@@ -116,7 +135,9 @@ uno::Reference<core::XBackgroundJob> BuildController::buildProject(const OUStrin
     // what the last build found is out of date the moment a new one starts
     task::theTaskHub::get(m_xContext)->clearCategory(u"build"_ustr);
 
-    uno::Reference<core::XBackgroundJob> xJob = xFormat->build(aUrl, aConfiguration);
+    uno::Reference<core::XBackgroundJob> xJob
+        = eAction == Action::Clean ? xFormat->clean(aUrl, aConfiguration)
+                                   : xFormat->build(aUrl, aConfiguration, eAction == Action::Rebuild);
     if (xJob.is())
     {
         core::theJobRegistry::get(m_xContext)->registerJob(xJob);

@@ -25,6 +25,16 @@
           <value xml:lang="en-US">~Build Solution</value>
         </prop>
       </node>
+      <node oor:name=".uno:CodeRebuild" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">~Rebuild Solution</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeClean" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Clea~n Solution</value>
+        </prop>
+      </node>
       <node oor:name=".uno:CodeCancelBuild" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">~Cancel Build</value>

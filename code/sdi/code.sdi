@@ -125,6 +125,42 @@ SfxVoidItem CodeBuild SID_CODE_BUILD
     GroupId = SfxGroupId::Application;
 ]
 
+// Build > Rebuild Solution: cleans the active project's build, then builds it.
+SfxVoidItem CodeRebuild SID_CODE_REBUILD
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
+// Build > Clean Solution: removes what the builds of the active project produced.
+SfxVoidItem CodeClean SID_CODE_CLEAN
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // Build > Cancel: stops the running build.
 SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
 ()
@@ -217,6 +253,18 @@ shell code_Shell
     ]
 
     SID_CODE_BUILD
+    [
+        ExecMethod = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_REBUILD
+    [
+        ExecMethod = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_CLEAN
     [
         ExecMethod = Execute;
         StateMethod = GetState;

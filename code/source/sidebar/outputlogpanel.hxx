@@ -39,8 +39,12 @@ private:
     // Re-reads the channel list and the selected channel.  Everything the
     // service tells the panel funnels into this; it runs on the main thread.
     void Refresh();
-    // The log text of the selected channel; also records where each line starts.
-    void UpdateLogText();
+    // The log text of the selected channel.  New lines are appended to what is
+    // shown rather than the text being set again (which would reset the caret
+    // and the scroll position); bRebuild forces setting it again, bToEnd also
+    // scrolls to the end.  The log follows new lines while the caret is after
+    // the last character, and stays where it is when the caret is anywhere else.
+    void UpdateLogText(bool bRebuild = false, bool bToEnd = false);
     css::uno::Reference<css::code::output::XOutputChannel> CurrentChannel() const;
     void JumpToTask(int nLine);
 
@@ -55,6 +59,10 @@ private:
     std::vector<OUString> maChannelNames;
     // the lines shown now (to find a line's own text again when highlighting it)
     std::vector<css::code::output::OutputLine> maLines;
+    // which channel they belong to, and how long the text showing them is
+    OUString maShownChannel;
+    int mnTextLength = 0;
+    bool mbShownTimestamps = false;
     // Index of the line highlighted by "Go to Previous/Next Message", -1 = none.
     int mnCurrentMessage;
     bool mbShowTimestamps;

@@ -147,6 +147,8 @@ void Shell::Execute(SfxRequest& rReq)
     switch (rReq.GetSlot())
     {
         case SID_CODE_BUILD:
+        case SID_CODE_REBUILD:
+        case SID_CODE_CLEAN:
         {
             uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
             try
@@ -160,7 +162,13 @@ void Shell::Execute(SfxRequest& rReq)
                 }
                 // what is on disk is what gets built
                 css::code::document::theDocumentManager::get(xContext)->saveAll();
-                css::code::build::theBuildController::get(xContext)->buildProject(xProject->getUrl());
+                auto xBuild = css::code::build::theBuildController::get(xContext);
+                if (rReq.GetSlot() == SID_CODE_REBUILD)
+                    xBuild->rebuildProject(xProject->getUrl());
+                else if (rReq.GetSlot() == SID_CODE_CLEAN)
+                    xBuild->cleanProject(xProject->getUrl());
+                else
+                    xBuild->buildProject(xProject->getUrl());
             }
             catch (const uno::Exception& rException)
             {
@@ -284,6 +292,8 @@ void Shell::GetState(SfxItemSet& rSet)
     // button's popover is still the constant "No background tasks running."
     // Build is possible with a project open and nothing building; Cancel only while one runs.
     if (rSet.GetItemState(SID_CODE_BUILD, false) != SfxItemState::UNKNOWN
+        || rSet.GetItemState(SID_CODE_REBUILD, false) != SfxItemState::UNKNOWN
+        || rSet.GetItemState(SID_CODE_CLEAN, false) != SfxItemState::UNKNOWN
         || rSet.GetItemState(SID_CODE_CANCELBUILD, false) != SfxItemState::UNKNOWN)
     {
         bool bProject = false;
@@ -299,6 +309,10 @@ void Shell::GetState(SfxItemSet& rSet)
         }
         if (rSet.GetItemState(SID_CODE_BUILD, false) != SfxItemState::UNKNOWN && (!bProject || bBuilding))
             rSet.DisableItem(SID_CODE_BUILD);
+        if (rSet.GetItemState(SID_CODE_REBUILD, false) != SfxItemState::UNKNOWN && (!bProject || bBuilding))
+            rSet.DisableItem(SID_CODE_REBUILD);
+        if (rSet.GetItemState(SID_CODE_CLEAN, false) != SfxItemState::UNKNOWN && (!bProject || bBuilding))
+            rSet.DisableItem(SID_CODE_CLEAN);
         if (rSet.GetItemState(SID_CODE_CANCELBUILD, false) != SfxItemState::UNKNOWN && !bBuilding)
             rSet.DisableItem(SID_CODE_CANCELBUILD);
     }

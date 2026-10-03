@@ -145,8 +145,16 @@ sal_Int16 ProgressOf(const OUString& rLine)
 }
 
 // cmake --build <build directory> [--config <type>], its output to the channel.
+enum class BuildMode
+{
+    Build,
+    Rebuild,
+    Clean
+};
+
 bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XOutputChannel>& xChannel,
-              const OUString& rProjectName, const project::ProjectConfiguration& rConfiguration)
+              const OUString& rProjectName, const project::ProjectConfiguration& rConfiguration,
+              BuildMode eMode)
 {
     OUString aBuildUrl;
     OUString aBuildType;
@@ -162,6 +170,16 @@ bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XO
         aBuildPath = aBuildUrl;
 
     std::vector<OUString> aArguments{ u"--build"_ustr, aBuildPath };
+    if (eMode == BuildMode::Rebuild)
+        aArguments.push_back(u"--clean-first"_ustr); // cmake cleans the tree first, whatever the generator
+    else if (eMode == BuildMode::Clean)
+    {
+        aArguments.push_back(u"--target"_ustr);
+        aArguments.push_back(u"clean"_ustr);
+    }
+    const OUString aVerb = eMode == BuildMode::Rebuild ? u"Rebuild"_ustr
+                           : eMode == BuildMode::Clean ? u"Clean"_ustr
+                                                       : u"Build"_ustr;
     // only a multi-configuration generator (Visual Studio, Xcode) looks at this;
     // for a single-configuration one the build type was fixed when configuring
     if (!aBuildType.isEmpty())
@@ -173,11 +191,12 @@ bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XO
     OUString aCommandLine = u"cmake"_ustr;
     for (const OUString& rArgument : aArguments)
         aCommandLine += " " + rArgument;
-    xChannel->appendLine("------ Build started: " + rProjectName + ", " + rConfiguration.Name + " ------",
+    xChannel->appendLine("------ " + aVerb + " started: " + rProjectName + ", "
+                             + rConfiguration.Name + " ------",
                          output::OutputStream_INFO);
     xChannel->appendLine(aCommandLine, output::OutputStream_INFO);
 
-    rJob.SetMessage("Building " + rProjectName + " (" + rConfiguration.Name + ")");
+    rJob.SetMessage(aVerb + " " + rProjectName + " (" + rConfiguration.Name + ")");
     OUString aStartError;
     const sal_Int32 nExit = codeservices::RunProcess(
         u"cmake"_ustr, aArguments, OUString(),
@@ -198,18 +217,18 @@ bool RunBuild(codeservices::BackgroundJob& rJob, const uno::Reference<output::XO
     }
     if (rJob.IsCancelled())
     {
-        xChannel->appendLine(u"========== Build cancelled =========="_ustr, output::OutputStream_WARNING);
+        xChannel->appendLine("========== " + aVerb + " cancelled ==========", output::OutputStream_WARNING);
         return false;
     }
     if (nExit != 0)
     {
-        xChannel->appendLine("========== Build failed: " + rProjectName + " (cmake exited with "
+        xChannel->appendLine("========== " + aVerb + " failed: " + rProjectName + " (cmake exited with "
                                  + OUString::number(nExit) + ") ==========",
                              output::OutputStream_ERROR);
         return false;
     }
     rJob.SetProgress(100);
-    xChannel->appendLine("========== Build succeeded: " + rProjectName + " ==========", output::OutputStream_INFO);
+    xChannel->appendLine("========== " + aVerb + " succeeded: " + rProjectName + " ==========", output::OutputStream_INFO);
     return true;
 }
 
@@ -268,17 +287,15 @@ public:
 
     // XBuildableProjectFormat
     uno::Reference<core::XBackgroundJob>
-        SAL_CALL build(const OUString& rProjectUrl, const project::ProjectConfiguration& rConfiguration) override
+        SAL_CALL build(const OUString& rProjectUrl, const project::ProjectConfiguration& rConfiguration,
+                       sal_Bool bCleanFirst) override
     {
-        uno::Reference<output::XOutputChannel> xChannel
-            = output::theOutputController::get(m_xContext)->getOrCreateChannel(u"build"_ustr, u"Build"_ustr);
-        xChannel->clear();
-
-        const OUString aProjectName = GetDisplayName(GetParentUrl(rProjectUrl));
-        return rtl::Reference<codeservices::BackgroundJob>(codeservices::BackgroundJob::Start(
-            u"cmake-build:"_ustr + rProjectUrl, "Building " + aProjectName + " (" + rConfiguration.Name + ")",
-            [xChannel, aProjectName, rConfiguration](codeservices::BackgroundJob& rJob)
-            { return RunBuild(rJob, xChannel, aProjectName, rConfiguration); }));
+        return startBuild(rProjectUrl, rConfiguration, bCleanFirst ? BuildMode::Rebuild : BuildMode::Build);
+    }
+    uno::Reference<core::XBackgroundJob> SAL_CALL clean(const OUString& rProjectUrl,
+                                                        const project::ProjectConfiguration& rConfiguration) override
+    {
+        return startBuild(rProjectUrl, rConfiguration, BuildMode::Clean);
     }
 
     // cmake -S <project> -B <build directory> -DCMAKE_BUILD_TYPE=<type>, once
@@ -305,6 +322,25 @@ public:
     }
 
 private:
+    // The one job of the three: cmake --build, with --clean-first or --target clean.
+    uno::Reference<core::XBackgroundJob> startBuild(const OUString& rProjectUrl,
+                                                    const project::ProjectConfiguration& rConfiguration,
+                                                    BuildMode eMode)
+    {
+        uno::Reference<output::XOutputChannel> xChannel
+            = output::theOutputController::get(m_xContext)->getOrCreateChannel(u"build"_ustr, u"Build"_ustr);
+        xChannel->clear();
+
+        const OUString aProjectName = GetDisplayName(GetParentUrl(rProjectUrl));
+        const OUString aVerb = eMode == BuildMode::Rebuild ? u"Rebuilding "_ustr
+                               : eMode == BuildMode::Clean ? u"Cleaning "_ustr
+                                                           : u"Building "_ustr;
+        return rtl::Reference<codeservices::BackgroundJob>(codeservices::BackgroundJob::Start(
+            u"cmake-build:"_ustr + rProjectUrl, aVerb + aProjectName + " (" + rConfiguration.Name + ")",
+            [xChannel, aProjectName, rConfiguration, eMode](codeservices::BackgroundJob& rJob)
+            { return RunBuild(rJob, xChannel, aProjectName, rConfiguration, eMode); }));
+    }
+
     uno::Reference<uno::XComponentContext> m_xContext;
 };
 

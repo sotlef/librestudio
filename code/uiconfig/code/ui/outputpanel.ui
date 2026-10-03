@@ -49,6 +49,10 @@
                  and gets copied onto the replacement (see replaceWidget in
                  gtkinst.cxx) -->
             <property name="hexpand">False</property>
+            <!-- the channels (Build, CMake, ...) arrive after the panel is
+                 built, when this box has already been sized for an empty
+                 list and shows one letter; ask for a width that fits them -->
+            <property name="width-request">150</property>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -214,7 +218,9 @@
             <property name="hexpand">True</property>
             <property name="vexpand">True</property>
             <property name="editable">False</property>
-            <property name="cursor-visible">False</property>
+            <!-- the caret shows where the auto-scroll stands: after the last
+                 character the log follows new lines, anywhere else it stays -->
+            <property name="cursor-visible">True</property>
             <property name="monospace">True</property>
             <property name="wrap-mode">none</property>
             <property name="buffer">buffer</property>

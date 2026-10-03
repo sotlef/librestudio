@@ -59,4 +59,10 @@
 // made by RecentProjectsMenuController (code/source/recentprojectsmenucontroller.cxx).
 #define SID_CODE_RECENTPROJECTS      (SID_CODE_START + 10)
 
+// Build > Rebuild Solution (.uno:CodeRebuild): a build that starts from clean.
+#define SID_CODE_REBUILD             (SID_CODE_START + 11)
+
+// Build > Clean Solution (.uno:CodeClean): removes what the builds produced.
+#define SID_CODE_CLEAN               (SID_CODE_START + 12)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
