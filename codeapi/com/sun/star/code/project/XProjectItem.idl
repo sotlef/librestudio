@@ -1,0 +1,26 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** A node of the project tree. */
+interface XProjectItem
+{
+    [attribute, readonly] string Name;
+    [attribute, readonly] ::com::sun::star::code::project::ItemKind Kind;
+    /** the item's file URL; empty for purely logical items */
+    [attribute, readonly] string Url;
+    /** null for the root item */
+    [attribute, readonly] ::com::sun::star::code::project::XProjectItem Parent;
+    [attribute, readonly] sequence< ::com::sun::star::code::project::XProjectItem > Children;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

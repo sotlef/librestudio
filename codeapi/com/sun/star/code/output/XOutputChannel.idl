@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module output {
+
+/** A named, append-only log, shown as one entry of the Output window's
+    source list.  Only the most recent lines are kept.
+ */
+interface XOutputChannel
+{
+    [attribute, readonly] string Name;
+    [attribute, readonly] string DisplayName;
+    [attribute, readonly] long LineCount;
+
+    void appendLine( [in] string Text, [in] ::com::sun::star::code::output::OutputStream Stream );
+    void clear();
+    sequence< ::com::sun::star::code::output::OutputLine > getContent();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

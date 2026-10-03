@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module core {
+
+/** Registry of the jobs currently running in the IDE.  It feeds the
+    background-tasks indicator of the status bar.
+
+    A job is dropped from the registry once it reaches a final status,
+    after the listeners have been told about that final status.
+ */
+interface XJobRegistry
+{
+    void registerJob( [in] ::com::sun::star::code::core::XBackgroundJob Job );
+
+    /** the jobs that have not yet reached a final status */
+    sequence< ::com::sun::star::code::core::XBackgroundJob > getActiveJobs();
+
+    /** Listeners receive the events of every registered job; the event's
+        Source is the job.  Registering a job itself is announced with an
+        event of status PENDING or RUNNING.
+     */
+    void addJobListener( [in] ::com::sun::star::code::core::XBackgroundJobListener Listener );
+    void removeJobListener( [in] ::com::sun::star::code::core::XBackgroundJobListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

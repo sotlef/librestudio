@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module core {
+
+/** The single primitive for asynchronous work (build, project scan,
+    search, ...) whose progress the IDE shows to the user.
+ */
+interface XBackgroundJob
+{
+    [attribute, readonly] string Identifier;
+    /** human-readable title, e.g. "Building DemoProject" */
+    [attribute, readonly] string Title;
+    [attribute, readonly] ::com::sun::star::code::core::JobStatus Status;
+    /** 0..100, or -1 if the amount of work is unknown */
+    [attribute, readonly] short Progress;
+    [attribute, readonly] string StatusMessage;
+    [attribute, readonly] boolean Cancellable;
+
+    /** requests cancellation; the job reaches CANCELLED asynchronously */
+    void cancel();
+
+    void addJobListener( [in] ::com::sun::star::code::core::XBackgroundJobListener Listener );
+    void removeJobListener( [in] ::com::sun::star::code::core::XBackgroundJobListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

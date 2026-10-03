@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module task {
+
+/** Acts on a task when the user activates it (double click in the problem
+    list).  Registered with XTaskHub by a plugin.
+ */
+interface XTaskHandler
+{
+    [attribute, readonly] string Name;
+    /** the categories it handles; empty means all */
+    [attribute, readonly] sequence< string > Categories;
+
+    boolean canHandle( [in] ::com::sun::star::code::task::Task Task );
+    void handle( [in] ::com::sun::star::code::task::Task Task );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

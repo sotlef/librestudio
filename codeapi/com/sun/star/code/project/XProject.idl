@@ -1,0 +1,31 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** A project.  This interface carries only identity and metadata; what a
+    project can do (a file tree, source groups, targets, ...) is expressed
+    by further capability interfaces that the object implements and that
+    clients discover with queryInterface.
+ */
+interface XProject : ::com::sun::star::lang::XComponent
+{
+    [attribute, readonly] string Name;
+    /** URL of the project: the file the project was read from, or the
+        directory for a project that is just a folder.  It is also the
+        project's identity in XProjectManager. */
+    [attribute, readonly] string Url;
+    /** the format reader's kind, e.g. "folder", "msvc6" */
+    [attribute, readonly] string FormatKind;
+    [attribute, readonly] sequence< ::com::sun::star::beans::PropertyValue > Properties;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -1,0 +1,34 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** Reads one project file format.  Implementations are registered with
+    XProjectFormatRegistry by a plugin.
+ */
+interface XProjectFormatReader
+{
+    [attribute, readonly] string FormatKind;
+    [attribute, readonly] string DisplayName;
+    /** When several readers accept the same URL, the one with the greatest
+        priority wins. */
+    [attribute, readonly] long Priority;
+
+    /** cheap probe: does this URL look like something this reader can read? */
+    boolean canRead( [in] string Url );
+
+    /** reads the project; the returned object implements every capability
+        interface that applies */
+    ::com::sun::star::code::project::XProject read( [in] string Url )
+        raises( ::com::sun::star::io::IOException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

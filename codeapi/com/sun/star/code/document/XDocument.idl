@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module document {
+
+/** A document open in the IDE, identified by its URL. */
+interface XDocument : ::com::sun::star::lang::XComponent
+{
+    [attribute, readonly] string Url;
+    [attribute, readonly] string MimeType;
+    [attribute, readonly] ::com::sun::star::code::document::DocumentState State;
+
+    void save()
+        raises( ::com::sun::star::io::IOException );
+    /** discards the changes and reads the document again */
+    void reload()
+        raises( ::com::sun::star::io::IOException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

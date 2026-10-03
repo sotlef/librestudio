@@ -1,0 +1,32 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module output {
+
+interface XOutputController
+{
+    /** the channel with this name; it is created, with this display name, if
+        it does not exist yet */
+    ::com::sun::star::code::output::XOutputChannel getOrCreateChannel( [in] string Name, [in] string DisplayName );
+    /** null if there is no such channel */
+    ::com::sun::star::code::output::XOutputChannel getChannel( [in] string Name );
+    [attribute, readonly] sequence< ::com::sun::star::code::output::XOutputChannel > Channels;
+
+    /** Every line appended to a channel is run through the applicable filters
+        and the tasks they return are added to XTaskHub. */
+    void registerFilter( [in] ::com::sun::star::code::output::XOutputFilter Filter );
+    void unregisterFilter( [in] string Name );
+
+    void addOutputListener( [in] ::com::sun::star::code::output::XOutputListener Listener );
+    void removeOutputListener( [in] ::com::sun::star::code::output::XOutputListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

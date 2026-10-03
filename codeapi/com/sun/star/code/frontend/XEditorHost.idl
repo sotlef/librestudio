@@ -1,0 +1,23 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module frontend {
+
+/** The editor area of the shell, as the services need it. */
+interface XEditorHost
+{
+    /** shows the document (opening it through XDocumentManager if needed) */
+    void openDocument( [in] string Url );
+    /** shows the document and puts the caret at the position */
+    void revealPosition( [in] string Url, [in] ::com::sun::star::code::core::Position Position );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

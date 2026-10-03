@@ -48,7 +48,8 @@
 # in types.rdb, every service in this tree that speaks an interface from the
 # office API — com.sun.star.i18n among them — needs offapi's registry, and
 # basic's VBA-compatibility objects (ooo.vba.* interfaces, instantiated at
-# macro runtime) need oovbaapi's.  Without any one of them, the service
+# macro runtime) need oovbaapi's, and Code's backend services
+# (com.sun.star.code.*) need codeapi's.  Without any one of them, the service
 # manager fails to build the corresponding component at all.  A single merged
 # types.rdb would do as well; see the comment on program_types_rdb in the
 # top-level CMakeLists.txt for why this build keeps them apart.
@@ -113,7 +114,7 @@ URE_INTERNAL_LIB_DIR=\${ORIGIN}
 URE_INTERNAL_JAVA_DIR=\${ORIGIN}/classes
 LO_LIB_DIR=\${ORIGIN}
 LO_JAVA_DIR=\${ORIGIN}/classes
-UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb \${ORIGIN}/types/oovbaapi.rdb
+UNO_TYPES=\${ORIGIN}/types.rdb \${ORIGIN}/types/offapi.rdb \${ORIGIN}/types/oovbaapi.rdb \${ORIGIN}/types/codeapi.rdb
 UNO_SERVICES=\${ORIGIN}/services.rdb
 CONFIGURATION_LAYERS=xcsxcu:\${ORIGIN}/../share/registry
 UserInstallation=\${ORIGIN}/../user

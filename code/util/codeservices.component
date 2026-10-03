@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ -->
+
+<component loader="com.sun.star.loader.SharedLibrary" environment="@CPPU_ENV@"
+    xmlns="http://openoffice.org/2010/uno-components">
+  <implementation name="com.sun.star.comp.code.Code"
+      constructor="com_sun_star_comp_code_Code_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.core.theCode"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.JobRegistry"
+      constructor="com_sun_star_comp_code_JobRegistry_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.core.theJobRegistry"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.ProjectFormatRegistry"
+      constructor="com_sun_star_comp_code_ProjectFormatRegistry_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.project.theProjectFormatRegistry"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.ProjectManager"
+      constructor="com_sun_star_comp_code_ProjectManager_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.project.theProjectManager"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.DocumentManager"
+      constructor="com_sun_star_comp_code_DocumentManager_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.document.theDocumentManager"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.OutputController"
+      constructor="com_sun_star_comp_code_OutputController_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.output.theOutputController"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.TaskHub"
+      constructor="com_sun_star_comp_code_TaskHub_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.task.theTaskHub"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.CompilerOutputPlugin"
+      constructor="com_sun_star_comp_code_CompilerOutputPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.EditorOpenPlugin"
+      constructor="com_sun_star_comp_code_EditorOpenPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
+</component>

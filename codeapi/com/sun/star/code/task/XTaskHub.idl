@@ -1,0 +1,39 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module task {
+
+interface XTaskHub
+{
+    /** stores the task and returns the identifier assigned to it */
+    string addTask( [in] ::com::sun::star::code::task::Task Task );
+    void removeTask( [in] string Identifier );
+    void clearCategory( [in] string Category );
+    void clearAll();
+
+    sequence< ::com::sun::star::code::task::Task > getTasks();
+    sequence< ::com::sun::star::code::task::Task > getTasksByCategory( [in] string Category );
+    sequence< ::com::sun::star::code::task::Task > getTasksByUrl( [in] string Url );
+    /** number of tasks of exactly this severity */
+    long countBySeverity( [in] ::com::sun::star::code::core::Severity Level );
+
+    void registerHandler( [in] ::com::sun::star::code::task::XTaskHandler Handler );
+    void unregisterHandler( [in] string Name );
+
+    /** Hands the task to the first registered handler that can handle it;
+        returns false if there is no such task or no such handler. */
+    boolean handleTask( [in] string Identifier );
+
+    void addTaskListener( [in] ::com::sun::star::code::task::XTaskListener Listener );
+    void removeTaskListener( [in] ::com::sun::star::code::task::XTaskListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

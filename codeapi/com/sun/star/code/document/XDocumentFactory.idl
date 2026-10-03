@@ -1,0 +1,26 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module document {
+
+/** Creates documents of the MIME types it supports; registered with
+    XDocumentManager by a plugin.  Documents of other types are opened by the
+    manager's built-in text document.
+ */
+interface XDocumentFactory
+{
+    [attribute, readonly] sequence< string > SupportedMimeTypes;
+
+    ::com::sun::star::code::document::XDocument loadDocument( [in] string Url )
+        raises( ::com::sun::star::io::IOException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module output {
+
+/** Recognises structure in the lines of a channel and turns it into tasks
+    (a compiler's "file:line: error: ..." into an Error List entry).
+    Registered with XOutputController by a plugin.
+ */
+interface XOutputFilter
+{
+    [attribute, readonly] string Name;
+    /** names of the channels it looks at; empty means all */
+    [attribute, readonly] sequence< string > ApplicableChannels;
+
+    /** the tasks the line yields, usually none or one */
+    sequence< ::com::sun::star::code::task::Task > filterLine( [in] string Channel, [in] ::com::sun::star::code::output::OutputLine Line );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

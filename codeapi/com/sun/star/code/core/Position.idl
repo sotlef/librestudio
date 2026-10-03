@@ -1,0 +1,26 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module core {
+
+/** A zero-based position in a text: line and column, the column counted in
+    UTF-16 code units (the same convention as LSP and as the editor's text
+    view uses).
+ */
+struct Position
+{
+    /** zero-based line */
+    long Line;
+    /** zero-based column, in UTF-16 code units */
+    long Column;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

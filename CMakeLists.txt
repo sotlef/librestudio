@@ -942,6 +942,10 @@ add_subdirectory(o3tl)
 # same as offapi only needs udkapi's -- declaring it here keeps it with its
 # sibling UnoApi modules, well ahead of basic (sb), its first consumer.
 add_subdirectory(oovbaapi)
+# codeapi (com.sun.star.code.*): the contracts between "Code"'s backend
+# services, its plugins and its shell. Original LibreStudio API, not an
+# upstream module; built exactly like oovbaapi (own .rdb, own headers).
+add_subdirectory(codeapi)
 add_subdirectory(officecfg)
 add_subdirectory(i18nlangtag)
 add_subdirectory(xmlreader)
@@ -1428,6 +1432,20 @@ add_custom_command(
     VERBATIM)
 add_custom_target(program_oovbaapi_rdb ALL
     DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types/oovbaapi.rdb")
+
+# Code's own API (com.sun.star.code.*). Like oovbaapi's it is named in unorc's
+# UNO_TYPES, so every program that bootstraps from unorc/coderc needs the file
+# to exist -- see the i18npool race described below.
+add_custom_command(
+    OUTPUT "${LIBRESTUDIO_PROGRAM_DIR}/types/codeapi.rdb"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBRESTUDIO_PROGRAM_DIR}/types"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${codeapi_RDB}" "${LIBRESTUDIO_PROGRAM_DIR}/types/codeapi.rdb"
+    DEPENDS "${codeapi_RDB}" codeapi_rdb
+    COMMENT "Installing types/codeapi.rdb"
+    VERBATIM)
+add_custom_target(program_codeapi_rdb ALL
+    DEPENDS "${LIBRESTUDIO_PROGRAM_DIR}/types/codeapi.rdb")
 
 # saxparser runs as part of the build and resolves com.sun.star.xml.sax.Parser
 # through the service manager, so the registry it reads has to be the one this

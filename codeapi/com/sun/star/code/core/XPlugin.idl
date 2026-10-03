@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module core {
+
+/** An IDE extension.  Implementations are registered as service
+    com.sun.star.code.core.Plugin; XCode::activatePlugins() instantiates all of
+    them and calls activate(), at which point a plugin attaches itself to
+    the controller it extends (registers a project-format reader, an output
+    filter, a task handler, ...).
+ */
+interface XPlugin
+{
+    void activate();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

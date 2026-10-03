@@ -1,0 +1,40 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module document {
+
+interface XDocumentManager
+{
+    /** opens the document, or returns it if it is already open */
+    ::com::sun::star::code::document::XDocument openDocument( [in] string Url )
+        raises( ::com::sun::star::io::IOException );
+
+    /** Closes the document.  A document with unsaved changes is only closed
+        if Force is true; otherwise nothing happens and false is returned.
+        Closing a document that is not open returns true.
+     */
+    boolean closeDocument( [in] string Url, [in] boolean Force );
+
+    void saveAll()
+        raises( ::com::sun::star::io::IOException );
+
+    sequence< ::com::sun::star::code::document::XDocument > getOpenDocuments();
+    /** null if the document is not open */
+    ::com::sun::star::code::document::XDocument getDocument( [in] string Url );
+
+    void registerFactory( [in] ::com::sun::star::code::document::XDocumentFactory Factory );
+    void unregisterFactory( [in] ::com::sun::star::code::document::XDocumentFactory Factory );
+
+    void addDocumentListener( [in] ::com::sun::star::code::document::XDocumentListener Listener );
+    void removeDocumentListener( [in] ::com::sun::star::code::document::XDocumentListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

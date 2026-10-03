@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module frontend {
+
+/** What the application shell offers to the backend.  Any of the
+    attributes may be null.  The shell registers it with XCode.
+ */
+interface XWorkbench
+{
+    [attribute, readonly] ::com::sun::star::code::frontend::XStatusBar StatusBar;
+    [attribute, readonly] ::com::sun::star::code::frontend::XNotificationSink NotificationSink;
+    [attribute, readonly] ::com::sun::star::code::frontend::XEditorHost EditorHost;
+    [attribute, readonly] ::com::sun::star::code::frontend::XDialogs Dialogs;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

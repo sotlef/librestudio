@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module document {
+
+/** A document that is plain text, stored as UTF-8. */
+interface XTextDocument : ::com::sun::star::code::document::XDocument
+{
+    [attribute] string Text;
+    [attribute, readonly] long LineCount;
+
+    /** the line without its line terminator */
+    string getLine( [in] long Index )
+        raises( ::com::sun::star::lang::IndexOutOfBoundsException );
+
+    void applyEdit( [in] ::com::sun::star::code::document::TextEdit Edit )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

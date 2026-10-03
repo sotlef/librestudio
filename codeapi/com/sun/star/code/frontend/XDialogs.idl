@@ -1,0 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module frontend {
+
+interface XDialogs
+{
+    /** the "save changes?" question asked before a modified document closes */
+    ::com::sun::star::code::frontend::SaveChoice askSaveChanges( [in] string DocumentName );
+    /** lets the user pick a directory; returns its URL, or empty if cancelled */
+    string pickFolder( [in] string Title );
+    /** lets the user pick a file; returns its URL, or empty if cancelled */
+    string pickFile( [in] string Title );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

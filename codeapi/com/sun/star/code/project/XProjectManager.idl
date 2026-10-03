@@ -1,0 +1,40 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+interface XProjectManager
+{
+    /** Opens a project through the reader that XProjectFormatRegistry finds;
+        a directory with no matching reader is opened as a plain folder.
+        Opening an already open project returns it.
+     */
+    ::com::sun::star::code::project::XProject openProject( [in] string Url )
+        raises( ::com::sun::star::io::IOException );
+
+    /** closes the project with this URL; does nothing if it is not open */
+    void closeProject( [in] string Url );
+
+    sequence< ::com::sun::star::code::project::XProject > getOpenProjects();
+    /** null if no project with this URL is open */
+    ::com::sun::star::code::project::XProject getProject( [in] string Url );
+
+    /** null if no project is open; only an open project can be made active */
+    [attribute] ::com::sun::star::code::project::XProject ActiveProject
+    {
+        set raises( ::com::sun::star::lang::IllegalArgumentException );
+    };
+
+    void addProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
+    void removeProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -96,7 +96,7 @@ foreach (_xml IN LISTS I18NPOOL_LOCALEDATA_XML)
         # on THIS custom command is what actually orders them.
         DEPENDS saxparser "${CMAKE_SOURCE_DIR}/i18npool/source/localedata/data/${_xml}"
                 program_services_rdb program_types_rdb program_offapi_rdb
-                program_oovbaapi_rdb sax
+                program_oovbaapi_rdb program_codeapi_rdb sax
         COMMENT "saxparser: localedata_${_name}.cxx"
         VERBATIM)
     list(APPEND I18NPOOL_LOCALEDATA_SOURCES "${_out}")
