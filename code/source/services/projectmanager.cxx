@@ -38,6 +38,7 @@
 #include <sal/log.hxx>
 
 #include <algorithm>
+#include <mutex>
 #include <vector>
 
 using namespace css;

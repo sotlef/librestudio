@@ -108,6 +108,17 @@
           <value>com.sun.star.comp.framework.MacrosMenuController</value>
         </prop>
       </node>
+      <node oor:name="CodeRecentProjects" oor:op="replace">
+        <prop oor:name="Command">
+          <value>.uno:CodeRecentProjects</value>
+        </prop>
+        <prop oor:name="Module">
+          <value/>
+        </prop>
+        <prop oor:name="Controller">
+          <value>com.sun.star.comp.code.RecentProjectsMenuController</value>
+        </prop>
+      </node>
       <node oor:name="c10" oor:op="replace">
         <prop oor:name="Command">
           <value>.uno:RecentFileList</value>

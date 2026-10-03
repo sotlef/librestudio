@@ -143,6 +143,25 @@ SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
     GroupId = SfxGroupId::Application;
 ]
 
+// File > Recent Projects and Solutions: the sub-menu is a popup-menu
+// controller's; the slot only has to exist and stay enabled.
+SfxVoidItem CodeRecentProjects SID_CODE_RECENTPROJECTS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Application;
+]
+
 // File > Save All: saves every document with unsaved changes.
 SfxVoidItem CodeSaveAll SID_CODE_SAVEALL
 ()
@@ -188,6 +207,11 @@ shell code_Shell
     ]
 
     SID_CODE_CONFIGURATION
+    [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_RECENTPROJECTS
     [
         StateMethod = GetState;
     ]

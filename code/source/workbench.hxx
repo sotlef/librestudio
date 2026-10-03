@@ -24,6 +24,8 @@
 
 #include <vcl/timer.hxx>
 
+#include <vector>
+
 namespace code
 {
 /// The editor area, as the workbench needs it.  Implemented by EditorMDIPanel,
@@ -124,6 +126,9 @@ private:
     // is; one that needs no configuration (an opened folder) always does.  The
     // deck is hidden or shown as projects open, close and change.
     void UpdateSolutionDeck();
+    // adds a project that has just been opened to the recent list
+    void RememberOpenedProjects();
+    std::vector<OUString> m_aKnownProjects;
     std::shared_ptr<UiNotifier> m_xProjectNotifier;
     css::uno::Reference<css::code::project::XProjectListener> m_xProjectListener;
 

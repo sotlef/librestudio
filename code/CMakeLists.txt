@@ -36,6 +36,7 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/recentprojects.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/uibridge.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/workbench.cxx"
     # The Output dock's own SfxChildWindow/SfxDockingWindow/IDeckHost
@@ -121,6 +122,8 @@ add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/errorlistpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputlogpanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/recentprojects.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/recentprojectsmenucontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/folderviewpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/projecttreepanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx"
@@ -137,7 +140,7 @@ target_include_directories(codesidebar PRIVATE
 add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
 
 target_link_libraries(codesidebar PRIVATE
-    comphelper cppu cppuhelper sal sfx svt tl ucbhelper vcl)
+    comphelper cppu cppuhelper sal sfx svt tk tl ucbhelper vcl)
 
 librestudio_add_component(codesidebar
     COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codesidebar.component"

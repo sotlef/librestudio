@@ -9,6 +9,10 @@
 
 <component loader="com.sun.star.loader.SharedLibrary" environment="@CPPU_ENV@"
     xmlns="http://openoffice.org/2010/uno-components">
+  <implementation name="com.sun.star.comp.code.RecentProjectsMenuController"
+      constructor="com_sun_star_comp_code_RecentProjectsMenuController_get_implementation">
+    <service name="com.sun.star.frame.PopupMenuController"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.sidebar.PanelFactory"
       constructor="com_sun_star_comp_code_sidebar_PanelFactory_get_implementation">
     <service name="com.sun.star.ui.UIElementFactory"/>

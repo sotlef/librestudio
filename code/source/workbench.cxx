@@ -11,12 +11,16 @@
 
 #include "configureprojectdialog.hxx"
 
+#include "recentprojects.hxx"
+
 #include <codeids.hxx>
 
 #include <com/sun/star/code/project/XProjectConfigurationState.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
 #include <sfx2/sidebar/SidebarController.hxx>
+
+#include <algorithm>
 
 #include <com/sun/star/code/core/XBackgroundJob.hpp>
 #include <com/sun/star/code/core/XJobRegistry.hpp>
@@ -171,8 +175,30 @@ OUString Workbench::GetJobsText() const
     return aText.isEmpty() ? u"No background tasks running."_ustr : aText;
 }
 
+// The project listener's job is "something changed, look again" -- which is
+// all UiNotifier carries -- so a project being opened is found by comparing
+// the open projects with the last look.
+void Workbench::RememberOpenedProjects()
+{
+    try
+    {
+        std::vector<OUString> aOpen;
+        for (const auto& xProject : css::code::project::theProjectManager::get(m_xContext)->getOpenProjects())
+            aOpen.push_back(xProject->getUrl());
+        for (const OUString& rUrl : aOpen)
+            if (std::find(m_aKnownProjects.begin(), m_aKnownProjects.end(), rUrl) == m_aKnownProjects.end())
+                RecentProjects::Add(rUrl);
+        m_aKnownProjects = std::move(aOpen);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot note the opened projects: " << rException.Message);
+    }
+}
+
 void Workbench::UpdateSolutionDeck()
 {
+    RememberOpenedProjects();
     bool bAvailable = false;
     try
     {

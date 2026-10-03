@@ -55,4 +55,8 @@
 #define SID_CODE_BUILD               (SID_CODE_START + 8)
 #define SID_CODE_CANCELBUILD         (SID_CODE_START + 9)
 
+// File > Recent Projects and Solutions (.uno:CodeRecentProjects): a sub-menu
+// made by RecentProjectsMenuController (code/source/recentprojectsmenucontroller.cxx).
+#define SID_CODE_RECENTPROJECTS      (SID_CODE_START + 10)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

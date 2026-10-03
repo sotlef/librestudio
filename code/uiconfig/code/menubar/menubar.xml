@@ -18,6 +18,7 @@
             </menu:menu>
             <menu:menuitem menu:id=".uno:Save"/>
             <menu:menuitem menu:id=".uno:CodeSaveAll"/>
+            <menu:menuitem menu:id=".uno:CodeRecentProjects" menu:style="text"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Quit"/>
         </menu:menupopup>
