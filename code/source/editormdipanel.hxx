@@ -9,13 +9,20 @@
 
 #pragma once
 
+#include "workbench.hxx"
+
+#include <com/sun/star/code/document/XDocumentListener.hpp>
+#include <com/sun/star/code/document/XTextDocument.hpp>
+
 #include <vcl/InterimItemWindow.hxx>
 
 #include <map>
 #include <memory>
 #include <vector>
 
+namespace code { class UiNotifier; }
 namespace weld { class Builder; }
+namespace weld { class TextWidget; }
 namespace weld { class MDI; }
 namespace weld { class TextView; }
 namespace weld { class Widget; }
@@ -28,12 +35,17 @@ namespace weld { class Widget; }
 // pinned) and the per-document content area itself; this class is a thin
 // consumer: open the starting demo documents, give each its content
 // widget, and react to close requests.
-class EditorMDIPanel final : public InterimItemWindow
+class EditorMDIPanel final : public InterimItemWindow, public code::EditorSurface
 {
 public:
     explicit EditorMDIPanel(vcl::Window* pParent);
     virtual ~EditorMDIPanel() override;
     virtual void dispose() override;
+
+    // code::EditorSurface
+    virtual void ShowDocument(const OUString& rUrl,
+                              const css::code::core::Position* pPosition) override;
+    virtual bool SaveCurrentDocument() override;
 
 private:
     // weld::MDI itself only owns the tab strip and a bare native container
@@ -52,14 +64,24 @@ private:
         // unattached). Kept alive alongside mxView, never otherwise used.
         std::unique_ptr<weld::Widget> mxRoot;
         std::unique_ptr<weld::TextView> mxView;
+        // empty for the demo documents, which belong to no file
+        OUString msUrl;
     };
 
-    void OpenDemoDocument(const OUString& rName, std::vector<OUString> aLines);
+    static css::uno::Reference<css::code::document::XTextDocument> DocumentOf(const OUString& rUrl);
+    void SyncWithDocuments();
 
     DECL_LINK(CloseRequestHdl, int, void);
+    DECL_LINK(TextChangedHdl, weld::TextWidget&, void);
 
     std::unique_ptr<weld::MDI> mxMDI;
     std::map<int, DocumentContent> maDocumentContents;
+    // set while the view is being filled from the document, so that filling it
+    // is not mistaken for typing
+    bool mbSyncing = false;
+
+    std::shared_ptr<::code::UiNotifier> mxNotifier;
+    css::uno::Reference<css::code::document::XDocumentListener> mxListener;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

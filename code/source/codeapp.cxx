@@ -11,17 +11,17 @@
  * =======================================================================
  * LibreStudio Code -- v2: a real sfx2/framework shell. The menu bar,
  * toolbar and status bar are no longer hand-built (see codeviewshell.cxx
- * for what code::Shell actually owns: the Editor/Output content panels)
+ * for what ::code::Shell actually owns: the Editor/Output content panels)
  * -- they come from code/uiconfig/code/{menubar,toolbar,statusbar}/*.xml
  * via framework's own LayoutManager, the same mechanism Writer/Calc/basctl
  * use. Solution Explorer is a real sfx2::sidebar deck now too (see
  * code/source/sidebar/), not a third hand-docked content panel.
  *
- * code::DocShell is constructed directly here and handed to the standard
+ * ::code::DocShell is constructed directly here and handed to the standard
  * office FrameLoader with an already-built model -- the same pattern
  * basctl's own SID_BASICIDE_APPEAR uses (sfx2/source/appl/appserv.cxx) --
  * rather than going through the generic private:factory/scode ->
- * UNO-service-name resolution path, which would require code::DocShell to
+ * UNO-service-name resolution path, which would require ::code::DocShell to
  * be registered as a dlopen()able UNO component. That is why "code" has no
  * .component file and stays a plain executable.
  * =======================================================================
@@ -35,6 +35,7 @@
 #include <execinfo.h>
 
 #include <com/sun/star/awt/XWindow2.hpp>
+#include <com/sun/star/code/core/theCode.hpp>
 #include <com/sun/star/frame/Frame.hpp>
 #include <com/sun/star/frame/XFrame2.hpp>
 #include <com/sun/star/frame/XModel3.hpp>
@@ -50,6 +51,7 @@
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
 #include <codeids.hxx>
+#include "workbench.hxx"
 #include <sfx2/app.hxx>
 #include <sfx2/chalign.hxx>
 #include <sfx2/childwin.hxx>
@@ -236,9 +238,9 @@ int CodeApplication::Main()
         // has no UNO-component entry point to hang an equivalent lazy
         // singleton off, so it just does it directly here, once, before the
         // first (and only) DocShell/Shell of the process is created.
-        code::DocShell::RegisterInterface();
-        code::Shell::RegisterFactory(CODE_INTERFACE_VIEWSH);
-        code::Shell::RegisterInterface();
+        ::code::DocShell::RegisterInterface();
+        ::code::Shell::RegisterFactory(CODE_INTERFACE_VIEWSH);
+        ::code::Shell::RegisterInterface();
 
         // bVisible=true: this app has no persisted user profile for a
         // saved ChildWindow state to override (see UserInstallation in
@@ -263,7 +265,7 @@ int CodeApplication::Main()
         // above (no persisted profile, so the factory default is what
         // actually governs whether this shows up on first run) -- v1/v2
         // always showed Output, so default it visible too.
-        code::sidebar::OutputChildWindow::RegisterChildWindow(true, nullptr);
+        ::code::sidebar::OutputChildWindow::RegisterChildWindow(true, nullptr);
 
         // Also basctl's Dll::Dll(): SfxBaseModel::getSupportedServiceNames()
         // (sfx2/source/doc/sfxbasemodel.cxx) delegates to
@@ -276,7 +278,7 @@ int CodeApplication::Main()
         // library boundaries that it stops matching `catch (css::uno::
         // Exception&)` by the time it reaches vcl's scheduler, landing in
         // its catch (...) instead, which is an abort(), not a warning.
-        code::DocShell::Factory().SetDocumentServiceName(u"com.sun.star.code.CodeDocument"_ustr);
+        ::code::DocShell::Factory().SetDocumentServiceName(u"com.sun.star.code.CodeDocument"_ustr);
 
         // Status bar: the background-tasks bubble button needs its custom
         // SfxStatusBarControl registered (app-globally, there is no "Code"
@@ -285,7 +287,7 @@ int CodeApplication::Main()
         // the SwModule/ScModule constructors register theirs up front.
         // (.uno:CodeStatusReady needs no registration: a plain SfxStringItem
         // state shown by the default SfxStatusBarControl.)
-        code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
+        ::code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
 
         xMainWindow = VclPtr<WorkWindow>::Create(nullptr,
             WB_APP | WB_STDWORK | WB_SIZEABLE | WB_CLOSEABLE | WB_CLIPCHILDREN);
@@ -311,10 +313,22 @@ int CodeApplication::Main()
             VCLUnoHelper::GetInterface(xMainWindow.get()), uno::UNO_QUERY_THROW);
 
         uno::Reference<uno::XComponentContext> xContext(comphelper::getProcessComponentContext());
+
+        // The shell's side of the backend/front-end split. It has to exist
+        // before anything can ask the services to reach the user, and the
+        // plugins are activated only once the services can see it (the "open in
+        // editor" handler asks theCode for the workbench's editor host at the
+        // moment a task is activated, not at registration, so either order
+        // would work -- but a plugin that wants to post a notification while
+        // activating would not).
+        uno::Reference<css::code::frontend::XWorkbench> xWorkbench(new ::code::Workbench(xContext));
+        css::code::core::theCode::get(xContext)->setWorkbench(xWorkbench);
+        css::code::core::theCode::get(xContext)->activatePlugins();
+
         uno::Reference<frame::XFrame2> xFrame(frame::Frame::create(xContext));
         xFrame->initialize(xWin);
 
-        rtl::Reference<SfxObjectShell> xDocShell = new code::DocShell();
+        rtl::Reference<SfxObjectShell> xDocShell = new ::code::DocShell();
         xDocShell->DoInitNew();
         xDocShell->SetModified(false);
 
@@ -354,7 +368,7 @@ int CodeApplication::Main()
             pViewFrame->ShowChildWindow(sfx2::sidebar::SidebarChildWindow::GetChildWindowId());
 
         if (pViewFrame)
-            pViewFrame->ShowChildWindow(code::sidebar::OutputChildWindow::GetChildWindowId());
+            pViewFrame->ShowChildWindow(::code::sidebar::OutputChildWindow::GetChildWindowId());
 
         // PropertyDeck (officecfg's Sidebar.xcu) is scoped "any, any,
         // visible" -- a generic default meant for real document modules
@@ -390,7 +404,7 @@ int CodeApplication::Main()
         // own ContextList in Sidebar.xcu). Without this, the real,
         // left-docked Sidebar also picks it up as a second, redundant,
         // empty-looking tab alongside Solution -- the actual Output content
-        // lives in the bottom dock (code::sidebar::OutputController),
+        // lives in the bottom dock (::code::sidebar::OutputController),
         // which never consults this hidden-deck registry at all (it builds
         // "OutputDeck" directly by id, bypassing GetMatchingDecks()
         // entirely), so hiding it here only affects the real Sidebar.
@@ -412,9 +426,9 @@ int CodeApplication::Main()
         // pushed shell onto its stack -- traced with a temporary diagnostic:
         // AppearWithUpdate()'s Update_Impl(true) above does flush the
         // dispatcher and fires exactly two Activate() calls, but neither
-        // this pointer is ever code::Shell's own -- some other piece of the
+        // this pointer is ever ::code::Shell's own -- some other piece of the
         // normal push-activation wiring our hand-built Frame/FrameLoader
-        // sequence relies on isn't happening either. code::Shell::Shell()
+        // sequence relies on isn't happening either. ::code::Shell::Shell()
         // already calls SetContextName() (codeviewshell.cxx), so the only
         // missing step is the broadcast call itself.
         if (pViewFrame)
@@ -447,6 +461,11 @@ int CodeApplication::Main()
         }
 
         Execute();
+
+        // Let go of the shell before it is torn down: the services outlive
+        // this function (they are disposed with the UNO context), and must
+        // not keep a workbench whose windows are gone.
+        css::code::core::theCode::get(xContext)->setWorkbench(nullptr);
 
         xDocShell->DoClose();
         xMainWindow.disposeAndClear();

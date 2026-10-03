@@ -8,6 +8,7 @@
  */
 
 #include "tasksstatusbarcontrol.hxx"
+#include "workbench.hxx"
 
 #include <svl/voiditem.hxx>
 #include <tools/poly.hxx>
@@ -16,6 +17,7 @@
 #include <vcl/status.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld/Builder.hxx>
+#include <vcl/weld/Label.hxx>
 #include <vcl/weld/Popover.hxx>
 #include <vcl/weld/Window.hxx>
 #include <vcl/weld/weldutils.hxx>
@@ -87,6 +89,11 @@ void TasksStatusBarControl::Click()
         mxPopover = mxBuilder->weld_popover(u"popover"_ustr);
         mxPopover->connect_closed(LINK(this, TasksStatusBarControl, PopoverClosedHdl));
     }
+    // what runs right now, asked each time the popover opens
+    if (auto xLabel = mxBuilder->weld_label(u"label"_ustr))
+        if (Workbench* pWorkbench = Workbench::Instance())
+            xLabel->set_label(pWorkbench->GetJobsText());
+
     // weld::Placement only knows Under/End, but both backends' popovers
     // flip to the other side on their own when there is no room below --
     // and below a status bar at the screen's bottom edge there isn't

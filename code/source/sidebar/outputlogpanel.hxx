@@ -9,24 +9,26 @@
 
 #pragma once
 
+#include <com/sun/star/code/output/OutputLine.hpp>
+#include <com/sun/star/code/output/XOutputChannel.hpp>
+#include <com/sun/star/code/output/XOutputListener.hpp>
 #include <sfx2/sidebar/PanelLayout.hxx>
 
+#include <memory>
 #include <vector>
 
 namespace weld { class ComboBox; class TextView; class Toolbar; }
 
+namespace code { class UiNotifier; }
+
 namespace code::sidebar
 {
 
-// Real sfx2::sidebar::PanelLayout replacement for the old, hand-docked
-// OutputPanel (code/source/outputpanel.hxx, now retired) -- same fake
-// build-log content, ported from a raw DockingWindow::Paint() to a real
-// weld::TextView, the same way SolutionPanel ported the old
-// SolutionExplorerPanel's raw ListBox to a weld::TreeView.
-//
-// Composite like Visual Studio's Output window: a toolbar strip above the
-// log ("Show output from:" source selector + find / prev / next / clear /
-// word-wrap / timestamp buttons), then the text view.
+// The Output window, like Visual Studio's: a toolbar strip ("Show output
+// from:" source selector + find / prev / next / clear / word-wrap /
+// timestamp buttons) above the log.  The sources are the channels of
+// theOutputController, the log is the selected channel's content; both follow
+// the service (a channel appearing, a line arriving, a channel being cleared).
 class OutputLogPanel final : public PanelLayout
 {
 public:
@@ -34,23 +36,13 @@ public:
     virtual ~OutputLogPanel() override;
 
 private:
-    // One line of the (demo) log: the message itself plus the timestamp
-    // shown in front of it while "Show Timestamp" is active.
-    struct LogLine
-    {
-        OUString msTimestamp;
-        OUString msText;
-    };
-
-    // One entry of the "Show output from:" selector with its own log.
-    struct LogSource
-    {
-        OUString msName;
-        std::vector<LogLine> maLines;
-    };
-
+    // Re-reads the channel list and the selected channel.  Everything the
+    // service tells the panel funnels into this; it runs on the main thread.
+    void Refresh();
+    // The log text of the selected channel; also records where each line starts.
     void UpdateLogText();
-    int CurrentSourceIndex() const;
+    css::uno::Reference<css::code::output::XOutputChannel> CurrentChannel() const;
+    void JumpToTask(int nLine);
 
     DECL_LINK(SourceChangedHdl, weld::ComboBox&, void);
     DECL_LINK(ToolbarClickHdl, const OUString&, void);
@@ -59,11 +51,16 @@ private:
     std::unique_ptr<weld::Toolbar> mxToolbar;
     std::unique_ptr<weld::TextView> mxLog;
 
-    std::vector<LogSource> maSources;
-    // Index of the line highlighted by "Go to Previous/Next Message" in the
-    // current source's log, -1 = nothing selected yet.
+    // names of the channels, parallel to the combo box entries
+    std::vector<OUString> maChannelNames;
+    // the lines shown now (to find a line's own text again when highlighting it)
+    std::vector<css::code::output::OutputLine> maLines;
+    // Index of the line highlighted by "Go to Previous/Next Message", -1 = none.
     int mnCurrentMessage;
     bool mbShowTimestamps;
+
+    std::shared_ptr<::code::UiNotifier> mxNotifier;
+    css::uno::Reference<css::code::output::XOutputListener> mxListener;
 };
 
 } // namespace code::sidebar

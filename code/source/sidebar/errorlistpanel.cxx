@@ -9,6 +9,22 @@
 
 #include "errorlistpanel.hxx"
 
+#include "../uibridge.hxx"
+
+#include <com/sun/star/code/core/Severity.hpp>
+#include <com/sun/star/code/document/DocumentState.hpp>
+#include <com/sun/star/code/document/XDocument.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <com/sun/star/code/project/XProject.hpp>
+#include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/theProjectManager.hpp>
+#include <com/sun/star/code/task/XTaskHub.hpp>
+#include <com/sun/star/code/task/theTaskHub.hpp>
+#include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
+#include <tools/urlobj.hxx>
+
 #include <algorithm>
 
 #include <vcl/weld/Builder.hxx>
@@ -30,8 +46,32 @@ constexpr int COL_FILE = 5;
 constexpr int COL_LINE = 6;
 }
 
+using namespace css;
+
 namespace code::sidebar
 {
+
+namespace
+{
+// Where a task came from, as the "provider" filter sees it: what the build
+// printed, or what an analysis of the open files produced.
+bool IsBuildTask(const css::code::task::Task& rTask) { return rTask.Category == "build"; }
+
+// The file's name for the File column; the whole URL is what the row opens.
+OUString FileNameOf(const OUString& rUrl)
+{
+    return rUrl.isEmpty() ? OUString() : INetURLObject(rUrl).getName(INetURLObject::LAST_SEGMENT, true,
+                                                                     INetURLObject::DecodeMechanism::WithCharset);
+}
+
+// "/home/me/proj/src/a.cpp" -> "proj" is not recoverable from a Task, which
+// only carries the project's URL; its last segment is what is shown.
+OUString ProjectNameOf(const OUString& rUrl)
+{
+    return rUrl.isEmpty() ? OUString() : INetURLObject(rUrl).getName(INetURLObject::LAST_SEGMENT, true,
+                                                                     INetURLObject::DecodeMechanism::WithCharset);
+}
+}
 
 ErrorListPanel::ErrorListPanel(weld::Widget* pParent)
     : PanelLayout(pParent, u"ErrorListPanel"_ustr, u"code/ui/errorlistpanel.ui"_ustr)
@@ -44,9 +84,9 @@ ErrorListPanel::ErrorListPanel(weld::Widget* pParent)
     , mxSearch(m_xBuilder->weld_combo_box(u"search"_ustr))
     , mxList(m_xBuilder->weld_tree_view(u"errorlist"_ustr))
 {
-    // The scope filter needs a real solution/project/document model to
-    // mean anything; until one exists the selector is just selectable --
-    // an honest no-op, like Output's "Show output from:" scopes.
+    // Scope: which tasks belong to what the user is looking at.  "Entire
+    // Solution" is every task; the narrower ones filter by the task's file or
+    // project (see IsShown()).
     mxScope->append_text(u"Entire Solution"_ustr);
     mxScope->append_text(u"Current Project"_ustr);
     mxScope->append_text(u"Current Document"_ustr);
@@ -77,31 +117,82 @@ ErrorListPanel::ErrorListPanel(weld::Widget* pParent)
     // set_column_fixed_widths()) computes them.
     mxList->connect_size_allocate(LINK(this, ErrorListPanel, ListSizeAllocHdl));
 
-    // Canned demo rows, same honesty rules as OutputLogPanel's fake build
-    // log: no real build/IntelliSense sink exists yet, but everything
-    // downstream of this vector -- the severity/provider/search filtering
-    // and the live counts on the toggle buttons -- is real.
-    maEntries = {
-        { Severity::Error, true, u"E0020"_ustr,
-          u"identifier \"undeclared_var\" is undefined"_ustr, u"DemoProject"_ustr,
-          u"main.cpp"_ustr, u"31"_ustr },
-        { Severity::Warning, false, u"C4101"_ustr,
-          u"'tmp': unreferenced local variable"_ustr, u"DemoProject"_ustr, u"utils.h"_ustr,
-          u"12"_ustr },
-        { Severity::Warning, false, u"C4244"_ustr,
-          u"'initializing': conversion from 'double' to 'int', possible loss of data"_ustr,
-          u"DemoProject"_ustr, u"main.cpp"_ustr, u"24"_ustr },
-        { Severity::Message, true, u""_ustr,
-          u"The variable 'result' is assigned but its value is never used"_ustr,
-          u"DemoProject"_ustr, u"main.cpp"_ustr, u"18"_ustr },
-    };
+    mxList->connect_item_activated(LINK(this, ErrorListPanel, RowActivatedHdl));
 
-    UpdateFilterButtonLabels();
-    UpdateList();
+    // Tasks are added by the output filters and diagnostics on whatever
+    // thread produced them; the table is only touched here, on the main
+    // thread, once per burst.
+    mxNotifier = std::make_shared<::code::UiNotifier>([this] { Refresh(); });
+    mxListener = new ::code::ServiceListener(mxNotifier);
+    try
+    {
+        css::code::task::theTaskHub::get(comphelper::getProcessComponentContext())
+            ->addTaskListener(mxListener);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "Error List cannot reach the task hub: " << rException.Message);
+    }
+
+    Refresh();
 }
 
 ErrorListPanel::~ErrorListPanel()
 {
+    mxNotifier->Detach();
+    try
+    {
+        css::code::task::theTaskHub::get(comphelper::getProcessComponentContext())
+            ->removeTaskListener(mxListener);
+    }
+    catch (const uno::Exception&)
+    {
+    }
+}
+
+void ErrorListPanel::Refresh()
+{
+    maEntries.clear();
+    try
+    {
+        const uno::Sequence<css::code::task::Task> aTasks
+            = css::code::task::theTaskHub::get(comphelper::getProcessComponentContext())->getTasks();
+        for (const auto& rTask : aTasks)
+        {
+            ErrorEntry aEntry;
+            switch (rTask.Level)
+            {
+                case css::code::core::Severity_FATAL:
+                case css::code::core::Severity_ERROR:
+                    aEntry.meSeverity = Severity::Error;
+                    break;
+                case css::code::core::Severity_WARNING:
+                    aEntry.meSeverity = Severity::Warning;
+                    break;
+                default: // INFO, HINT
+                    aEntry.meSeverity = Severity::Message;
+                    break;
+            }
+            aEntry.mbIntelliSense = !IsBuildTask(rTask);
+            aEntry.msIdentifier = rTask.Identifier;
+            aEntry.msCode = rTask.Code;
+            aEntry.msDescription = rTask.Description;
+            aEntry.msProject = ProjectNameOf(rTask.Project);
+            aEntry.msUrl = rTask.Url;
+            aEntry.msProjectUrl = rTask.Project;
+            aEntry.msFile = FileNameOf(rTask.Url);
+            // Positions are 0-based in the API, 1-based on screen.
+            aEntry.msLine = rTask.Url.isEmpty() ? OUString() : OUString::number(rTask.Location.Line + 1);
+            maEntries.push_back(std::move(aEntry));
+        }
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot read the task list: " << rException.Message);
+    }
+
+    UpdateFilterButtonLabels();
+    UpdateList();
 }
 
 void ErrorListPanel::UpdateFilterButtonLabels()
@@ -126,6 +217,48 @@ void ErrorListPanel::UpdateFilterButtonLabels()
                           + (nMessages == 1 ? u" Message"_ustr : u" Messages"_ustr));
 }
 
+bool ErrorListPanel::IsInScope(const ErrorEntry& rEntry) const
+{
+    const int nScope = mxScope->get_active();
+    if (nScope <= 0) // Entire Solution (or nothing selected)
+        return true;
+    try
+    {
+        const uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+        switch (nScope)
+        {
+            case 1: // Current Project
+            {
+                auto xActive = css::code::project::theProjectManager::get(xContext)->getActiveProject();
+                // A task that names no project cannot be placed in one: shown
+                // only when there is no active project to compare with.
+                return xActive.is() ? rEntry.msProjectUrl == xActive->getUrl() : true;
+            }
+            // The services have no notion of a "current" document (that is the
+            // editor tab strip's), so Current Document shows the same as Open Documents.
+            case 2: // Current Document
+            case 3: // Changed Documents
+            case 4: // Open Documents
+            {
+                auto xManager = css::code::document::theDocumentManager::get(xContext);
+                for (const auto& xDocument : xManager->getOpenDocuments())
+                {
+                    if (xDocument->getUrl() != rEntry.msUrl)
+                        continue;
+                    return nScope != 3
+                           || xDocument->getState() == css::code::document::DocumentState_MODIFIED;
+                }
+                return false;
+            }
+        }
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot apply the scope filter: " << rException.Message);
+    }
+    return true;
+}
+
 bool ErrorListPanel::IsShown(const ErrorEntry& rEntry, const OUString& rNeedle) const
 {
     switch (rEntry.meSeverity)
@@ -143,6 +276,9 @@ bool ErrorListPanel::IsShown(const ErrorEntry& rEntry, const OUString& rNeedle) 
                 return false;
             break;
     }
+
+    if (!IsInScope(rEntry))
+        return false;
 
     const int nProvider = mxProvider->get_active();
     if (nProvider == 1 && rEntry.mbIntelliSense) // Build Only
@@ -166,11 +302,14 @@ void ErrorListPanel::UpdateList()
 
     mxList->freeze();
     mxList->clear();
+    maRowEntries.clear();
     int nRow = 0;
-    for (const auto& rEntry : maEntries)
+    for (size_t nEntry = 0; nEntry < maEntries.size(); ++nEntry)
     {
+        const ErrorEntry& rEntry = maEntries[nEntry];
         if (!IsShown(rEntry, aNeedle))
             continue;
+        maRowEntries.push_back(nEntry);
 
         mxList->append();
         OUString sIcon;
@@ -189,6 +328,25 @@ void ErrorListPanel::UpdateList()
         ++nRow;
     }
     mxList->thaw();
+}
+
+IMPL_LINK_NOARG(ErrorListPanel, RowActivatedHdl, const weld::TreeIter&, bool)
+{
+    // Double click / Enter: hand the task to the hub, whose handlers decide what
+    // "activate" means (the editor-open handler jumps to the file and line).
+    const int nRow = mxList->get_selected_index();
+    if (nRow < 0 || static_cast<size_t>(nRow) >= maRowEntries.size())
+        return true;
+    try
+    {
+        css::code::task::theTaskHub::get(comphelper::getProcessComponentContext())
+            ->handleTask(maEntries[maRowEntries[nRow]].msIdentifier);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot activate the task: " << rException.Message);
+    }
+    return true;
 }
 
 IMPL_LINK(ErrorListPanel, ListSizeAllocHdl, const Size&, rSize, void)

@@ -9,13 +9,18 @@
 
 #pragma once
 
+#include <com/sun/star/code/task/Task.hpp>
+#include <com/sun/star/code/task/XTaskListener.hpp>
 #include <sfx2/sidebar/PanelLayout.hxx>
 
 #include <tools/gen.hxx>
 
+#include <memory>
 #include <vector>
 
-namespace weld { class Button; class ComboBox; class Toggleable; class ToggleButton; class TreeView; }
+namespace code { class UiNotifier; }
+
+namespace weld { class TreeIter; class Button; class ComboBox; class Toggleable; class ToggleButton; class TreeView; }
 
 namespace code::sidebar
 {
@@ -39,26 +44,33 @@ private:
         Message
     };
 
-    // One row of the (demo) error table.
+    // One row of the table: a Task of theTaskHub, prepared for display.
     struct ErrorEntry
     {
         Severity meSeverity;
-        bool mbIntelliSense; // provider: IntelliSense vs. Build
+        bool mbIntelliSense; // provider: IntelliSense (diagnostics) vs. Build
+        OUString msIdentifier; // the task's, to hand back to XTaskHub::handleTask()
         OUString msCode;
         OUString msDescription;
         OUString msProject;
         OUString msFile;
         OUString msLine;
+        OUString msUrl;
+        OUString msProjectUrl;
     };
 
+    // Re-reads the tasks from the hub, then redraws; runs on the main thread.
+    void Refresh();
     void UpdateList();
     void UpdateFilterButtonLabels();
     bool IsShown(const ErrorEntry& rEntry, const OUString& rNeedle) const;
+    bool IsInScope(const ErrorEntry& rEntry) const;
 
     DECL_LINK(FilterToggledHdl, weld::Toggleable&, void);
     DECL_LINK(FilterChangedHdl, weld::ComboBox&, void);
     DECL_LINK(ClearFiltersHdl, weld::Button&, void);
     DECL_LINK(ListSizeAllocHdl, const Size&, void);
+    DECL_LINK(RowActivatedHdl, const weld::TreeIter&, bool);
 
     std::unique_ptr<weld::ComboBox> mxScope;
     std::unique_ptr<weld::ToggleButton> mxErrors;
@@ -70,6 +82,11 @@ private:
     std::unique_ptr<weld::TreeView> mxList;
 
     std::vector<ErrorEntry> maEntries;
+    // the entry each table row stands for, in row order (rows are filtered)
+    std::vector<size_t> maRowEntries;
+
+    std::shared_ptr<::code::UiNotifier> mxNotifier;
+    css::uno::Reference<css::code::task::XTaskListener> mxListener;
 };
 
 } // namespace code::sidebar

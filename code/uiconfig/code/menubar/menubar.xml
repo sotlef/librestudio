@@ -10,8 +10,9 @@
     <menu:menu menu:id=".uno:PickList">
         <menu:menupopup>
             <menu:menuitem menu:id=".uno:NewDoc"/>
-            <menu:menuitem menu:id=".uno:Open"/>
+            <menu:menuitem menu:id=".uno:CodeOpenFolder"/>
             <menu:menuitem menu:id=".uno:Save"/>
+            <menu:menuitem menu:id=".uno:CodeSaveAll"/>
             <menu:menuseparator/>
             <menu:menuitem menu:id=".uno:Quit"/>
         </menu:menupopup>

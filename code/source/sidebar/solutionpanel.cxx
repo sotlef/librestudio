@@ -9,11 +9,26 @@
 
 #include "solutionpanel.hxx"
 
+#include "../uibridge.hxx"
+
+#include <com/sun/star/code/core/theCode.hpp>
+#include <com/sun/star/code/frontend/XEditorHost.hpp>
+#include <com/sun/star/code/frontend/XWorkbench.hpp>
+#include <com/sun/star/code/project/ItemKind.hpp>
+#include <com/sun/star/code/project/XProject.hpp>
+#include <com/sun/star/code/project/XProjectFiles.hpp>
+#include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/theProjectManager.hpp>
+#include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
 #include <svtools/imagemgr.hxx>
 #include <tools/urlobj.hxx>
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/TreeView.hxx>
 #include <vcl/weld/Widget.hxx>
+
+using namespace css;
+using namespace css::code::project;
 
 namespace code::sidebar
 {
@@ -23,31 +38,17 @@ namespace
 // Generic folder icon (same one a real Open dialog shows for any plain
 // directory) -- SvFileInformationManager::GetFolderImageId() only touches
 // the filesystem for the remote/CD/removable-device flags in VolumeInfo, a
-// default-constructed one (all false) is safe to use for our fake tree.
+// default-constructed one (all false) is safe to use.
 OUString FolderIcon()
 {
     return SvFileInformationManager::GetFolderImageId(svtools::VolumeInfo());
 }
 
-// Per-extension file icon, keyed purely off the name (GetFileImageId's
-// bDetectFolder=false path never touches the filesystem, so a URL that
-// doesn't exist on disk is fine) -- falls back to LO's generic "unknown
-// file" icon for extensions it has no special mapping for (.cpp/.h today).
-OUString FileIcon(const OUString& rFileName)
+// Per-file icon, keyed purely off the URL (GetFileImageId's bDetectFolder=false
+// path never touches the filesystem).
+OUString FileIcon(const OUString& rUrl)
 {
-    const OUString sUrl(u"file:///"_ustr + rFileName);
-    return SvFileInformationManager::GetFileImageId(INetURLObject(sUrl));
-}
-
-// insert()'s own pIconName argument isn't how real LO code sets a row's
-// icon (cui's SvxScriptOrgDialog::insertEntry, cui/source/dialogs/
-// scriptdlg.cxx, is the proven pattern): insert the row first, then call
-// set_image() on the iterator insert() filled in.
-void InsertRow(weld::TreeView& rTree, const weld::TreeIter* pParent, const OUString& rText,
-    const OUString& rIconName, weld::TreeIter* pRet)
-{
-    rTree.insert(pParent, -1, &rText, nullptr, nullptr, nullptr, false, pRet);
-    rTree.set_image(*pRet, rIconName);
+    return SvFileInformationManager::GetFileImageId(INetURLObject(rUrl));
 }
 }
 
@@ -57,49 +58,138 @@ SolutionPanel::SolutionPanel(weld::Widget* pParent,
     , mxTree(m_xBuilder->weld_tree_view(u"tree"_ustr))
     , mxSidebar(std::move(xSidebar))
 {
-    // Same fake demo project as the old SolutionExplorerPanel
-    // (code/source/solutionexplorer.cxx), now a real parent/child tree
-    // (solutionpanel.ui's model is a GtkTreeStore) with real folder/file
-    // icons instead of a flat, hand-indented list. A real tree model with
-    // a real project backing it is future work.
-    const OUString sFolderIcon(FolderIcon());
+    mxTree->connect_expanding(LINK(this, SolutionPanel, ExpandingHdl));
+    mxTree->connect_item_activated(LINK(this, SolutionPanel, ActivatedHdl));
 
-    std::unique_ptr<weld::TreeIter> xSolution(mxTree->make_iterator());
-    InsertRow(*mxTree, nullptr, u"Solution 'DemoProject' (1 project)"_ustr, sFolderIcon,
-        xSolution.get());
+    // Projects open and close on any thread; the tree is only touched on this one.
+    mxNotifier = std::make_shared<::code::UiNotifier>([this] { Rebuild(); });
+    mxListener = new ::code::ServiceListener(mxNotifier);
+    try
+    {
+        css::code::project::theProjectManager::get(comphelper::getProcessComponentContext())
+            ->addProjectListener(mxListener);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "Solution Explorer cannot reach the project manager: " << rException.Message);
+    }
 
-    std::unique_ptr<weld::TreeIter> xProject(mxTree->make_iterator());
-    InsertRow(*mxTree, xSolution.get(), u"DemoProject"_ustr, sFolderIcon, xProject.get());
-
-    std::unique_ptr<weld::TreeIter> xSourceFiles(mxTree->make_iterator());
-    InsertRow(*mxTree, xProject.get(), u"Source Files"_ustr, sFolderIcon, xSourceFiles.get());
-    std::unique_ptr<weld::TreeIter> xLeaf(mxTree->make_iterator());
-    InsertRow(*mxTree, xSourceFiles.get(), u"main.cpp"_ustr, FileIcon(u"main.cpp"_ustr),
-        xLeaf.get());
-
-    std::unique_ptr<weld::TreeIter> xHeaderFiles(mxTree->make_iterator());
-    InsertRow(*mxTree, xProject.get(), u"Header Files"_ustr, sFolderIcon, xHeaderFiles.get());
-    InsertRow(*mxTree, xHeaderFiles.get(), u"utils.h"_ustr, FileIcon(u"utils.h"_ustr), xLeaf.get());
-
-    InsertRow(*mxTree, xProject.get(), u"README.md"_ustr, FileIcon(u"README.md"_ustr), xLeaf.get());
-
-    mxTree->expand_row(*xSolution);
-    mxTree->expand_row(*xProject);
-
-    // SidebarController::requestLayout() (sfx2/source/sidebar/
-    // SidebarController.cxx) is what computes and applies
-    // Deck::GetMinimalWidth() -- the real, already-built "size the sidebar
-    // to fit its content" feature (officecfg's Office.UI.Sidebar.General.
-    // MinimumWidth, on by default), not something to hand-compute here --
-    // but it only runs when asked: real panels call this once their
-    // content (and thus their natural width) is known, we have nothing
-    // that changes after construction so once, here, is enough.
-    if (mxSidebar.is())
-        mxSidebar->requestLayout();
+    Rebuild();
 }
 
 SolutionPanel::~SolutionPanel()
 {
+    mxNotifier->Detach();
+    try
+    {
+        css::code::project::theProjectManager::get(comphelper::getProcessComponentContext())
+            ->removeProjectListener(mxListener);
+    }
+    catch (const uno::Exception&)
+    {
+    }
+}
+
+void SolutionPanel::InsertItem(const weld::TreeIter* pParent,
+                               const uno::Reference<XProjectItem>& xItem, const OUString& rLabel)
+{
+    const ItemKind eKind = xItem->getKind();
+    const bool bFile = eKind == ItemKind_FILE;
+    const OUString aId = OUString::number(mnNextId++);
+    maItems[aId] = xItem;
+
+    const OUString aIcon = bFile ? FileIcon(xItem->getUrl()) : FolderIcon();
+    std::unique_ptr<weld::TreeIter> xRow(mxTree->make_iterator());
+    // Everything that is not a file can have children; they are read when the
+    // row is expanded, not before.
+    mxTree->insert(pParent, -1, &rLabel, &aId, nullptr, nullptr, !bFile, xRow.get());
+    mxTree->set_image(*xRow, aIcon);
+}
+
+void SolutionPanel::Rebuild()
+{
+    mxTree->freeze();
+    mxTree->clear();
+    maItems.clear();
+
+    uno::Sequence<uno::Reference<XProject>> aProjects;
+    try
+    {
+        aProjects = css::code::project::theProjectManager::get(comphelper::getProcessComponentContext())
+                        ->getOpenProjects();
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot list the open projects: " << rException.Message);
+    }
+
+    if (!aProjects.hasElements())
+    {
+        // A row without an id: nothing to open behind it.
+        const OUString aHint(u"No folder open (File > Open Folder)"_ustr);
+        mxTree->insert(nullptr, -1, &aHint, nullptr, nullptr, nullptr, false, nullptr);
+    }
+
+    for (const auto& xProject : aProjects)
+    {
+        uno::Reference<XProjectFiles> xFiles(xProject, uno::UNO_QUERY);
+        if (!xFiles.is())
+            continue; // a project with no file tree has nothing to show here
+        InsertItem(nullptr, xFiles->getRootItem(), xProject->getName());
+    }
+    mxTree->thaw();
+
+    // Open the project rows, the way a solution opens: you see its top level.
+    std::unique_ptr<weld::TreeIter> xIter(mxTree->make_iterator());
+    if (mxTree->get_iter_first(*xIter))
+    {
+        do
+        {
+            if (!mxTree->get_id(*xIter).isEmpty())
+                mxTree->expand_row(*xIter);
+        } while (mxTree->iter_next_sibling(*xIter));
+    }
+
+    if (mxSidebar.is())
+        mxSidebar->requestLayout();
+}
+
+IMPL_LINK(SolutionPanel, ExpandingHdl, const weld::TreeIter&, rIter, bool)
+{
+    const auto it = maItems.find(mxTree->get_id(rIter));
+    if (it == maItems.end())
+        return true;
+
+    try
+    {
+        for (const auto& xChild : it->second->getChildren())
+            InsertItem(&rIter, xChild, xChild->getName());
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot list " << it->second->getUrl() << ": " << rException.Message);
+    }
+    return true;
+}
+
+IMPL_LINK(SolutionPanel, ActivatedHdl, const weld::TreeIter&, rIter, bool)
+{
+    const auto it = maItems.find(mxTree->get_id(rIter));
+    if (it == maItems.end() || it->second->getKind() != ItemKind_FILE)
+        return false; // a folder: let the tree expand or collapse it
+
+    try
+    {
+        uno::Reference<css::code::frontend::XWorkbench> xWorkbench
+            = css::code::core::theCode::get(comphelper::getProcessComponentContext())->getWorkbench();
+        if (xWorkbench.is() && xWorkbench->getEditorHost().is())
+            xWorkbench->getEditorHost()->openDocument(it->second->getUrl());
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot open " << it->second->getUrl() << ": " << rException.Message);
+    }
+    return true;
 }
 
 } // namespace code::sidebar

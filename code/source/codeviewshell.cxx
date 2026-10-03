@@ -11,6 +11,16 @@
 
 #include "codedocshell.hxx"
 #include "editormdipanel.hxx"
+#include "workbench.hxx"
+
+#include <com/sun/star/code/core/theCode.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <com/sun/star/code/frontend/XDialogs.hpp>
+#include <com/sun/star/code/frontend/XWorkbench.hpp>
+#include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/theProjectManager.hpp>
+#include <comphelper/processfactory.hxx>
 #include "sidebar/outputchildwindow.hxx"
 
 #include <codeids.hxx>
@@ -28,6 +38,8 @@ extern SFX2_DLLPUBLIC constinit const SfxType0 aSfxVoidItem_Impl;
 
 #define ShellClass_code_Shell
 #include <codeslots.hxx>
+
+namespace uno = css::uno;
 
 namespace code
 {
@@ -123,8 +135,59 @@ void Shell::InitPanels()
 
 void Shell::Execute(SfxRequest& rReq)
 {
-    // Both SID_NEWDOC and SID_SAVEDOC are still decorative -- same "inert
-    // menu item" spirit as v1, just reached through the real SfxDispatcher.
+    switch (rReq.GetSlot())
+    {
+        case SID_CODE_OPENFOLDER:
+        {
+            // The project manager decides what a folder is (a registered reader
+            // that recognises it, else a plain file tree); this only asks where.
+            uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+            try
+            {
+                uno::Reference<css::code::frontend::XWorkbench> xWorkbench
+                    = css::code::core::theCode::get(xContext)->getWorkbench();
+                if (!xWorkbench.is() || !xWorkbench->getDialogs().is())
+                    break;
+                const OUString aUrl = xWorkbench->getDialogs()->pickFolder(u"Open Folder"_ustr);
+                if (aUrl.isEmpty())
+                    break;
+                css::code::project::theProjectManager::get(xContext)->openProject(aUrl);
+            }
+            catch (const uno::Exception& rException)
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->showMessage(u"Cannot open folder: "_ustr + rException.Message, 8000);
+            }
+            break;
+        }
+        case SID_CODE_SAVEALL:
+            try
+            {
+                css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
+                    ->saveAll();
+            }
+            catch (const uno::Exception& rException)
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->showMessage(u"Cannot save: "_ustr + rException.Message, 8000);
+            }
+            break;
+        case SID_SAVEDOC: // File > Save and Ctrl+S
+            try
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->SaveCurrentDocument();
+            }
+            catch (const uno::Exception& rException)
+            {
+                if (Workbench* pWorkbench = Workbench::Instance())
+                    pWorkbench->showMessage(u"Cannot save: "_ustr + rException.Message, 8000);
+            }
+            break;
+        default:
+            // SID_NEWDOC is still decorative.
+            break;
+    }
     rReq.Done();
 }
 
@@ -133,13 +196,16 @@ void Shell::GetState(SfxItemSet& rSet)
     // SID_NEWDOC/SID_SAVEDOC: leaving them untouched keeps both slots
     // enabled; nothing here depends on document state yet.
 
-    // Status bar items. There is no real task/readiness machinery yet:
-    // "Ready" is the honest, constant idle state (like the bubble button's
-    // constant "No background tasks running." popover).
+    // Status bar items. The text is the workbench's current message
+    // (XStatusBar::showMessage, notifications), "Ready" when it has none; the
+    // workbench invalidates this slot whenever that changes. The bubble
+    // button's popover is still the constant "No background tasks running."
     if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_STATUS_TASKS));
     if (rSet.GetItemState(SID_CODE_STATUS_READY, false) != SfxItemState::UNKNOWN)
-        rSet.Put(SfxStringItem(SID_CODE_STATUS_READY, u"Ready"_ustr));
+        rSet.Put(SfxStringItem(SID_CODE_STATUS_READY,
+                               Workbench::Instance() ? Workbench::Instance()->GetStatusText()
+                                                     : u"Ready"_ustr));
 }
 
 } // namespace code

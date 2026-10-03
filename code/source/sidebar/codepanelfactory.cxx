@@ -61,11 +61,11 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
     ui::LayoutSize aLayoutSize(0, -1, -1);
 
     if (rsResourceURL.endsWith("/SolutionPanel"))
-        xControl = std::make_unique<code::sidebar::SolutionPanel>(pParent, xSidebar);
+        xControl = std::make_unique<::code::sidebar::SolutionPanel>(pParent, xSidebar);
     else if (rsResourceURL.endsWith("/OutputPanel"))
-        xControl = std::make_unique<code::sidebar::OutputLogPanel>(pParent);
+        xControl = std::make_unique<::code::sidebar::OutputLogPanel>(pParent);
     else if (rsResourceURL.endsWith("/ErrorListPanel"))
-        xControl = std::make_unique<code::sidebar::ErrorListPanel>(pParent);
+        xControl = std::make_unique<::code::sidebar::ErrorListPanel>(pParent);
 
     if (xControl)
         return sfx2::sidebar::SidebarPanelBase::Create(rsResourceURL, xFrame, std::move(xControl),
@@ -94,7 +94,7 @@ extern "C" SAL_DLLPUBLIC_EXPORT uno::XInterface*
 com_sun_star_comp_code_sidebar_PanelFactory_get_implementation(uno::XComponentContext*,
                                                                  uno::Sequence<uno::Any> const&)
 {
-    return cppu::acquire(new code::sidebar::CodePanelFactory);
+    return cppu::acquire(new ::code::sidebar::CodePanelFactory);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

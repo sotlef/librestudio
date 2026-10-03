@@ -52,6 +52,42 @@ SfxStringItem CodeStatusReady SID_CODE_STATUS_READY
     GroupId = SfxGroupId::View;
 ]
 
+// File > Open Folder: asks for a directory and opens it as a project.
+SfxVoidItem CodeOpenFolder SID_CODE_OPENFOLDER
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
+// File > Save All: saves every document with unsaved changes.
+SfxVoidItem CodeSaveAll SID_CODE_SAVEALL
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 shell code_Shell
 {
     import CodeView;
@@ -66,6 +102,16 @@ shell code_Shell
     [
         ExecMethod  = Execute;
         StateMethod = GetState;
+    ]
+
+    SID_CODE_OPENFOLDER
+    [
+        ExecMethod = Execute;
+    ]
+
+    SID_CODE_SAVEALL
+    [
+        ExecMethod = Execute;
     ]
 
     SID_CODE_STATUS_TASKS

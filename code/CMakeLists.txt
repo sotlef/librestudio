@@ -34,6 +34,8 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/uibridge.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/workbench.cxx"
     # The Output dock's own SfxChildWindow/SfxDockingWindow/IDeckHost
     # trio -- unlike codesidebar's panel factory below, these are
     # constructed directly (RegisterChildWindow/ShowChildWindow in
@@ -53,8 +55,9 @@ target_include_directories(code PRIVATE
     "${code_sdi_INCLUDE_DIR}"
     "${OFFICECFG_INCLUDE_DIR}"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry officecfg_headers program_services_rdb
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${codeapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers codeapi_normal_headers gcc3_uno officecfg_registry officecfg_headers program_services_rdb
     # Runtime-only UNO components/build-tree assets "code" never links
     # against but silently needs to actually run without crashing or
     # missing content -- each one found and built ad hoc during a single
@@ -116,13 +119,18 @@ add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/errorlistpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/outputlogpanel.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx")
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx"
+    # The panels listen to the services through the same UI bridge the exe
+    # uses; a second copy here (rather than a shared library) because it is
+    # one small file and the two sides never exchange its objects.
+    "${CMAKE_SOURCE_DIR}/code/source/uibridge.cxx")
 
 target_include_directories(codesidebar PRIVATE
     "${CMAKE_SOURCE_DIR}/code/source"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers)
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${codeapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
 
 target_link_libraries(codesidebar PRIVATE
     comphelper cppu cppuhelper sal sfx svt tl ucbhelper vcl)
@@ -141,6 +149,51 @@ install(TARGETS codesidebar LIBRARY DESTINATION program)
 # building it is what makes the Solution sidebar panel actually work
 # instead of silently doing nothing.
 add_dependencies(code codesidebar)
+
+# --- codeservices ----------------------------------------------------------
+#
+# The backend of "Code": the singletons of the com.sun.star.code.* API
+# (codeapi) -- project, document, output, task, job registry -- and the
+# first-wave plugins that attach to them (compiler-output filter, "open in
+# editor" task handler). One SHARED component library for all of them: they
+# are small, share common.cxx, and unlike deepcode's library-per-service
+# layout nothing here is meant to be loaded on its own. Like codesidebar it is
+# discovered through services.rdb, never linked by "code".
+add_library(codeservices SHARED
+    "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/common.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/folderproject.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/jobregistry.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/outputcontroller.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/projectformatregistry.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/projectmanager.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx")
+
+target_include_directories(codeservices PRIVATE
+    "${CMAKE_SOURCE_DIR}/code/source/services"
+    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+    "${offapi_normal_HEADERS_INCLUDE_DIR}"
+    "${codeapi_normal_HEADERS_INCLUDE_DIR}")
+add_dependencies(codeservices udkapi_normal_headers offapi_normal_headers
+    codeapi_normal_headers)
+
+target_link_libraries(codeservices PRIVATE comphelper cppu cppuhelper sal)
+
+librestudio_add_component(codeservices
+    COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codeservices.component"
+    LIBRARY   codeservices
+    LAYER     OOO)
+
+librestudio_set_library_output_name(codeservices codeservices OOO)
+
+install(TARGETS codeservices LIBRARY DESTINATION program)
+
+# Runtime-only, like codesidebar: building "code" must also build the services
+# it asks for by name, and install the registry that names their types.
+add_dependencies(code codeservices program_codeapi_rdb)
 
 # --- UIConfig_code -------------------------------------------------------
 #
