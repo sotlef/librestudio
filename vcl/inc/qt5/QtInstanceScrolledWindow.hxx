@@ -17,16 +17,25 @@
 
 #include <QtWidgets/QScrollArea>
 
+class QtScrolledArea;
+
 class QtInstanceScrolledWindow : public QtInstanceWidget, public virtual weld::ScrolledWindow
 {
     Q_OBJECT
 
     QScrollArea* m_pScrollArea;
+    // set for a window whose owner does the scrolling (bUserManagedScrolling):
+    // the bars then show the extents it configures; see QtScrolledArea
+    QtScrolledArea* m_pUserManaged = nullptr;
 
 public:
-    QtInstanceScrolledWindow(QScrollArea* pScrollArea);
+    QtInstanceScrolledWindow(QScrollArea* pScrollArea, bool bUserManagedScrolling = false);
 
 public:
+    virtual void hadjustment_configure(int nValue, int nUpper, int nStepIncrement,
+                                       int nPageIncrement, int nPageSize) override;
+    virtual void vadjustment_configure(int nValue, int nUpper, int nStepIncrement,
+                                       int nPageIncrement, int nPageSize) override;
     virtual int hadjustment_get_value() const override;
     virtual void hadjustment_set_value(int nValue) override;
     virtual int hadjustment_get_upper() const override;
@@ -55,6 +64,9 @@ public:
                                       const Color& rFaceColor) override;
 
 private:
+    void configureUserManaged(Qt::Orientation eOrientation, int nValue, int nUpper,
+                              int nStepIncrement, int nPageIncrement, int nPageSize);
+
     static Qt::ScrollBarPolicy toQtPolicy(VclPolicyType eVclPolicy);
     static VclPolicyType toVclPolicy(Qt::ScrollBarPolicy eQtPolicy);
 

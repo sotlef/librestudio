@@ -17,6 +17,7 @@
 #include <QtInstanceMessageDialog.hxx>
 #include <QtInstanceNotebook.hxx>
 #include <QtInstanceTreeView.hxx>
+#include <QtScrolledArea.hxx>
 #include <QtHyperlinkLabel.hxx>
 #include <QtTreeViewModel.hxx>
 
@@ -512,7 +513,7 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     }
     else if (rClass == u"GtkScrolledWindow")
     {
-        QScrollArea* pScrollArea = new QtScrolledNatural<QScrollArea>(pParentWidget);
+        QScrollArea* pScrollArea = new QtScrolledArea(pParentWidget);
         pScrollArea->setWidgetResizable(true);
         // GtkScrolledWindow's shadow-type: "none" (also the GtkBuilder
         // default when unset) means no frame, anything else ("in", "out",

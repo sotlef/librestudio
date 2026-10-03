@@ -10,15 +10,24 @@
 #include <sal/config.h>
 
 #include <QtInstanceScrolledWindow.hxx>
+#include <QtScrolledArea.hxx>
 #include <QtInstanceScrolledWindow.moc>
 
 #include <QtWidgets/QScrollBar>
 
-QtInstanceScrolledWindow::QtInstanceScrolledWindow(QScrollArea* pScrollArea)
+QtInstanceScrolledWindow::QtInstanceScrolledWindow(QScrollArea* pScrollArea,
+                                                   bool bUserManagedScrolling)
     : QtInstanceWidget(pScrollArea)
     , m_pScrollArea(pScrollArea)
 {
     assert(m_pScrollArea);
+
+    if (bUserManagedScrolling)
+    {
+        m_pUserManaged = dynamic_cast<QtScrolledArea*>(pScrollArea);
+        if (m_pUserManaged)
+            m_pUserManaged->setUserManaged(true);
+    }
 
     if (QScrollBar* pHorizontalScrollBar = m_pScrollArea->horizontalScrollBar())
         connect(pHorizontalScrollBar, &QScrollBar::valueChanged, this,
@@ -27,6 +36,48 @@ QtInstanceScrolledWindow::QtInstanceScrolledWindow(QScrollArea* pScrollArea)
     if (QScrollBar* pVerticalScrollBar = m_pScrollArea->verticalScrollBar())
         connect(pVerticalScrollBar, &QScrollBar::valueChanged, this,
                 &QtInstanceScrolledWindow::handleVerticalScrollValueChanged);
+}
+
+void QtInstanceScrolledWindow::configureUserManaged(Qt::Orientation eOrientation, int nValue,
+                                                     int nUpper, int nStepIncrement,
+                                                     int nPageIncrement, int nPageSize)
+{
+    SolarMutexGuard g;
+
+    GetQtInstance().RunInMainThread([&] {
+        QtScrolledArea::Axis& rAxis = m_pUserManaged->axis(eOrientation);
+        rAxis.bSet = true;
+        rAxis.nUpper = nUpper;
+        rAxis.nPage = nPageSize;
+        rAxis.nPageStep = nPageIncrement;
+        QScrollBar* pBar = eOrientation == Qt::Horizontal ? m_pScrollArea->horizontalScrollBar()
+                                                          : m_pScrollArea->verticalScrollBar();
+        pBar->setSingleStep(nStepIncrement);
+        m_pUserManaged->applyExtents();
+        pBar->setValue(nValue);
+    });
+}
+
+void QtInstanceScrolledWindow::hadjustment_configure(int nValue, int nUpper, int nStepIncrement,
+                                                     int nPageIncrement, int nPageSize)
+{
+    if (m_pUserManaged)
+        configureUserManaged(Qt::Horizontal, nValue, nUpper, nStepIncrement, nPageIncrement,
+                             nPageSize);
+    else
+        weld::ScrolledWindow::hadjustment_configure(nValue, nUpper, nStepIncrement,
+                                                    nPageIncrement, nPageSize);
+}
+
+void QtInstanceScrolledWindow::vadjustment_configure(int nValue, int nUpper, int nStepIncrement,
+                                                     int nPageIncrement, int nPageSize)
+{
+    if (m_pUserManaged)
+        configureUserManaged(Qt::Vertical, nValue, nUpper, nStepIncrement, nPageIncrement,
+                             nPageSize);
+    else
+        weld::ScrolledWindow::vadjustment_configure(nValue, nUpper, nStepIncrement,
+                                                    nPageIncrement, nPageSize);
 }
 
 int QtInstanceScrolledWindow::hadjustment_get_value() const
@@ -54,6 +105,9 @@ void QtInstanceScrolledWindow::hadjustment_set_value(int nValue)
 
 int QtInstanceScrolledWindow::hadjustment_get_upper() const
 {
+    if (m_pUserManaged)
+        return m_pUserManaged->axis(Qt::Horizontal).nUpper;
+
     SolarMutexGuard g;
 
     int nMax = 0;
@@ -67,6 +121,17 @@ int QtInstanceScrolledWindow::hadjustment_get_upper() const
 
 void QtInstanceScrolledWindow::hadjustment_set_upper(int nUpper)
 {
+    if (m_pUserManaged)
+    {
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Horizontal).nUpper = nUpper;
+            m_pUserManaged->axis(Qt::Horizontal).bSet = true;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {
@@ -77,6 +142,9 @@ void QtInstanceScrolledWindow::hadjustment_set_upper(int nUpper)
 
 int QtInstanceScrolledWindow::hadjustment_get_page_size() const
 {
+    if (m_pUserManaged)
+        return m_pUserManaged->axis(Qt::Horizontal).nPage;
+
     SolarMutexGuard g;
 
     int nPageSize = 0;
@@ -90,6 +158,18 @@ int QtInstanceScrolledWindow::hadjustment_get_page_size() const
 
 void QtInstanceScrolledWindow::hadjustment_set_page_size(int nSize)
 {
+    if (m_pUserManaged)
+    {
+        // the visible part is the viewport's; the child is never resized to it
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Horizontal).nPage = nSize;
+            m_pUserManaged->axis(Qt::Horizontal).bSet = true;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {
@@ -100,6 +180,16 @@ void QtInstanceScrolledWindow::hadjustment_set_page_size(int nSize)
 
 void QtInstanceScrolledWindow::hadjustment_set_page_increment(int nSize)
 {
+    if (m_pUserManaged)
+    {
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Horizontal).nPageStep = nSize;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {
@@ -162,6 +252,9 @@ void QtInstanceScrolledWindow::vadjustment_set_value(int nValue)
 
 int QtInstanceScrolledWindow::vadjustment_get_upper() const
 {
+    if (m_pUserManaged)
+        return m_pUserManaged->axis(Qt::Vertical).nUpper;
+
     SolarMutexGuard g;
 
     int nMax = 0;
@@ -175,6 +268,17 @@ int QtInstanceScrolledWindow::vadjustment_get_upper() const
 
 void QtInstanceScrolledWindow::vadjustment_set_upper(int nUpper)
 {
+    if (m_pUserManaged)
+    {
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Vertical).nUpper = nUpper;
+            m_pUserManaged->axis(Qt::Vertical).bSet = true;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {
@@ -185,6 +289,9 @@ void QtInstanceScrolledWindow::vadjustment_set_upper(int nUpper)
 
 int QtInstanceScrolledWindow::vadjustment_get_page_size() const
 {
+    if (m_pUserManaged)
+        return m_pUserManaged->axis(Qt::Vertical).nPage;
+
     SolarMutexGuard g;
 
     int nPageSize = 0;
@@ -198,6 +305,18 @@ int QtInstanceScrolledWindow::vadjustment_get_page_size() const
 
 void QtInstanceScrolledWindow::vadjustment_set_page_size(int nSize)
 {
+    if (m_pUserManaged)
+    {
+        // the visible part is the viewport's; the child is never resized to it
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Vertical).nPage = nSize;
+            m_pUserManaged->axis(Qt::Vertical).bSet = true;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {
@@ -208,6 +327,16 @@ void QtInstanceScrolledWindow::vadjustment_set_page_size(int nSize)
 
 void QtInstanceScrolledWindow::vadjustment_set_page_increment(int nSize)
 {
+    if (m_pUserManaged)
+    {
+        SolarMutexGuard g;
+        GetQtInstance().RunInMainThread([&] {
+            m_pUserManaged->axis(Qt::Vertical).nPageStep = nSize;
+            m_pUserManaged->applyExtents();
+        });
+        return;
+    }
+
     SolarMutexGuard g;
 
     GetQtInstance().RunInMainThread([&] {

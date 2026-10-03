@@ -812,15 +812,15 @@ std::unique_ptr<weld::Frame> QtInstanceBuilder::weld_frame(const OUString& rId)
     return xRet;
 }
 
-std::unique_ptr<weld::ScrolledWindow> QtInstanceBuilder::weld_scrolled_window(const OUString& rId,
-                                                                              bool)
+std::unique_ptr<weld::ScrolledWindow>
+QtInstanceBuilder::weld_scrolled_window(const OUString& rId, bool bUserManagedScrolling)
 {
     SolarMutexGuard g;
 
     std::unique_ptr<weld::ScrolledWindow> xRet;
     GetQtInstance().RunInMainThread([&] {
         if (QScrollArea* pScrollArea = m_xBuilder->get<QScrollArea>(rId))
-            xRet = std::make_unique<QtInstanceScrolledWindow>(pScrollArea);
+            xRet = std::make_unique<QtInstanceScrolledWindow>(pScrollArea, bUserManagedScrolling);
     });
     return xRet;
 }
