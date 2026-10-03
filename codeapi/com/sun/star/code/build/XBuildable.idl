@@ -1,0 +1,43 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module build {
+
+/** Something that can be built: a project, a target of one.  Found with
+    queryInterface on the item; an item without it cannot be built, and an IDE
+    offers no build commands for it.
+
+    The build runs in the project's current configuration, as a background job
+    that returns at once.  What the build tool prints goes to the output channel
+    "build", which is cleared first and exists before the first line.  The
+    job's progress is that of the build as far as the tool reports it.
+
+    Callers go through XBuildController, which sees to it that one build runs
+    at a time and keeps the problem list in step.
+ */
+interface XBuildable
+{
+    /** builds what changed
+
+        @throws IOException if the project has not been configured */
+    ::com::sun::star::code::core::XBackgroundJob build()
+        raises( ::com::sun::star::io::IOException );
+
+    /** builds everything again: what earlier builds produced is removed first */
+    ::com::sun::star::code::core::XBackgroundJob rebuild()
+        raises( ::com::sun::star::io::IOException );
+
+    /** removes what builds produced */
+    ::com::sun::star::code::core::XBackgroundJob clean()
+        raises( ::com::sun::star::io::IOException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

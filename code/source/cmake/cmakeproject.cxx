@@ -9,9 +9,11 @@
 
 #include "cmakeproject.hxx"
 
+#include "cmakebuild.hxx"
 #include "common.hxx"
 #include "folderproject.hxx"
 
+#include <com/sun/star/code/build/XBuildable.hpp>
 #include <com/sun/star/code/project/ItemKind.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/TargetType.hpp>
@@ -176,17 +178,35 @@ public:                                                                         
                                                                                                   \
 private:
 
-class TargetNode final : public cppu::WeakImplHelper<XProjectItem, XProjectTarget>
+// A target can be built on its own, in the current configuration of its project.
+class TargetNode final : public cppu::WeakImplHelper<XProjectItem, XProjectTarget, css::code::build::XBuildable>
 {
 public:
-    TargetNode(const OUString& rName, TargetType eType)
-        : m_eType(eType)
+    TargetNode(uno::Reference<uno::XComponentContext> xContext, OUString aProjectUrl, const OUString& rName,
+               TargetType eType)
+        : m_xContext(std::move(xContext))
+        , m_aProjectUrl(std::move(aProjectUrl))
+        , m_eType(eType)
     {
         m_aData.aName = rName;
     }
     TargetType SAL_CALL getType() override { return m_eType; }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL build() override
+    {
+        return StartBuild(m_xContext, m_aProjectUrl, m_aData.aName, BuildMode::Build);
+    }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL rebuild() override
+    {
+        return StartBuild(m_xContext, m_aProjectUrl, m_aData.aName, BuildMode::Rebuild);
+    }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL clean() override
+    {
+        return StartBuild(m_xContext, m_aProjectUrl, m_aData.aName, BuildMode::Clean);
+    }
     CMAKEPROJ_ITEM_METHODS(ItemKind_TARGET)
 
+    const uno::Reference<uno::XComponentContext> m_xContext;
+    const OUString m_aProjectUrl;
     const TargetType m_eType;
 };
 
@@ -239,7 +259,8 @@ struct Structure
 
 // Reads the code model in rBuildUrl's reply directory; an empty root if there
 // is none (never configured, or configuring failed).
-Structure ReadStructure(const OUString& rBuildUrl)
+Structure ReadStructure(const uno::Reference<uno::XComponentContext>& xContext, const OUString& rProjectUrl,
+                        const OUString& rBuildUrl)
 {
     Structure aResult;
     const OUString aReplyUrl = ReplyDirectoryOf(rBuildUrl);
@@ -271,7 +292,7 @@ Structure ReadStructure(const OUString& rBuildUrl)
                 continue;
 
             rtl::Reference<TargetNode> xTarget = new TargetNode(
-                OUString::fromUtf8(aTarget.get<std::string>("name", "")),
+                xContext, rProjectUrl, OUString::fromUtf8(aTarget.get<std::string>("name", "")),
                 TargetTypeOf(aTarget.get<std::string>("type", "")));
 
             // the target's files, by group; a file in no group goes under the default one
@@ -343,7 +364,8 @@ std::map<OUString, css::uno::WeakReference<XProject>> g_aOpenProjects;
 
 class CMakeProject final
     : public comphelper::WeakComponentImplHelper<XProject, XProjectFiles, XProjectTargets,
-                                                 XProjectConfigurationState, util::XModifyBroadcaster>
+                                                 XProjectConfigurationState, util::XModifyBroadcaster,
+                                                 css::code::build::XBuildable>
 {
 public:
     CMakeProject(uno::Reference<uno::XComponentContext> xContext, uno::Reference<XProject> xFolder,
@@ -360,6 +382,20 @@ public:
     OUString SAL_CALL getUrl() override { return m_aUrl; }
     OUString SAL_CALL getFormatKind() override { return u"cmake"_ustr; }
     uno::Sequence<beans::PropertyValue> SAL_CALL getProperties() override { return {}; }
+
+    // XBuildable: the whole project
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL build() override
+    {
+        return StartBuild(m_xContext, m_aUrl, OUString(), BuildMode::Build);
+    }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL rebuild() override
+    {
+        return StartBuild(m_xContext, m_aUrl, OUString(), BuildMode::Rebuild);
+    }
+    uno::Reference<css::code::core::XBackgroundJob> SAL_CALL clean() override
+    {
+        return StartBuild(m_xContext, m_aUrl, OUString(), BuildMode::Clean);
+    }
 
     // XProjectFiles
     uno::Reference<XProjectItem> SAL_CALL getRootItem() override { return m_xFiles->getRootItem(); }
@@ -425,7 +461,7 @@ private:
         catch (const uno::Exception&)
         {
         }
-        Structure aStructure = aBuildUrl.isEmpty() ? Structure() : ReadStructure(aBuildUrl);
+        Structure aStructure = aBuildUrl.isEmpty() ? Structure() : ReadStructure(m_xContext, m_aUrl, aBuildUrl);
 
         std::unique_lock aGuard(m_aMutex);
         m_aStructure = std::move(aStructure);

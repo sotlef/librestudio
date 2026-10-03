@@ -14,6 +14,7 @@
 #include "workbench.hxx"
 
 #include <com/sun/star/code/build/XBuildController.hpp>
+#include <com/sun/star/code/build/XBuildable.hpp>
 #include <com/sun/star/code/build/theBuildController.hpp>
 #include <com/sun/star/code/core/XBackgroundJob.hpp>
 #include <com/sun/star/code/core/theCode.hpp>
@@ -160,15 +161,22 @@ void Shell::Execute(SfxRequest& rReq)
                         pWorkbench->showMessage(u"Open a project to build."_ustr, 6000);
                     break;
                 }
+                css::uno::Reference<css::code::build::XBuildable> xBuildable(xProject, css::uno::UNO_QUERY);
+                if (!xBuildable.is())
+                {
+                    if (Workbench* pWorkbench = Workbench::Instance())
+                        pWorkbench->showMessage(u"This project cannot be built."_ustr, 6000);
+                    break;
+                }
                 // what is on disk is what gets built
                 css::code::document::theDocumentManager::get(xContext)->saveAll();
                 auto xBuild = css::code::build::theBuildController::get(xContext);
                 if (rReq.GetSlot() == SID_CODE_REBUILD)
-                    xBuild->rebuildProject(xProject->getUrl());
+                    xBuild->rebuild(xBuildable);
                 else if (rReq.GetSlot() == SID_CODE_CLEAN)
-                    xBuild->cleanProject(xProject->getUrl());
+                    xBuild->clean(xBuildable);
                 else
-                    xBuild->buildProject(xProject->getUrl());
+                    xBuild->build(xBuildable);
             }
             catch (const uno::Exception& rException)
             {
@@ -301,7 +309,8 @@ void Shell::GetState(SfxItemSet& rSet)
         try
         {
             auto xContext = comphelper::getProcessComponentContext();
-            bProject = css::code::project::theProjectManager::get(xContext)->getActiveProject().is();
+            bProject = css::uno::Reference<css::code::build::XBuildable>(
+                css::code::project::theProjectManager::get(xContext)->getActiveProject(), css::uno::UNO_QUERY).is();
             bBuilding = css::code::build::theBuildController::get(xContext)->getRunningBuild().is();
         }
         catch (const uno::Exception&)

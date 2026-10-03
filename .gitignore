@@ -119,6 +119,7 @@ __pycache__
 
 # Xcode specific
 build/
+!/codeapi/com/sun/star/code/build/
 *.pbxuser
 !default.pbxuser
 *.mode1v3

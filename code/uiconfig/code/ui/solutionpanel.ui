@@ -18,14 +18,24 @@
       <column type="gchararray"/>
     </columns>
   </object>
-  <object class="GtkMenu" id="solutionmenu">
+  <!-- the commands an item has are the ones its interfaces give it; the
+       panel removes the rest -->
+  <object class="GtkMenu" id="itemmenu">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="open">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="solutionpanel|open">Open</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
     <child>
       <object class="GtkMenuItem" id="build">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="solutionpanel|build">Build Solution</property>
+        <property name="label" translatable="yes" context="solutionpanel|build">Build</property>
         <property name="use-underline">True</property>
       </object>
     </child>
@@ -33,7 +43,7 @@
       <object class="GtkMenuItem" id="rebuild">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="solutionpanel|rebuild">Rebuild Solution</property>
+        <property name="label" translatable="yes" context="solutionpanel|rebuild">Rebuild</property>
         <property name="use-underline">True</property>
       </object>
     </child>
@@ -41,7 +51,21 @@
       <object class="GtkMenuItem" id="clean">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="label" translatable="yes" context="solutionpanel|clean">Clean Solution</property>
+        <property name="label" translatable="yes" context="solutionpanel|clean">Clean</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="filesep">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="compile">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="solutionpanel|compile">Compile</property>
         <property name="use-underline">True</property>
       </object>
     </child>

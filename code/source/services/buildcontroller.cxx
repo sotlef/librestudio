@@ -10,26 +10,22 @@
 #include "common.hxx"
 
 #include <com/sun/star/code/build/XBuildController.hpp>
+#include <com/sun/star/code/build/XBuildable.hpp>
+#include <com/sun/star/code/build/XCompilable.hpp>
 #include <com/sun/star/code/core/XBackgroundJob.hpp>
 #include <com/sun/star/code/core/XJobRegistry.hpp>
 #include <com/sun/star/code/core/theJobRegistry.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
-#include <com/sun/star/code/project/XBuildableProjectFormat.hpp>
 #include <com/sun/star/code/project/XProject.hpp>
-#include <com/sun/star/code/project/XProjectFormatReader.hpp>
-#include <com/sun/star/code/project/XProjectFormatRegistry.hpp>
-#include <com/sun/star/code/project/XProjectManager.hpp>
-#include <com/sun/star/code/project/theProjectFormatRegistry.hpp>
-#include <com/sun/star/code/project/theProjectManager.hpp>
 #include <com/sun/star/code/task/XTaskHub.hpp>
 #include <com/sun/star/code/task/theTaskHub.hpp>
 #include <com/sun/star/io/IOException.hpp>
-#include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
+#include <functional>
 #include <mutex>
 
 using namespace css;
@@ -48,17 +44,21 @@ public:
     }
 
     // XBuildController
-    uno::Reference<core::XBackgroundJob> SAL_CALL buildProject(const OUString& rProjectUrl) override
+    uno::Reference<core::XBackgroundJob> SAL_CALL build(const uno::Reference<build::XBuildable>& xItem) override
     {
-        return start(rProjectUrl, Action::Build);
+        return start([&] { return xItem->build(); });
     }
-    uno::Reference<core::XBackgroundJob> SAL_CALL rebuildProject(const OUString& rProjectUrl) override
+    uno::Reference<core::XBackgroundJob> SAL_CALL rebuild(const uno::Reference<build::XBuildable>& xItem) override
     {
-        return start(rProjectUrl, Action::Rebuild);
+        return start([&] { return xItem->rebuild(); });
     }
-    uno::Reference<core::XBackgroundJob> SAL_CALL cleanProject(const OUString& rProjectUrl) override
+    uno::Reference<core::XBackgroundJob> SAL_CALL clean(const uno::Reference<build::XBuildable>& xItem) override
     {
-        return start(rProjectUrl, Action::Clean);
+        return start([&] { return xItem->clean(); });
+    }
+    uno::Reference<core::XBackgroundJob> SAL_CALL compile(const uno::Reference<build::XCompilable>& xItem) override
+    {
+        return start([&] { return xItem->compile(); });
     }
     uno::Reference<core::XBackgroundJob> SAL_CALL getRunningBuild() override;
     void SAL_CALL cancelBuild() override;
@@ -75,13 +75,7 @@ public:
     uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override { return {}; }
 
 private:
-    enum class Action
-    {
-        Build,
-        Rebuild,
-        Clean
-    };
-    uno::Reference<core::XBackgroundJob> start(const OUString& rProjectUrl, Action eAction);
+    uno::Reference<core::XBackgroundJob> start(const std::function<uno::Reference<core::XBackgroundJob>()>& rStart);
 
     uno::Reference<uno::XComponentContext> m_xContext;
     std::mutex m_aMutex;
@@ -102,42 +96,16 @@ void BuildController::cancelBuild()
         xJob->cancel();
 }
 
-uno::Reference<core::XBackgroundJob> BuildController::start(const OUString& rProjectUrl, Action eAction)
+uno::Reference<core::XBackgroundJob>
+BuildController::start(const std::function<uno::Reference<core::XBackgroundJob>()>& rStart)
 {
-    const OUString aUrl = NormalizeUrl(rProjectUrl);
-
-    auto xManager = project::theProjectManager::get(m_xContext);
-    if (!xManager->getProject(aUrl).is())
-        throw lang::IllegalArgumentException("no such project is open: " + aUrl, getXWeak(), 0);
-
-    uno::Reference<project::XProjectFormatReader> xReader
-        = project::theProjectFormatRegistry::get(m_xContext)->findReader(aUrl);
-    uno::Reference<project::XBuildableProjectFormat> xFormat(xReader, uno::UNO_QUERY);
-    if (!xFormat.is())
-        throw io::IOException("projects of this format cannot be built: " + aUrl, getXWeak());
-
-    // a build is in a configuration; a project that has none was never configured
-    const OUString aCurrent = xManager->getCurrentConfiguration(aUrl);
-    project::ProjectConfiguration aConfiguration;
-    bool bFound = false;
-    for (const project::ProjectConfiguration& rConfiguration : xManager->getConfigurations(aUrl))
-        if (rConfiguration.Name == aCurrent)
-        {
-            aConfiguration = rConfiguration;
-            bFound = true;
-        }
-    if (!bFound)
-        throw io::IOException("the project has not been configured: " + aUrl, getXWeak());
-
     if (getRunningBuild().is())
         throw io::IOException(u"a build is running already"_ustr, getXWeak());
 
     // what the last build found is out of date the moment a new one starts
     task::theTaskHub::get(m_xContext)->clearCategory(u"build"_ustr);
 
-    uno::Reference<core::XBackgroundJob> xJob
-        = eAction == Action::Clean ? xFormat->clean(aUrl, aConfiguration)
-                                   : xFormat->build(aUrl, aConfiguration, eAction == Action::Rebuild);
+    uno::Reference<core::XBackgroundJob> xJob = rStart();
     if (xJob.is())
     {
         core::theJobRegistry::get(m_xContext)->registerJob(xJob);

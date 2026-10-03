@@ -229,6 +229,7 @@ add_dependencies(code codeservices program_codeapi_rdb)
 # through services.rdb, never linked by "code". Autotools will get a library
 # of its own the same way.
 add_library(cmakeproj SHARED
+    "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakebuild.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeconfigpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeformatreader.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeproject.cxx")

@@ -1,0 +1,41 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module build {
+
+/** Starts builds.  One build runs at a time, as in an IDE with one Output
+    window; what to build is the item's own business (XBuildable, XCompilable),
+    this makes sure only one runs, registers it with XJobRegistry (so that the
+    status bar shows it) and keeps the problem list in step: the "build" tasks
+    are cleared when a build starts, they describe what is now out of date.
+
+    Each method returns the job; each throws IOException if a build is running
+    already, or whatever the item throws.
+ */
+interface XBuildController
+{
+    ::com::sun::star::code::core::XBackgroundJob build( [in] XBuildable Item )
+        raises( ::com::sun::star::io::IOException );
+    ::com::sun::star::code::core::XBackgroundJob rebuild( [in] XBuildable Item )
+        raises( ::com::sun::star::io::IOException );
+    ::com::sun::star::code::core::XBackgroundJob clean( [in] XBuildable Item )
+        raises( ::com::sun::star::io::IOException );
+    ::com::sun::star::code::core::XBackgroundJob compile( [in] XCompilable Item )
+        raises( ::com::sun::star::io::IOException );
+
+    /** the build that is running, or null */
+    ::com::sun::star::code::core::XBackgroundJob getRunningBuild();
+
+    /** asks the running build to stop; does nothing if there is none */
+    void cancelBuild();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */
