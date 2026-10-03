@@ -371,3 +371,8 @@ foreach (_code_ui_src IN LISTS CODE_UI_FILES)
 endforeach ()
 
 add_custom_target(code_uiconfig ALL DEPENDS ${_code_uiconfig_outputs})
+
+# The tests need program_services_rdb, which exists only after the whole tree
+# has been processed.
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
+    "${CMAKE_SOURCE_DIR}/code/CppunitTest_deferred.cmake")
