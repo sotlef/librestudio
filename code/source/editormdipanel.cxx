@@ -18,6 +18,8 @@
 #include <com/sun/star/code/frontend/SaveChoice.hpp>
 #include <com/sun/star/code/frontend/XDialogs.hpp>
 #include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <com/sun/star/code/semantic/XSemanticTokenController.hpp>
+#include <com/sun/star/code/semantic/theSemanticTokenController.hpp>
 #include <comphelper/processfactory.hxx>
 #include <rtl/uri.hxx>
 #include <sal/log.hxx>
@@ -66,6 +68,10 @@ EditorMDIPanel::EditorMDIPanel(vcl::Window* pParent)
     {
         css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
             ->addDocumentListener(mxListener);
+        // new colours for the text arrive on their own
+        css::code::semantic::theSemanticTokenController::get(comphelper::getProcessComponentContext())
+            ->addSemanticTokenListener(
+                uno::Reference<css::code::semantic::XSemanticTokenListener>(mxListener, uno::UNO_QUERY));
     }
     catch (const uno::Exception& rException)
     {
@@ -89,6 +95,10 @@ void EditorMDIPanel::dispose()
         if (mxListener.is())
             css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
                 ->removeDocumentListener(mxListener);
+        if (mxListener.is())
+            css::code::semantic::theSemanticTokenController::get(comphelper::getProcessComponentContext())
+                ->removeSemanticTokenListener(uno::Reference<css::code::semantic::XSemanticTokenListener>(
+                    mxListener, uno::UNO_QUERY));
     }
     catch (const uno::Exception&)
     {

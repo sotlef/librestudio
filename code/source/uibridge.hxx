@@ -23,6 +23,8 @@
 #include <com/sun/star/code/output/XOutputListener.hpp>
 #include <com/sun/star/code/project/ProjectEvent.hpp>
 #include <com/sun/star/code/project/XProjectListener.hpp>
+#include <com/sun/star/code/semantic/SemanticTokenEvent.hpp>
+#include <com/sun/star/code/semantic/XSemanticTokenListener.hpp>
 #include <com/sun/star/code/task/XTaskListener.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <tools/link.hxx>
@@ -71,6 +73,7 @@ class ServiceListener final
                                   css::code::document::XDocumentListener,
                                   css::code::output::XOutputListener,
                                   css::code::project::XProjectListener,
+                                  css::code::semantic::XSemanticTokenListener,
                                   css::code::task::XTaskListener>
 {
 public:
@@ -91,6 +94,10 @@ public:
     }
     void SAL_CALL channelCleared(const OUString&) override { m_xNotifier->Notify(); }
     void SAL_CALL projectChanged(const css::code::project::ProjectEvent&) override
+    {
+        m_xNotifier->Notify();
+    }
+    void SAL_CALL tokensChanged(const css::code::semantic::SemanticTokenEvent&) override
     {
         m_xNotifier->Notify();
     }
