@@ -37,12 +37,14 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/editor/codeeditview.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/finddialog.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/gitbranchespopover.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/gotosymboldialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/optionsdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/optionspages.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/recentprojects.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/uibridge.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/vcsstatusbarcontrol.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/workbench.cxx"
     # The Output dock's own SfxChildWindow/SfxDockingWindow/IDeckHost
     # trio -- unlike codesidebar's panel factory below, these are
@@ -198,6 +200,7 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/finder.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/gitvcs.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/jobregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/outputcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectconfigstore.cxx"
@@ -206,7 +209,8 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/semantictokencontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolindex.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolstore.cxx"
-    "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx")
+    "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/vcsmanager.cxx")
 
 target_include_directories(codeservices PRIVATE
     "${CMAKE_SOURCE_DIR}/code/source/services"
@@ -356,6 +360,7 @@ endforeach ()
 # share/config/soffice.cfg/ -- same "<module>/ui/" convention every other
 # module's own weld .ui files use (e.g. svx/ui/sidebarempty.ui).
 set(CODE_UI_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/branchespopover.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/cmakeconfigpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configurationbox.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configureprojectdialog.ui"
@@ -368,6 +373,7 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findresultspage.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findpage.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/gotosymboldialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/newbranchdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionsdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorfont.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorgeneral.ui"

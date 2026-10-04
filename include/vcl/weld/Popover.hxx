@@ -31,6 +31,13 @@ public:
 
     virtual void resize_to_request() = 0;
 
+    // Where the popover is on the screen, and moving it there: for a popover
+    // the user resizes by an edge, so that the opposite edge stays where it
+    // is.  False where the backend cannot tell or place it (a popover under
+    // Wayland is placed by the compositor, against an anchor); the default.
+    virtual bool get_screen_rect(tools::Rectangle& /*rRect*/) const { return false; }
+    virtual bool set_screen_position(const Point& /*rPos*/) { return false; }
+
     void connect_closed(const Link<weld::Popover&, void>& rLink) { m_aCloseHdl = rLink; }
 };
 }

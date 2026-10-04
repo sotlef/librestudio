@@ -29,6 +29,9 @@ public:
     virtual void resize_to_request() override;
 
     virtual bool eventFilter(QObject* pObject, QEvent* pEvent) override;
+
+    virtual bool get_screen_rect(tools::Rectangle& rRect) const override;
+    virtual bool set_screen_position(const Point& rPos) override;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

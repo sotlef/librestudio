@@ -69,6 +69,15 @@
       single-instance="true">
     <singleton name="com.sun.star.code.index.theCompileCommandProvider"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.VcsManager"
+      constructor="com_sun_star_comp_code_VcsManager_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.vcs.theVcsManager"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.GitPlugin"
+      constructor="com_sun_star_comp_code_GitPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.TaskHub"
       constructor="com_sun_star_comp_code_TaskHub_get_implementation"
       single-instance="true">

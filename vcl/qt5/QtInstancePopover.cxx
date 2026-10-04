@@ -44,7 +44,43 @@ void QtInstancePopover::popdown()
     GetQtInstance().RunInMainThread([&] { getQWidget()->hide(); });
 }
 
-void QtInstancePopover::resize_to_request() { assert(false && "Not implemented yet"); }
+void QtInstancePopover::resize_to_request()
+{
+    SolarMutexGuard g;
+
+    GetQtInstance().RunInMainThread([&] { getQWidget()->adjustSize(); });
+}
+
+bool QtInstancePopover::get_screen_rect(tools::Rectangle& rRect) const
+{
+    SolarMutexGuard g;
+
+    bool bRet = false;
+    GetQtInstance().RunInMainThread([&] {
+        QWidget* pWidget = getQWidget();
+        if (!pWidget->isVisible())
+            return;
+        const QRect aRect = pWidget->frameGeometry();
+        rRect = tools::Rectangle(Point(aRect.x(), aRect.y()), Size(aRect.width(), aRect.height()));
+        bRet = true;
+    });
+    return bRet;
+}
+
+bool QtInstancePopover::set_screen_position(const Point& rPos)
+{
+    SolarMutexGuard g;
+
+    bool bRet = false;
+    GetQtInstance().RunInMainThread([&] {
+        QWidget* pWidget = getQWidget();
+        if (!pWidget->isVisible())
+            return;
+        pWidget->move(rPos.X(), rPos.Y());
+        bRet = true;
+    });
+    return bRet;
+}
 
 bool QtInstancePopover::eventFilter(QObject* pObject, QEvent* pEvent)
 {

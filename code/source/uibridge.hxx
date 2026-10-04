@@ -26,6 +26,8 @@
 #include <com/sun/star/code/semantic/SemanticTokenEvent.hpp>
 #include <com/sun/star/code/semantic/XSemanticTokenListener.hpp>
 #include <com/sun/star/code/task/XTaskListener.hpp>
+#include <com/sun/star/code/vcs/RepositoryEvent.hpp>
+#include <com/sun/star/code/vcs/XRepositoryListener.hpp>
 #include <cppuhelper/implbase.hxx>
 #include <tools/link.hxx>
 #include <vcl/svapp.hxx>
@@ -74,7 +76,8 @@ class ServiceListener final
                                   css::code::output::XOutputListener,
                                   css::code::project::XProjectListener,
                                   css::code::semantic::XSemanticTokenListener,
-                                  css::code::task::XTaskListener>
+                                  css::code::task::XTaskListener,
+                                  css::code::vcs::XRepositoryListener>
 {
 public:
     explicit ServiceListener(std::shared_ptr<UiNotifier> xNotifier)
@@ -98,6 +101,10 @@ public:
         m_xNotifier->Notify();
     }
     void SAL_CALL tokensChanged(const css::code::semantic::SemanticTokenEvent&) override
+    {
+        m_xNotifier->Notify();
+    }
+    void SAL_CALL repositoryChanged(const css::code::vcs::RepositoryEvent&) override
     {
         m_xNotifier->Notify();
     }

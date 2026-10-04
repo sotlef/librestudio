@@ -18,6 +18,9 @@
 #include <com/sun/star/code/project/XProjectConfigurationState.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
+#include <com/sun/star/code/vcs/XRepositoryListener.hpp>
+#include <com/sun/star/code/vcs/XVcsManager.hpp>
+#include <com/sun/star/code/vcs/theVcsManager.hpp>
 #include <sfx2/sidebar/SidebarController.hxx>
 
 #include <algorithm>
@@ -90,6 +93,16 @@ Workbench::Workbench(uno::Reference<uno::XComponentContext> xContext)
     {
         SAL_WARN("code", "the status bar cannot follow background jobs: " << rException.Message);
     }
+    // the branch in the status bar follows the repositories the same way
+    try
+    {
+        css::code::vcs::theVcsManager::get(m_xContext)->addVcsListener(
+            css::uno::Reference<css::code::vcs::XRepositoryListener>(m_xJobListener, css::uno::UNO_QUERY));
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "the status bar cannot follow version control: " << rException.Message);
+    }
 }
 
 Workbench::~Workbench()
@@ -103,6 +116,14 @@ Workbench::~Workbench()
     {
     }
     m_xJobNotifier->Detach();
+    try
+    {
+        css::code::vcs::theVcsManager::get(m_xContext)->removeVcsListener(
+            css::uno::Reference<css::code::vcs::XRepositoryListener>(m_xJobListener, css::uno::UNO_QUERY));
+    }
+    catch (const uno::Exception&)
+    {
+    }
     try
     {
         css::code::core::theJobRegistry::get(m_xContext)->removeJobListener(m_xJobListener);
@@ -217,6 +238,9 @@ void Workbench::RememberOpenedProjects()
 void Workbench::UpdateSolutionDeck()
 {
     RememberOpenedProjects();
+    // the active project may have changed, and with it the working copy shown
+    if (SfxViewFrame* pFrame = SfxViewFrame::Current())
+        pFrame->GetBindings().Invalidate(SID_CODE_STATUS_VCS);
     bool bAvailable = false;
     try
     {
@@ -253,6 +277,7 @@ void Workbench::InvalidateStatus()
     {
         pFrame->GetBindings().Invalidate(SID_CODE_STATUS_READY);
         pFrame->GetBindings().Invalidate(SID_CODE_STATUS_TASKS);
+        pFrame->GetBindings().Invalidate(SID_CODE_STATUS_VCS);
         pFrame->GetBindings().Invalidate(SID_CODE_BUILD);
         pFrame->GetBindings().Invalidate(SID_CODE_REBUILD);
         pFrame->GetBindings().Invalidate(SID_CODE_CLEAN);

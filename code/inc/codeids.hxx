@@ -87,4 +87,9 @@
 // projects, found by a part of its name.
 #define SID_CODE_GOTOSYMBOL          (SID_CODE_START + 19)
 
+// The status bar's version control item (.uno:CodeVcsBranch): the current
+// branch of the working copy the active project is in; empty (the item is
+// hidden) if it is in none.  A click opens the branches popup.
+#define SID_CODE_STATUS_VCS          (SID_CODE_START + 20)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs {
+
+/** A working copy of some version control system.  This interface carries only
+    identity and the one-line summary; what the system can do (browse
+    branches, ...) is expressed by further capability interfaces that the
+    object implements and that clients discover with queryInterface.  What
+    only one system has (a Git index, Subversion's path-copy branches) is in
+    that system's own interface, not here. */
+interface XRepository
+{
+    /** the system: "git", ... */
+    [attribute, readonly] string Kind;
+    /** the top directory of the working copy, as a file URL; also its identity */
+    [attribute, readonly] string RootUrl;
+
+    ::com::sun::star::code::vcs::RepositorySummary getSummary();
+    /** reads the state again, for the case that it was changed behind our back */
+    void refresh();
+
+    void addRepositoryListener( [in] ::com::sun::star::code::vcs::XRepositoryListener Listener );
+    void removeRepositoryListener( [in] ::com::sun::star::code::vcs::XRepositoryListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

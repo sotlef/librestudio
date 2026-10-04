@@ -52,6 +52,25 @@ SfxStringItem CodeStatusReady SID_CODE_STATUS_READY
     GroupId = SfxGroupId::View;
 ]
 
+// The status bar's version control item: what the repository of the active
+// project shows of itself (shell GetState), drawn by VcsStatusBarControl.
+SfxStringItem CodeVcsBranch SID_CODE_STATUS_VCS
+
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::View;
+]
+
 // File > Open Folder: asks for a directory and opens it as a project.
 SfxVoidItem CodeOpenFolder SID_CODE_OPENFOLDER
 ()
@@ -455,6 +474,11 @@ shell code_Shell
     ]
 
     SID_CODE_STATUS_READY
+    [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_STATUS_VCS
     [
         StateMethod = GetState;
     ]

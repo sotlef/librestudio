@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs {
+
+/** One version control system, registered with theVcsManager (as the symbol
+    providers are with theSymbolIndex).  Called on threads of the manager, never
+    on the UI thread. */
+interface XVcsProvider
+{
+    /** "git", ... */
+    string getKind();
+    /** The top directory of the working copy that holds Url (a file or a
+        directory), or empty if Url is not under this system's control. */
+    string findRoot( [in] string Url );
+    ::com::sun::star::code::vcs::XRepository openRepository( [in] string RootUrl )
+        raises( ::com::sun::star::code::vcs::VcsException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

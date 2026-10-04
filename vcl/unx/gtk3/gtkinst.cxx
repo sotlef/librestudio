@@ -23402,6 +23402,30 @@ public:
         // resizing to request is what gtk does automatically
     }
 
+#if !GTK_CHECK_VERSION(4, 0, 0)
+    // only the raw window used under X can be placed; a real popover is placed
+    // by the compositor against its anchor
+    virtual bool get_screen_rect(tools::Rectangle& rRect) const override
+    {
+        if (!m_pMenuHack || !m_bMenuPoppedUp)
+            return false;
+        GtkWidget* pWindow = GTK_WIDGET(m_pMenuHack);
+        gint x(0), y(0);
+        gdk_window_get_position(widget_get_surface(pWindow), &x, &y);
+        rRect = tools::Rectangle(Point(x, y), Size(gtk_widget_get_allocated_width(pWindow),
+                                                   gtk_widget_get_allocated_height(pWindow)));
+        return true;
+    }
+
+    virtual bool set_screen_position(const Point& rPos) override
+    {
+        if (!m_pMenuHack || !m_bMenuPoppedUp)
+            return false;
+        gtk_window_move(m_pMenuHack, rPos.X(), rPos.Y());
+        return true;
+    }
+#endif
+
     virtual ~GtkInstancePopover() override
     {
         PopdownAndFlushClosedSignal();

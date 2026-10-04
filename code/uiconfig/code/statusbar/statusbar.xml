@@ -17,4 +17,10 @@
  <statusbar:statusbaritem xlink:href=".uno:CodeBackgroundTasks" statusbar:align="left" statusbar:ownerdraw="true" statusbar:style="flat" statusbar:width="16" statusbar:offset="0"/>
  <statusbar:statusbaritem xlink:href=".uno:CodeStatusReady" statusbar:align="left" statusbar:style="flat" statusbar:width="60"/>
  <statusbar:statusbaritem xlink:href=".uno:StatusGetTitle" statusbar:align="left" statusbar:autosize="true" statusbar:width="240"/>
+ <!-- the right end: the autosize item above takes the free room, so what
+      follows it is at the right edge.  Version control: the branch of the
+      working copy (code/source/vcsstatusbarcontrol.cxx); hidden outside one by
+      the control itself, hence mandatory: vcl would otherwise show it again
+      on every layout. -->
+ <statusbar:statusbaritem xlink:href=".uno:CodeVcsBranch" statusbar:align="right" statusbar:ownerdraw="true" statusbar:style="flat" statusbar:mandatory="true" statusbar:width="140"/>
 </statusbar:statusbar>

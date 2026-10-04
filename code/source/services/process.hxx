@@ -25,10 +25,14 @@ namespace codeservices
 /// program is terminated.  Returns the program's exit code; -1 if it could not
 /// be started or was terminated.  rStartError gets the reason for the first.
 /// The program is looked up in PATH; rWorkingDirectory is a file URL, or empty.
+/// rEnvironment is "NAME=value" entries that are added to (or replace those
+/// of) the environment of this process; honoured on Linux, where there is an
+/// environment block to merge with, ignored elsewhere.
 sal_Int32 RunProcess(const OUString& rProgram, const std::vector<OUString>& rArguments,
                      const OUString& rWorkingDirectory,
                      const std::function<void(bool bStderr, const OUString& rLine)>& rSink,
-                     const std::function<bool()>& rIsCancelled, OUString& rStartError);
+                     const std::function<bool()>& rIsCancelled, OUString& rStartError,
+                     const std::vector<OUString>& rEnvironment = {});
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

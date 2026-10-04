@@ -14,6 +14,7 @@
 #include <osl/security.h>
 #include <rtl/strbuf.hxx>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -24,6 +25,7 @@
 
 #if defined(__linux__)
 #include <csignal>
+#include <unistd.h>
 #include <dirent.h>
 #include <fstream>
 #include <sys/types.h>
@@ -133,8 +135,29 @@ void ReadLines(oslFileHandle hPipe, bool bStderr,
 sal_Int32 RunProcess(const OUString& rProgram, const std::vector<OUString>& rArguments,
                      const OUString& rWorkingDirectory,
                      const std::function<void(bool, const OUString&)>& rSink,
-                     const std::function<bool()>& rIsCancelled, OUString& rStartError)
+                     const std::function<bool()>& rIsCancelled, OUString& rStartError,
+                     const std::vector<OUString>& rEnvironment)
 {
+    // osl takes the environment as the whole of it: start from ours
+    std::vector<OUString> aEnvironment;
+#if defined(__linux__)
+    if (!rEnvironment.empty())
+    {
+        auto nameOf = [](const OUString& rEntry) { return rEntry.copy(0, rEntry.indexOf('=') + 1); };
+        for (char** ppEntry = environ; ppEntry && *ppEntry; ++ppEntry)
+        {
+            const OUString aEntry = OUString::fromUtf8(*ppEntry);
+            if (std::none_of(rEnvironment.begin(), rEnvironment.end(),
+                             [&](const OUString& r) { return nameOf(r) == nameOf(aEntry); }))
+                aEnvironment.push_back(aEntry);
+        }
+        aEnvironment.insert(aEnvironment.end(), rEnvironment.begin(), rEnvironment.end());
+    }
+#endif
+    std::vector<rtl_uString*> aEnvironmentData;
+    for (const OUString& rEntry : aEnvironment)
+        aEnvironmentData.push_back(rEntry.pData);
+
     std::vector<rtl_uString*> aArguments;
     for (const OUString& rArgument : rArguments)
         aArguments.push_back(rArgument.pData);
@@ -147,7 +170,9 @@ sal_Int32 RunProcess(const OUString& rProgram, const std::vector<OUString>& rArg
     const oslProcessError eError = osl_executeProcess_WithRedirectedIO(
         rProgram.pData, aArguments.data(), static_cast<sal_uInt32>(aArguments.size()),
         osl_Process_SEARCHPATH | osl_Process_HIDDEN, hSecurity,
-        rWorkingDirectory.isEmpty() ? nullptr : rWorkingDirectory.pData, nullptr, 0, &hProcess, &hIn,
+        rWorkingDirectory.isEmpty() ? nullptr : rWorkingDirectory.pData,
+        aEnvironmentData.empty() ? nullptr : aEnvironmentData.data(),
+        static_cast<sal_uInt32>(aEnvironmentData.size()), &hProcess, &hIn,
         &hOut, &hErr);
     osl_freeSecurityHandle(hSecurity);
 

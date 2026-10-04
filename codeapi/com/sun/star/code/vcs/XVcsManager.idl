@@ -1,0 +1,32 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs {
+
+/** Finds out which of the open projects are working copies and keeps their
+    repositories.  The deepest root wins when working copies are nested. */
+interface XVcsManager
+{
+    void registerProvider( [in] ::com::sun::star::code::vcs::XVcsProvider Provider );
+    void unregisterProvider( [in] string Kind );
+
+    /** The repository that holds Url, or void if it is not under version
+        control. */
+    ::com::sun::star::code::vcs::XRepository getRepository( [in] string Url );
+    sequence< ::com::sun::star::code::vcs::XRepository > getRepositories();
+
+    /** Told of repositories appearing and disappearing, and of the changes of
+        every one of them. */
+    void addVcsListener( [in] ::com::sun::star::code::vcs::XRepositoryListener Listener );
+    void removeVcsListener( [in] ::com::sun::star::code::vcs::XRepositoryListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

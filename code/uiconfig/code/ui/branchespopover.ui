@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkListStore" id="liststore">
+    <columns>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <!-- the weld::TreeView's own id column -->
+      <column type="gchararray"/>
+      <!-- the text weight of each text column, for set_text_emphasis -->
+      <column type="gint"/>
+      <column type="gint"/>
+    </columns>
+  </object>
+  <object class="GtkPopover" id="popover">
+    <property name="can-focus">False</property>
+    <property name="no-show-all">True</property>
+    <child>
+      <!-- the one container child: the generic-vcl popover only lays itself
+           out when its child is a container.  The eight cells around the
+           content are the edges and corners the popup is resized by.  No
+           double hyphen in comments, its strict XML parser rejects them -->
+      <object class="GtkGrid" id="container">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <child>
+          <object class="GtkDrawingArea" id="nwedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="nedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">1</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="needge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">2</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="wedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">1</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="eedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">1</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">2</property>
+            <property name="top-attach">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="swedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="sedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">1</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkDrawingArea" id="seedge">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="width-request">6</property>
+            <property name="height-request">6</property>
+            <property name="hexpand">False</property>
+            <property name="vexpand">False</property>
+          </object>
+          <packing>
+            <property name="left-attach">2</property>
+            <property name="top-attach">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="content">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="orientation">vertical</property>
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkEntry" id="search">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="placeholder-text" translatable="yes" context="branchespopover|search|placeholder_text">Search for a branch</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkBox" id="actions">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="spacing">6</property>
+            <child>
+              <object class="GtkButton" id="newbranch">
+                <property name="label" translatable="yes" context="branchespopover|newbranch">_New Branch...</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="fetch">
+                <property name="label" translatable="yes" context="branchespopover|fetch">_Fetch</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="pull">
+                <property name="label" translatable="yes" context="branchespopover|pull">Pu_ll</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="push">
+                <property name="label" translatable="yes" context="branchespopover|push">_Push</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow" id="scrolledwindow1">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="shadow-type">in</property>
+                <child>
+                  <object class="GtkTreeView" id="branches">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="model">liststore</property>
+                    <property name="headers-visible">False</property>
+                    <child internal-child="selection">
+                      <object class="GtkTreeSelection" id="branches-selection"/>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="columnname">
+                        <property name="resizable">True</property>
+                        <property name="expand">True</property>
+                        <child>
+                          <object class="GtkCellRendererText" id="renderername"/>
+                          <attributes>
+                            <attribute name="text">0</attribute>
+                            <attribute name="weight">3</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="columninfo">
+                        <property name="resizable">True</property>
+                        <child>
+                          <object class="GtkCellRendererText" id="rendererinfo"/>
+                          <attributes>
+                            <attribute name="text">1</attribute>
+                            <attribute name="weight">4</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="status">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="halign">start</property>
+                <property name="label"></property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">1</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

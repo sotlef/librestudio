@@ -71,6 +71,7 @@
 #include "codeviewshell.hxx"
 #include "sidebar/outputchildwindow.hxx"
 #include "tasksstatusbarcontrol.hxx"
+#include "vcsstatusbarcontrol.hxx"
 
 using namespace com::sun::star;
 
@@ -289,6 +290,7 @@ int CodeApplication::Main()
         // (.uno:CodeStatusReady needs no registration: a plain SfxStringItem
         // state shown by the default SfxStatusBarControl.)
         ::code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
+        ::code::VcsStatusBarControl::RegisterControl(SID_CODE_STATUS_VCS, nullptr);
         ::code::ConfigurationControl::RegisterControl(SID_CODE_CONFIGURATION, nullptr);
 
         xMainWindow = VclPtr<WorkWindow>::Create(nullptr,

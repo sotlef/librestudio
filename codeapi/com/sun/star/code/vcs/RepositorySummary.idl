@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs {
+
+/** What a repository shows of itself in one line; every system fills it in its
+    own terms, so the IDE can show any of them without knowing which it is. */
+struct RepositorySummary
+{
+    /** the branch, "trunk r123", ...: what the status bar shows */
+    string Label;
+    string Tooltip;
+    /** commits not yet sent / not yet received; 0 where the system has no such notion */
+    long Ahead;
+    long Behind;
+    /** an operation is running */
+    boolean Busy;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

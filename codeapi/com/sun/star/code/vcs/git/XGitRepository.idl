@@ -1,0 +1,32 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs { module git {
+
+/** What only a Git repository does.  The calls return when the operation is
+    over, which may take long (the network): call them from a thread of your
+    own.  They also run as a background job, visible and cancellable there. */
+interface XGitRepository
+{
+    void checkout( [in] string Branch )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** Creates Branch at StartPoint (empty: the current commit). */
+    void createBranch( [in] string Branch, [in] string StartPoint, [in] boolean Checkout )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    void fetch() raises( ::com::sun::star::code::vcs::VcsException );
+    void pull() raises( ::com::sun::star::code::vcs::VcsException );
+    void push() raises( ::com::sun::star::code::vcs::VcsException );
+    sequence< string > getRemotes()
+        raises( ::com::sun::star::code::vcs::VcsException );
+};
+
+}; }; }; }; }; };
+
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

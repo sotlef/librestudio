@@ -37,6 +37,7 @@
 #include "optionsdialog.hxx"
 #include "finddialog.hxx"
 #include "gotosymboldialog.hxx"
+#include "vcsstatusbarcontrol.hxx"
 #include <sfx2/objface.hxx>
 #include <vector>
 #include <sfx2/request.hxx>
@@ -390,6 +391,8 @@ void Shell::GetState(SfxItemSet& rSet)
         rSet.Put(SfxVoidItem(SID_CODE_CONFIGURATION));
     if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_STATUS_TASKS));
+    if (rSet.GetItemState(SID_CODE_STATUS_VCS, false) != SfxItemState::UNKNOWN)
+        rSet.Put(SfxStringItem(SID_CODE_STATUS_VCS, VcsStatusText()));
     if (rSet.GetItemState(SID_CODE_STATUS_READY, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxStringItem(SID_CODE_STATUS_READY,
                                Workbench::Instance() ? Workbench::Instance()->GetStatusText()
