@@ -573,15 +573,39 @@ uno::Sequence<Symbol> SymbolIndex::findDefinition(const OUString& rUrl,
         return comphelper::containerToSequence(aSame);
     }
 
-    uno::Sequence<Symbol> aFound = Store()->findById(aTarget.Id);
+    const uno::Sequence<Symbol> aFound = Store()->findById(aTarget.Id);
     if (aFound.hasElements())
     {
-        // the definitions come first; if there are some, the declarations are noise
-        std::vector<Symbol> aDefinitions;
+        // The symbol the caret is on is not a place to go to.  What is left is
+        // where the other half is: from a declaration (or a use) the
+        // definitions, from a definition the declarations; if there are none of
+        // that kind, whatever else there is.
+        auto isAtCaret = [&](const Symbol& rSymbol)
+        {
+            const auto& rStart = rSymbol.Range.Start;
+            const auto& rEnd = rSymbol.Range.End;
+            return rSymbol.Url == rUrl
+                   && (rPosition.Line > rStart.Line
+                       || (rPosition.Line == rStart.Line && rPosition.Column >= rStart.Column))
+                   && (rPosition.Line < rEnd.Line
+                       || (rPosition.Line == rEnd.Line && rPosition.Column <= rEnd.Column));
+        };
+        bool bOnDefinition = false;
+        std::vector<Symbol> aOthers;
         for (const Symbol& rSymbol : aFound)
-            if (rSymbol.IsDefinition)
-                aDefinitions.push_back(rSymbol);
-        return aDefinitions.empty() ? aFound : comphelper::containerToSequence(aDefinitions);
+        {
+            if (isAtCaret(rSymbol))
+                bOnDefinition = bOnDefinition || rSymbol.IsDefinition;
+            else
+                aOthers.push_back(rSymbol);
+        }
+        if (aOthers.empty())
+            return aFound; // nothing else is known: stay where the name is declared
+        std::vector<Symbol> aPreferred;
+        for (const Symbol& rSymbol : aOthers)
+            if (rSymbol.IsDefinition != bOnDefinition)
+                aPreferred.push_back(rSymbol);
+        return comphelper::containerToSequence(aPreferred.empty() ? aOthers : aPreferred);
     }
     // not stored (a file outside the project, or not yet scanned): what the
     // provider itself says, if it says where
