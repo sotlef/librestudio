@@ -44,6 +44,11 @@ public:
     virtual void ShowRange(const OUString& rUrl, const css::code::core::Range& rRange,
                            bool bTakeFocus) = 0;
 
+    /// Replaces the range of the document, which is open in a tab (an edit that can be undone).
+    virtual void ReplaceRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                              const OUString& rNewText)
+        = 0;
+
     /// Saves the document of the tab that is showing; false if there is none.
     virtual bool SaveCurrentDocument() = 0;
 
@@ -72,6 +77,10 @@ public:
 
     /// the one workbench of the process; null before it is created and after it is gone
     static Workbench* Instance();
+
+    /// see EditorSurface::ReplaceRange; main thread
+    void ReplaceRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                      const OUString& rNewText);
 
     /// The editor area registers itself here, and withdraws with nullptr.
     void SetEditorSurface(EditorSurface* pSurface);

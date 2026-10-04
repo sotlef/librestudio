@@ -206,7 +206,8 @@ void Shell::Execute(SfxRequest& rReq)
                 bInitial = pOptions && (pOptions->GetValue() >>= aInitial);
             }
             RunFindDialog(
-                rReq.GetFrameWeld(), rReq.GetSlot() == SID_CODE_REPLACEINFILES,
+                rReq.GetFrameWeld(),
+                rReq.GetSlot() == SID_CODE_REPLACEINFILES || (bInitial && aInitial.Replace),
                 [this]
                 {
                     // the results come in the bottom dock, on the Find in Files tab

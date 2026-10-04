@@ -31,6 +31,10 @@ struct FindOptions
     boolean IncludeMisc;
     /** file name masks separated by ";", e.g. "*.cpp;*.h"; empty or "*.*" is every file */
     string FileTypes;
+    /** the results are those of Replace All: Replace says so and ReplaceWith is what the matches
+        were replaced with (only the results of showResults() carry it; a search ignores it) */
+    boolean Replace;
+    string ReplaceWith;
 };
 
 }; }; }; }; };

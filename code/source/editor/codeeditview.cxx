@@ -606,6 +606,14 @@ void CodeEditView::RevealRange(const css::code::core::Range& rRange, bool bTakeF
         GrabFocus();
 }
 
+void CodeEditView::ReplaceRange(const css::code::core::Range& rRange, const OUString& rNewText)
+{
+    MoveCaret(rRange.Start, false);
+    MoveCaret(rRange.End, true);
+    InsertText(rNewText, false);
+    ScrollInto(m_aCaret, true);
+}
+
 // ---- the caret ------------------------------------------------------------
 
 void CodeEditView::ResetBlink()

@@ -55,6 +55,8 @@ public:
     void RevealPosition(const css::code::core::Position& rPosition);
     /// Selects the range, puts the caret at its end, scrolls it into view and takes the focus if asked to.
     void RevealRange(const css::code::core::Range& rRange, bool bTakeFocus);
+    /// Replaces the range, as an edit that can be undone, and puts the caret after the new text.
+    void ReplaceRange(const css::code::core::Range& rRange, const OUString& rNewText);
     OUString GetText() const;
 
     /// Reads the Tools > Options settings again and lays the text out anew.

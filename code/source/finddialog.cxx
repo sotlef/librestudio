@@ -10,9 +10,16 @@
 #include "finddialog.hxx"
 
 #include "workbench.hxx"
+#include "services/common.hxx"
 
 #include <com/sun/star/code/search/FindOptions.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/XTextDocument.hpp>
+#include <com/sun/star/code/document/TextEdit.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <com/sun/star/code/search/FindResult.hpp>
 #include <com/sun/star/code/search/FindScope.hpp>
+#include <com/sun/star/code/search/XFindEnumeration.hpp>
 #include <com/sun/star/code/search/XFinder.hpp>
 #include <com/sun/star/code/search/theFinder.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -38,6 +45,11 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <comphelper/sequence.hxx>
 
+#include <unicode/regex.h>
+#include <unicode/uchar.h>
+#include <unicode/unistr.h>
+
+#include <map>
 #include <algorithm>
 #include <vector>
 
@@ -75,6 +87,44 @@ template <class T> css::uno::Sequence<OUString> Hist()
 
 /// the scope that is one document: there is no file to skip in it
 OUString CurrentDocument() { return u"Current document"_ustr; }
+
+/// Preserve case: the replacement takes the case of what it replaces, all
+/// upper, all lower or a capital first letter; a mixed case is left as it is.
+OUString PreserveCase(const OUString& rFound, const OUString& rReplacement)
+{
+    bool bLetters = false, bUpper = true, bLower = true;
+    for (sal_Int32 i = 0; i < rFound.getLength(); ++i)
+    {
+        const sal_Unicode c = rFound[i];
+        if (!u_isalpha(c))
+            continue;
+        bLetters = true;
+        if (u_isupper(c))
+            bLower = false;
+        else
+            bUpper = false;
+    }
+    if (!bLetters || rReplacement.isEmpty())
+        return rReplacement;
+    if (bUpper && rFound.getLength() > 1)
+        return rReplacement.toAsciiUpperCase();
+    if (bLower)
+        return rReplacement.toAsciiLowerCase();
+    // a capital first letter, the rest lower
+    if (u_isupper(rFound[0]) && rFound.getLength() > 1)
+    {
+        bool bRestLower = true;
+        for (sal_Int32 i = 1; i < rFound.getLength(); ++i)
+            if (u_isupper(rFound[i]))
+                bRestLower = false;
+        if (bRestLower)
+            return OUString::Concat(rReplacement.copy(0, 1).toAsciiUpperCase())
+                   + rReplacement.copy(1).toAsciiLowerCase();
+    }
+    if (bUpper)
+        return rReplacement.toAsciiUpperCase();
+    return rReplacement;
+}
 
 /// the directory the "Current directory" scope stands for
 OUString CurrentDirectory()
@@ -217,6 +267,10 @@ public:
     }
 
     weld::Button* FindAllButton() { return m_xFindAll.get(); }
+    weld::Button* ReplaceNextButton() { return m_xReplaceNext.get(); }
+    weld::Button* FindNextButton() { return m_xFindNext.get(); }
+    weld::Button* FindPrevButton() { return m_xFindPrev.get(); }
+    weld::Button* SkipFileButton() { return m_xSkipFile.get(); }
 
     void FocusFindWhat() { m_xFindWhat->grab_focus(); }
 
@@ -316,15 +370,23 @@ public:
         Active().FocusFindWhat();
     }
 
-    /// true if the dialog was left with Find All; the options are then in rOptions
-    bool Run(css::code::search::FindOptions& rOptions)
+    ~FindDialog()
+    {
+        if (m_xEnum.is())
+            m_xEnum->cancel();
+    }
+
+    enum class Result { None, FindAll, ReplaceAll };
+
+    /// how the dialog was left; the options are then in rOptions (for Replace All
+    /// with Replace and ReplaceWith set), rPreserveCase is the check box of Replace All
+    Result Run(css::code::search::FindOptions& rOptions, bool& rPreserveCase)
     {
         m_xDialog->run();
         Store();
-        if (!m_bFindAll)
-            return false;
         rOptions = m_aOptions;
-        return true;
+        rPreserveCase = m_bPreserveCase;
+        return m_eResult;
     }
 
 private:
@@ -385,6 +447,8 @@ private:
         rState.bExternal = rOptions.IncludeExternal;
         rState.bMisc = rOptions.IncludeMisc;
         rState.aFileTypes = rOptions.FileTypes;
+        if (rOptions.Replace)
+            rState.aReplaceWith = rOptions.ReplaceWith;
         switch (rOptions.Scope)
         {
             case FindScope_ENTIRE_SOLUTION:
@@ -407,6 +471,140 @@ private:
                 break;
             }
         }
+    }
+
+    /// Find Next / Find Previous / Skip File: the results of the search are read
+    /// as far as they are needed and the editor goes to the current one, which
+    /// is the Find in Files list without the list.  nStep is 1, -1, or 0 for
+    /// Skip File (the next result in another file).
+    void Navigate(int nStep, bool bSkipFile)
+    {
+        css::code::search::FindOptions aOptions;
+        try
+        {
+            aOptions = OptionsOf(Active().Get());
+            const bool bChanged = !(aOptions == m_aNavOptions);
+            if (!m_xEnum.is() || bChanged)
+            {
+                if (m_xEnum.is())
+                    m_xEnum->cancel();
+                m_aNavOptions = aOptions;
+                m_aNavResults.clear();
+                // the search starts again after a replace, at the same place
+                if (bChanged)
+                    m_nNavIndex = -1;
+                m_xEnum = css::code::search::theFinder::get(comphelper::getProcessComponentContext())
+                              ->find(aOptions);
+            }
+            // reads one more result; false when there are no more
+            auto aRead = [this]
+            {
+                if (!m_xEnum.is() || !m_xEnum->hasMoreResults())
+                    return false;
+                m_aNavResults.push_back(m_xEnum->nextResult());
+                return true;
+            };
+            const OUString aUrl
+                = m_nNavIndex >= 0 ? m_aNavResults[m_nNavIndex].Url : OUString();
+            if (nStep > 0)
+            {
+                sal_Int32 nNext = m_nNavIndex + 1;
+                while (true)
+                {
+                    while (nNext >= static_cast<sal_Int32>(m_aNavResults.size()) && aRead())
+                        ;
+                    if (nNext >= static_cast<sal_Int32>(m_aNavResults.size()))
+                    {
+                        // the end: it goes on from the first one
+                        if (m_aNavResults.empty() || nNext == 0)
+                            break;
+                        nNext = 0;
+                        if (!bSkipFile)
+                            break;
+                        // skipping: the first result of another file than aUrl
+                        while (nNext < static_cast<sal_Int32>(m_aNavResults.size())
+                               && m_aNavResults[nNext].Url == aUrl)
+                            ++nNext;
+                        if (nNext >= static_cast<sal_Int32>(m_aNavResults.size()))
+                            nNext = 0;
+                        break;
+                    }
+                    if (!bSkipFile || aUrl.isEmpty() || m_aNavResults[nNext].Url != aUrl)
+                        break;
+                    ++nNext;
+                }
+                m_nNavIndex = m_aNavResults.empty() ? -1 : nNext;
+            }
+            else
+            {
+                if (m_nNavIndex <= 0)
+                {
+                    // before the first: it goes on from the last one
+                    while (aRead())
+                        ;
+                    m_nNavIndex = static_cast<sal_Int32>(m_aNavResults.size()) - 1;
+                }
+                else
+                    --m_nNavIndex;
+            }
+            if (m_nNavIndex < 0)
+            {
+                std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
+                    m_xDialog.get(), VclMessageType::Info, VclButtonsType::Ok,
+                    u"No matches were found."_ustr));
+                xBox->run();
+                return;
+            }
+            const css::code::search::FindResult& rResult = m_aNavResults[m_nNavIndex];
+            if (::code::Workbench* pWorkbench = ::code::Workbench::Instance())
+                pWorkbench->revealRange(rResult.Url, rResult.Match, false);
+        }
+        catch (const css::lang::IllegalArgumentException& rException)
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
+                m_xDialog.get(), VclMessageType::Warning, VclButtonsType::Ok, rException.Message));
+            xBox->run();
+        }
+        catch (const css::uno::Exception& rException)
+        {
+            SAL_WARN("code", "cannot search: " << rException.Message);
+        }
+    }
+
+    /// Replace Next: the current match is replaced, and the next one is shown.
+    /// Without a current match it only goes to the first.
+    void ReplaceNext()
+    {
+        const FindState aState = Active().Get();
+        ::code::Workbench* pWorkbench = ::code::Workbench::Instance();
+        if (m_nNavIndex < 0 || !pWorkbench || !m_xEnum.is()
+            || !(OptionsOf(aState) == m_aNavOptions))
+        {
+            Navigate(1, false);
+            return;
+        }
+        const css::code::search::FindResult aDone = m_aNavResults[m_nNavIndex];
+        OUString aNew = aState.aReplaceWith;
+        if (aState.bPreserveCase && aDone.Match.Start.Line == aDone.Match.End.Line
+            && aDone.Match.End.Column <= aDone.LineText.getLength())
+            aNew = PreserveCase(
+                aDone.LineText.copy(aDone.Match.Start.Column,
+                                    aDone.Match.End.Column - aDone.Match.Start.Column),
+                aNew);
+        pWorkbench->ReplaceRange(aDone.Url, aDone.Match, aNew);
+        // the lines moved: the search is read again, from the match that was replaced
+        m_xEnum->cancel();
+        m_xEnum.clear();
+        m_aNavResults.clear();
+        --m_nNavIndex;
+        // a replacement that holds the match itself is not found again
+        const sal_Int32 nLine = aDone.Match.Start.Line;
+        Navigate(1, false);
+        if (m_nNavIndex >= 0 && m_aNavResults[m_nNavIndex].Url == aDone.Url
+            && m_aNavResults[m_nNavIndex].Match.Start.Line == nLine
+            && m_aNavResults[m_nNavIndex].Match.Start.Column == aDone.Match.Start.Column
+            && !aState.aReplaceWith.isEmpty())
+            Navigate(1, false);
     }
 
     FindPage& Active() { return m_nTab == 1 ? m_aReplace : m_aFind; }
@@ -461,7 +659,13 @@ private:
     FindPage m_aFind;
     FindPage m_aReplace;
     int m_nTab = 0;
-    bool m_bFindAll = false;
+    Result m_eResult = Result::None;
+    bool m_bPreserveCase = false;
+    // the search Find Next and the others walk through
+    css::uno::Reference<css::code::search::XFindEnumeration> m_xEnum;
+    css::code::search::FindOptions m_aNavOptions;
+    std::vector<css::code::search::FindResult> m_aNavResults;
+    sal_Int32 m_nNavIndex = -1;
     css::code::search::FindOptions m_aOptions;
 };
 
@@ -473,15 +677,173 @@ IMPL_LINK(FindDialog, TabHdl, const OUString&, rIdent, void)
 IMPL_LINK(FindDialog, ButtonHdl, weld::Button&, rButton, void)
 {
     // Find All of the Find tab: the search is started once the dialog is gone.
-    // The other buttons need the editor (Find Next, Replace) and are not there yet.
     if (m_nTab == 0 && &rButton == Active().FindAllButton())
     {
         m_aOptions = OptionsOf(Active().Get());
-        m_bFindAll = true;
+        m_eResult = Result::FindAll;
         m_xDialog->response(RET_OK);
         return;
     }
+    if (m_nTab == 1 && &rButton == Active().FindAllButton())
+    {
+        const FindState aState = Active().Get();
+        m_aOptions = OptionsOf(aState);
+        m_aOptions.Replace = true;
+        m_aOptions.ReplaceWith = aState.aReplaceWith;
+        m_bPreserveCase = aState.bPreserveCase;
+        m_eResult = Result::ReplaceAll;
+        m_xDialog->response(RET_OK);
+        return;
+    }
+    FindPage& rPage = Active();
+    if (&rButton == rPage.ReplaceNextButton())
+        ReplaceNext();
+    else if (&rButton == rPage.FindNextButton())
+        Navigate(1, false);
+    else if (&rButton == rPage.FindPrevButton())
+        Navigate(-1, false);
+    else if (&rButton == rPage.SkipFileButton())
+        Navigate(1, true);
     Store();
+}
+
+/// Replace All: every match of the search is replaced, in the open documents
+/// and, opening them, in the others; the lines that were changed are shown as
+/// the results of the search.
+void ReplaceAll(const css::code::search::FindOptions& rOptions, bool bPreserveCase)
+{
+    using namespace css::code::search;
+    namespace doc = css::code::document;
+    const css::uno::Reference<XFinder> xFinder
+        = theFinder::get(comphelper::getProcessComponentContext());
+    const css::uno::Reference<doc::XDocumentManager> xDocuments
+        = doc::theDocumentManager::get(comphelper::getProcessComponentContext());
+    ::code::Workbench* pWorkbench = ::code::Workbench::Instance();
+
+    // the lines the search finds, by file
+    std::map<OUString, std::vector<sal_Int32>> aLines;
+    const css::uno::Reference<XFindEnumeration> xFound = xFinder->find(rOptions);
+    while (xFound->hasMoreResults())
+    {
+        const FindResult aFound = xFound->nextResult();
+        aLines[aFound.Url].push_back(aFound.Match.Start.Line);
+    }
+    const sal_Int32 nFilesSearched = xFound->getFilesSearched();
+
+    UErrorCode eError = U_ZERO_ERROR;
+    const OUString aPattern = codeservices::FindPattern(rOptions);
+    icu::RegexMatcher aMatcher(
+        icu::UnicodeString(reinterpret_cast<const char16_t*>(aPattern.getStr()),
+                           aPattern.getLength()),
+        rOptions.MatchCase ? 0 : UREGEX_CASE_INSENSITIVE, eError);
+    if (U_FAILURE(eError) || !pWorkbench)
+        return;
+
+    std::vector<FindResult> aChanged;
+    for (const auto& [rUrl, rFileLines] : aLines)
+    {
+        css::uno::Reference<doc::XTextDocument> xText;
+        try
+        {
+            xText.set(xDocuments->openDocument(rUrl), css::uno::UNO_QUERY);
+        }
+        catch (const css::uno::Exception&)
+        {
+        }
+        if (!xText.is())
+            continue;
+
+        struct Edit
+        {
+            css::code::core::Range aRange;
+            OUString aNew;
+        };
+        // from the end of the file, so that what was not changed yet keeps its place
+        for (auto it = rFileLines.rbegin(); it != rFileLines.rend(); ++it)
+        {
+            const sal_Int32 nLine = *it;
+            OUString aLine;
+            try
+            {
+                aLine = xText->getLine(nLine);
+            }
+            catch (const css::uno::Exception&)
+            {
+                continue;
+            }
+            const icu::UnicodeString aUnicode(reinterpret_cast<const char16_t*>(aLine.getStr()),
+                                              aLine.getLength());
+            aMatcher.reset(aUnicode);
+            std::vector<Edit> aEdits;
+            icu::UnicodeString aNewLine;
+            sal_Int32 nPreviousEnd = 0;
+            sal_Int32 nFirstStart = -1, nFirstEnd = 0;
+            eError = U_ZERO_ERROR;
+            while (aMatcher.find(eError) && U_SUCCESS(eError))
+            {
+                const sal_Int32 nStart = aMatcher.start(eError), nEnd = aMatcher.end(eError);
+                OUString aReplacement = rOptions.ReplaceWith;
+                if (bPreserveCase)
+                    aReplacement = PreserveCase(aLine.copy(nStart, nEnd - nStart), aReplacement);
+                if (!rOptions.UseRegex)
+                {
+                    // taken literally
+                    OUStringBuffer aEscaped;
+                    for (sal_Int32 i = 0; i < aReplacement.getLength(); ++i)
+                    {
+                        if (aReplacement[i] == '$' || aReplacement[i] == '\\')
+                            aEscaped.append('\\');
+                        aEscaped.append(aReplacement[i]);
+                    }
+                    aReplacement = aEscaped.makeStringAndClear();
+                }
+                const sal_Int32 nNewStart = aNewLine.length() + (nStart - nPreviousEnd);
+                aMatcher.appendReplacement(
+                    aNewLine,
+                    icu::UnicodeString(reinterpret_cast<const char16_t*>(aReplacement.getStr()),
+                                       aReplacement.getLength()),
+                    eError);
+                nPreviousEnd = nEnd;
+                Edit aEdit;
+                aEdit.aRange.Start.Line = aEdit.aRange.End.Line = nLine;
+                aEdit.aRange.Start.Column = nStart;
+                aEdit.aRange.End.Column = nEnd;
+                icu::UnicodeString aPart;
+                aNewLine.extractBetween(nNewStart, aNewLine.length(), aPart);
+                aEdit.aNew = OUString(reinterpret_cast<const sal_Unicode*>(aPart.getBuffer()),
+                                      aPart.length());
+                aEdits.push_back(std::move(aEdit));
+                if (nFirstStart < 0)
+                {
+                    nFirstStart = nNewStart;
+                    nFirstEnd = aNewLine.length();
+                }
+                // an empty match would not go on
+                if (nEnd == nStart && nEnd >= aLine.getLength())
+                    break;
+            }
+            if (aEdits.empty())
+                continue;
+            aMatcher.appendTail(aNewLine);
+
+            for (auto e = aEdits.rbegin(); e != aEdits.rend(); ++e)
+                pWorkbench->ReplaceRange(rUrl, e->aRange, e->aNew);
+
+            FindResult aResult;
+            aResult.Url = rUrl;
+            aResult.LineText = OUString(reinterpret_cast<const sal_Unicode*>(aNewLine.getBuffer()),
+                                        aNewLine.length());
+            aResult.Match.Start.Line = aResult.Match.End.Line = nLine;
+            aResult.Match.Start.Column = nFirstStart;
+            aResult.Match.End.Column = nFirstEnd;
+            aChanged.push_back(std::move(aResult));
+        }
+    }
+    // in the order of the files and of the lines
+    std::reverse(aChanged.begin(), aChanged.end());
+    std::stable_sort(aChanged.begin(), aChanged.end(),
+                     [](const FindResult& a, const FindResult& b) { return a.Url < b.Url; });
+    xFinder->showResults(rOptions, comphelper::containerToSequence(aChanged), nFilesSearched);
 }
 }
 
@@ -490,9 +852,12 @@ void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
                    const css::code::search::FindOptions* pInitial)
 {
     css::code::search::FindOptions aOptions;
+    bool bPreserveCase = false;
+    FindDialog::Result eResult;
     {
         FindDialog aDialog(pParent, bReplaceTab, pInitial);
-        if (!aDialog.Run(aOptions))
+        eResult = aDialog.Run(aOptions, bPreserveCase);
+        if (eResult == FindDialog::Result::None)
             return;
     }
 
@@ -500,6 +865,11 @@ void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
         rShowResults();
     try
     {
+        if (eResult == FindDialog::Result::ReplaceAll)
+        {
+            ReplaceAll(aOptions, bPreserveCase);
+            return;
+        }
         css::code::search::theFinder::get(comphelper::getProcessComponentContext())
             ->startSearch(aOptions);
     }

@@ -346,6 +346,13 @@ void Workbench::revealRange(const OUString& rUrl, const css::code::core::Range& 
         m_pEditorSurface->ShowRange(rUrl, rRange, bTakeFocus);
 }
 
+void Workbench::ReplaceRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                             const OUString& rNewText)
+{
+    if (m_pEditorSurface)
+        m_pEditorSurface->ReplaceRange(rUrl, rRange, rNewText);
+}
+
 // ---- dialogs --------------------------------------------------------------
 
 cf::SaveChoice Workbench::askSaveChanges(const OUString& rDocumentName)

@@ -55,6 +55,7 @@ add_executable(code
 target_compile_definitions(code PRIVATE VCL_INTERNALS)
 
 target_include_directories(code PRIVATE
+    "${CMAKE_SOURCE_DIR}/code/source/services"
     "${CMAKE_SOURCE_DIR}/code/inc"
     "${CMAKE_SOURCE_DIR}/code/source"
     "${CMAKE_SOURCE_DIR}/code/sdi"
@@ -103,7 +104,7 @@ if (ENABLE_QT6)
     add_dependencies(code vclplug_qt6)
 endif()
 
-target_link_libraries(code PRIVATE
+target_link_libraries(code PRIVATE ICU::uc ICU::i18n
     comphelper cppu cppuhelper sal sfx fwk svxcore svx svl svt tk tl ucbhelper utl vcl vclmain)
 
 # Same reason every vcl workbench program above gets one: UNO/configmgr

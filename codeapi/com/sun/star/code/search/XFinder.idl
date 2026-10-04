@@ -21,6 +21,14 @@ interface XFinder
     ::com::sun::star::code::search::XFindEnumeration startSearch( [in] ::com::sun::star::code::search::FindOptions Options )
         raises( ::com::sun::star::lang::IllegalArgumentException );
 
+    /** Shows results that somebody else found (Replace All: the lines that were
+        changed): the listeners are told as of startSearch(), and the enumeration
+        goes through Results.  A search that was shown before is cancelled. */
+    ::com::sun::star::code::search::XFindEnumeration showResults(
+        [in] ::com::sun::star::code::search::FindOptions Options,
+        [in] sequence< ::com::sun::star::code::search::FindResult > Results,
+        [in] long FilesSearched );
+
     /** the enumeration of the search the front end shows now (the last
         startSearch()); null if there was none */
     [attribute, readonly] ::com::sun::star::code::search::XFindEnumeration ShownSearch;

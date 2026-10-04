@@ -179,6 +179,18 @@ void EditorMDIPanel::ShowDocumentAt(const OUString& rUrl, const css::code::core:
         maDocumentContents[nDocId].mxView->RevealPosition(*pPosition);
 }
 
+void EditorMDIPanel::ReplaceRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                                  const OUString& rNewText)
+{
+    ShowRange(rUrl, rRange, false);
+    for (const auto& [nId, rContent] : maDocumentContents)
+        if (rContent.msUrl == rUrl)
+        {
+            rContent.mxView->ReplaceRange(rRange, rNewText);
+            return;
+        }
+}
+
 bool EditorMDIPanel::SaveCurrentDocument()
 {
     if (!mxMDI)

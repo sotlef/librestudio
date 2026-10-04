@@ -10,6 +10,9 @@
 #pragma once
 
 #include <com/sun/star/code/core/JobStatus.hpp>
+#include <com/sun/star/code/search/FindOptions.hpp>
+#include <rtl/character.hxx>
+#include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
 
 // Helpers shared by the services of the "codeservices" component library.
@@ -22,6 +25,30 @@ OUString GetMimeType(const OUString& rUrl);
 /// Strips a trailing '/' (but never from a bare "file:///"), so that one
 /// directory has one URL and therefore one identity in the managers.
 OUString NormalizeUrl(const OUString& rUrl);
+
+/// the text to search for as an ICU regular expression: what was typed, taken
+/// literally unless it is one, with the whole-word frame if asked for
+inline OUString FindPattern(const css::code::search::FindOptions& rOptions)
+{
+    OUStringBuffer aPattern;
+    if (rOptions.UseRegex)
+        aPattern.append(rOptions.FindWhat);
+    else
+    {
+        for (sal_Int32 i = 0; i < rOptions.FindWhat.getLength(); ++i)
+        {
+            const sal_Unicode c = rOptions.FindWhat[i];
+            if (c < 128 && !rtl::isAsciiAlphanumeric(c) && c != ' ' && c != '_')
+                aPattern.append('\\');
+            aPattern.append(c);
+        }
+    }
+    OUString aText = aPattern.makeStringAndClear();
+    if (rOptions.MatchWholeWord)
+        aText = "\\b(?:" + aText + ")\\b";
+    return aText;
+}
+
 
 inline bool IsFinalStatus(css::code::core::JobStatus eStatus)
 {

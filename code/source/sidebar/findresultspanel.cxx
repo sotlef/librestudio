@@ -256,7 +256,10 @@ void FindResultsPanel::Refresh()
     t.mxEnumeration = xShown;
     t.mbHasOptions = mxListener->Last(t.maOptions);
     if (t.mbHasOptions)
-        mxTabs->set_tab_label_text(t.msIdent, "Find \"" + t.maOptions.FindWhat + "\"");
+        mxTabs->set_tab_label_text(
+            t.msIdent, t.maOptions.Replace ? OUString("Replace \"" + t.maOptions.FindWhat + "\" with \""
+                                                 + t.maOptions.ReplaceWith + "\"")
+                                           : OUString("Find \"" + t.maOptions.FindWhat + "\""));
     t.mxDescription->set_label(t.mbHasOptions ? Describe(t.maOptions) : OUString());
     t.mxDescription->set_tooltip_text(t.mxDescription->get_label());
     mxTabs->set_current_page(t.msIdent);
@@ -417,7 +420,9 @@ void FindResultsPanel::HighlightListRow(Tab& t)
 OUString FindResultsPanel::Describe(const css::code::search::FindOptions& rOptions)
 {
     using namespace css::code::search;
-    OUString aText = "Find all \"" + rOptions.FindWhat + "\"";
+    OUString aText = rOptions.Replace ? OUString("Replace all \"" + rOptions.FindWhat + "\" with \""
+                                            + rOptions.ReplaceWith + "\"")
+                                      : OUString("Find all \"" + rOptions.FindWhat + "\"");
     if (rOptions.MatchCase)
         aText += ", Match case";
     if (rOptions.MatchWholeWord)
@@ -504,7 +509,8 @@ IMPL_LINK(FindResultsPanel, ToolbarClickHdl, const OUString&, rIdent, void)
     else if (rIdent == "refresh")
     {
         // the same search again; theFinder tells the panel of it
-        if (t.mbHasOptions)
+        // what was replaced is not searched for again
+        if (t.mbHasOptions && !t.maOptions.Replace)
             try
             {
                 mpRefreshTab = &t;

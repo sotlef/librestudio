@@ -112,25 +112,9 @@ OUString NameOf(const OUString& rUrl)
     return rUrl.copy(rUrl.lastIndexOf('/') + 1);
 }
 
-/// the text to search for as a regular expression: what was typed, taken literally, unless it is one
 icu::UnicodeString PatternOf(const FindOptions& rOptions)
 {
-    OUStringBuffer aPattern;
-    if (rOptions.UseRegex)
-        aPattern.append(rOptions.FindWhat);
-    else
-    {
-        for (sal_Int32 i = 0; i < rOptions.FindWhat.getLength(); ++i)
-        {
-            const sal_Unicode c = rOptions.FindWhat[i];
-            if (c < 128 && !rtl::isAsciiAlphanumeric(c) && c != ' ' && c != '_')
-                aPattern.append('\\');
-            aPattern.append(c);
-        }
-    }
-    OUString aText = aPattern.makeStringAndClear();
-    if (rOptions.MatchWholeWord)
-        aText = "\\b(?:" + aText + ")\\b";
+    const OUString aText = FindPattern(rOptions);
     return icu::UnicodeString(reinterpret_cast<const char16_t*>(aText.getStr()), aText.getLength());
 }
 
@@ -516,6 +500,42 @@ private:
     bool m_bCancelled = false;
 };
 
+/// results that are known: what Replace All changed
+class ListEnumeration final : public cppu::WeakImplHelper<XFindEnumeration>
+{
+public:
+    ListEnumeration(const uno::Sequence<FindResult>& rResults, sal_Int32 nFilesSearched)
+        : m_aResults(rResults)
+        , m_nFilesSearched(nFilesSearched)
+    {
+    }
+
+    sal_Bool SAL_CALL hasMoreResults() override
+    {
+        std::unique_lock aGuard(m_aMutex);
+        return m_nNext < m_aResults.getLength();
+    }
+    FindResult SAL_CALL nextResult() override
+    {
+        std::unique_lock aGuard(m_aMutex);
+        if (m_nNext >= m_aResults.getLength())
+            throw container::NoSuchElementException();
+        return m_aResults[m_nNext++];
+    }
+    sal_Int32 SAL_CALL getFilesSearched() override { return m_nFilesSearched; }
+    void SAL_CALL cancel() override
+    {
+        std::unique_lock aGuard(m_aMutex);
+        m_nNext = m_aResults.getLength();
+    }
+
+private:
+    std::mutex m_aMutex;
+    const uno::Sequence<FindResult> m_aResults;
+    const sal_Int32 m_nFilesSearched;
+    sal_Int32 m_nNext = 0;
+};
+
 class Finder final : public comphelper::WeakComponentImplHelper<XFinder, lang::XServiceInfo>
 {
 public:
@@ -532,7 +552,12 @@ public:
 
     uno::Reference<XFindEnumeration> SAL_CALL startSearch(const FindOptions& rOptions) override
     {
-        uno::Reference<XFindEnumeration> xSearch = new FindEnumeration(m_xContext, rOptions);
+        return show(rOptions, new FindEnumeration(m_xContext, rOptions));
+    }
+
+    uno::Reference<XFindEnumeration> show(const FindOptions& rOptions,
+                                          uno::Reference<XFindEnumeration> xSearch)
+    {
         uno::Reference<XFindEnumeration> xPrevious;
         {
             std::unique_lock aGuard(m_aMutex);
@@ -547,6 +572,13 @@ public:
         m_aListeners.forEach(aGuard, [&](const uno::Reference<XFindListener>& xListener)
                              { xListener->searchStarted(rOptions, xSearch); });
         return xSearch;
+    }
+
+    uno::Reference<XFindEnumeration> SAL_CALL showResults(
+        const FindOptions& rOptions, const uno::Sequence<FindResult>& rResults,
+        sal_Int32 nFilesSearched) override
+    {
+        return show(rOptions, new ListEnumeration(rResults, nFilesSearched));
     }
 
     uno::Reference<XFindEnumeration> SAL_CALL getShownSearch() override
