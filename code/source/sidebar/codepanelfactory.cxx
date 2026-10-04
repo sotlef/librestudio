@@ -12,6 +12,7 @@
 #include "errorlistpanel.hxx"
 #include "findresultspanel.hxx"
 #include "folderviewpanel.hxx"
+#include "gitchangespanel.hxx"
 #include "outputlogpanel.hxx"
 #include "solutionpanel.hxx"
 
@@ -73,6 +74,8 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
 
     else if (rsResourceURL.endsWith("/FindResultsPanel"))
         xControl = std::make_unique<::code::sidebar::FindResultsPanel>(pParent);
+    else if (rsResourceURL.endsWith("/GitChangesPanel"))
+        xControl = std::make_unique<::code::sidebar::GitChangesPanel>(pParent);
 
     if (xControl)
         return sfx2::sidebar::SidebarPanelBase::Create(rsResourceURL, xFrame, std::move(xControl),

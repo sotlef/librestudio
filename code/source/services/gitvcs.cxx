@@ -29,7 +29,12 @@
 #include <com/sun/star/code/vcs/XRepository.hpp>
 #include <com/sun/star/code/vcs/XRepositoryListener.hpp>
 #include <com/sun/star/code/vcs/XVcsProvider.hpp>
+#include <com/sun/star/code/vcs/git/ChangeKind.hpp>
+#include <com/sun/star/code/vcs/git/CommitInfo.hpp>
+#include <com/sun/star/code/vcs/git/FileChange.hpp>
+#include <com/sun/star/code/vcs/git/StashEntry.hpp>
 #include <com/sun/star/code/vcs/git/XGitRepository.hpp>
+#include <com/sun/star/code/vcs/git/XGitWorkingCopy.hpp>
 #include <com/sun/star/code/vcs/theVcsManager.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -49,6 +54,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <memory>
@@ -158,7 +164,8 @@ void ParseTrack(const OUString& rTrack, sal_Int32& rAhead, sal_Int32& rBehind)
 }
 
 class GitRepository final
-    : public comphelper::WeakComponentImplHelper<XRepository, XBranchBrowser, git::XGitRepository>
+    : public comphelper::WeakComponentImplHelper<XRepository, XBranchBrowser, git::XGitRepository,
+                                                 git::XGitWorkingCopy>
 {
 public:
     GitRepository(uno::Reference<uno::XComponentContext> xContext, OUString aRootUrl)
@@ -177,7 +184,7 @@ public:
     OUString SAL_CALL getKind() override { return u"git"_ustr; }
     OUString SAL_CALL getRootUrl() override { return m_aRootUrl; }
     RepositorySummary SAL_CALL getSummary() override;
-    void SAL_CALL refresh() override { Refresh(); }
+    void SAL_CALL refresh() override { Refresh(true); }
     void SAL_CALL addRepositoryListener(const uno::Reference<XRepositoryListener>& xListener) override;
     void SAL_CALL
     removeRepositoryListener(const uno::Reference<XRepositoryListener>& xListener) override;
@@ -192,7 +199,21 @@ public:
     void SAL_CALL fetch() override;
     void SAL_CALL pull() override;
     void SAL_CALL push() override;
+    uno::Sequence<git::CommitInfo> SAL_CALL getOutgoingCommits() override;
     uno::Sequence<OUString> SAL_CALL getRemotes() override;
+
+    // XGitWorkingCopy
+    uno::Sequence<git::FileChange> SAL_CALL getChanges() override;
+    void SAL_CALL stage(const uno::Sequence<OUString>& rPaths) override;
+    void SAL_CALL unstage(const uno::Sequence<OUString>& rPaths) override;
+    void SAL_CALL addUntracked(const uno::Sequence<OUString>& rPaths) override;
+    void SAL_CALL rollback(const uno::Sequence<OUString>& rPaths) override;
+    void SAL_CALL commit(const OUString& rMessage, sal_Bool bAll, sal_Bool bAmend) override;
+    uno::Sequence<git::StashEntry> SAL_CALL getStashes() override;
+    void SAL_CALL stash(const OUString& rMessage, sal_Bool bIncludeUntracked) override;
+    void SAL_CALL stashPop(sal_Int32 nIndex) override;
+    void SAL_CALL stashApply(sal_Int32 nIndex) override;
+    void SAL_CALL stashDrop(sal_Int32 nIndex) override;
 
     // called by the watching thread
     void Poll();
@@ -215,7 +236,14 @@ private:
     // as Run, but as a background job that can be seen and cancelled
     void RunAsJob(const OUString& rTitle, const std::vector<OUString>& rArguments);
     bool RefExists(const OUString& rRef);
-    void Refresh();
+    // bForce: tell the listeners even if the summary is the same (the working tree may differ)
+    void Refresh(bool bForce = false);
+    // the files as git status lists them, parsed
+    std::vector<git::FileChange> ReadChanges();
+    // git add/restore/... on a list of paths, never read as patterns
+    void RunOnPaths(const OUString& rWhat, std::vector<OUString> aArguments,
+                    const uno::Sequence<OUString>& rPaths);
+    OUString StashName(sal_Int32 nIndex) const { return "stash@{" + OUString::number(nIndex) + "}"; }
     sal_uInt64 Signature();
     RepositorySummary Compose(const RepositorySummary& rBefore);
     void StartWatching();
@@ -245,7 +273,8 @@ GitResult GitRepository::Git(const std::vector<OUString>& rArguments, bool bMuta
     aArguments.insert(aArguments.end(), rArguments.begin(), rArguments.end());
     // Nobody can answer a question or edit a message: the operation must fail
     // (or go on) by itself.  Questions leave git's files alone.
-    std::vector<OUString> aEnvironment{ u"LC_ALL=C"_ustr, u"GIT_TERMINAL_PROMPT=0"_ustr };
+    std::vector<OUString> aEnvironment{ u"LC_ALL=C"_ustr, u"GIT_TERMINAL_PROMPT=0"_ustr,
+                                        u"GIT_LITERAL_PATHSPECS=1"_ustr };
     if (bMutating)
     {
         aEnvironment.push_back(u"GIT_EDITOR=true"_ustr);
@@ -390,6 +419,7 @@ sal_uInt64 GitRepository::Signature()
         }
     };
     mix(m_aGitDir / "HEAD");
+    mix(m_aGitDir / "index"); // what is staged
     mix(m_aCommonDir / "packed-refs");
     for (const char* pRoot : { "refs/heads", "refs/remotes" })
     {
@@ -468,7 +498,7 @@ RepositorySummary GitRepository::getSummary()
     return aSummary;
 }
 
-void GitRepository::Refresh()
+void GitRepository::Refresh(bool bForce)
 {
     RepositorySummary aNew;
     {
@@ -479,13 +509,17 @@ void GitRepository::Refresh()
                 return;
             aNew = m_aSummary;
         }
-        m_nSignature = Signature();
+        const sal_uInt64 nSignature = Signature();
+        const bool bFilesChanged = nSignature != m_nSignature;
+        m_nSignature = nSignature;
         aNew = Compose(aNew);
         std::unique_lock aGuard(m_aMutex);
         if (m_bDisposed)
             return;
-        if (aNew.Label == m_aSummary.Label && aNew.Tooltip == m_aSummary.Tooltip
-            && aNew.Ahead == m_aSummary.Ahead && aNew.Behind == m_aSummary.Behind)
+        // the index moving is news to whoever shows the changes, though not to the summary
+        if (!bForce && !bFilesChanged && aNew.Label == m_aSummary.Label
+            && aNew.Tooltip == m_aSummary.Tooltip && aNew.Ahead == m_aSummary.Ahead
+            && aNew.Behind == m_aSummary.Behind)
             return;
         m_aSummary = aNew;
     }
@@ -686,6 +720,38 @@ void GitRepository::push()
     RunAsJob(u"push"_ustr, { u"push"_ustr, u"--set-upstream"_ustr, aRemote, u"HEAD"_ustr });
 }
 
+uno::Sequence<git::CommitInfo> GitRepository::getOutgoingCommits()
+{
+    std::vector<OUString> aArguments{ u"log"_ustr, u"--format=%h%x09%an%x09%s"_ustr };
+    if (Git({ u"rev-parse"_ustr, u"--abbrev-ref"_ustr, u"--symbolic-full-name"_ustr,
+              u"@{upstream}"_ustr },
+            false)
+            .Ok())
+        aArguments.push_back(u"@{upstream}..HEAD"_ustr);
+    else
+    {
+        aArguments.push_back(u"HEAD"_ustr);
+        aArguments.push_back(u"--not"_ustr);
+        aArguments.push_back(u"--remotes"_ustr);
+    }
+    const GitResult aResult = Git(aArguments, false);
+    if (!aResult.Ok())
+        Fail(u"cannot list the commits to push"_ustr, aResult);
+    std::vector<git::CommitInfo> aCommits;
+    for (const OUString& rLine : aResult.aOut)
+    {
+        const std::vector<OUString> aFields = Split(rLine, '\t');
+        if (aFields.size() < 3)
+            continue;
+        git::CommitInfo aCommit;
+        aCommit.Hash = aFields[0];
+        aCommit.Author = aFields[1];
+        aCommit.Subject = aFields[2];
+        aCommits.push_back(std::move(aCommit));
+    }
+    return comphelper::containerToSequence(aCommits);
+}
+
 uno::Sequence<OUString> GitRepository::getRemotes()
 {
     const GitResult aResult = Git({ u"remote"_ustr }, false);
@@ -696,6 +762,306 @@ uno::Sequence<OUString> GitRepository::getRemotes()
         if (!rLine.trim().isEmpty())
             aRemotes.push_back(rLine.trim());
     return comphelper::containerToSequence(aRemotes);
+}
+
+// ---- the working copy ------------------------------------------------------
+
+namespace
+{
+git::ChangeKind KindOf(sal_Unicode c)
+{
+    switch (c)
+    {
+        case 'A':
+            return git::ChangeKind_ADDED;
+        case 'D':
+            return git::ChangeKind_DELETED;
+        case 'R':
+            return git::ChangeKind_RENAMED;
+        case 'C':
+            return git::ChangeKind_COPIED;
+        case 'U':
+            return git::ChangeKind_CONFLICTED;
+        default: // M, and T (the type of the file changed)
+            return git::ChangeKind_MODIFIED;
+    }
+}
+
+// "a b c d" in at most nFields parts: the last takes the rest, spaces and all
+std::vector<OUString> SplitFields(const OUString& rLine, int nFields)
+{
+    std::vector<OUString> aFields;
+    sal_Int32 nFrom = 0;
+    while (static_cast<int>(aFields.size()) + 1 < nFields)
+    {
+        const sal_Int32 nBlank = rLine.indexOf(' ', nFrom);
+        if (nBlank < 0)
+            break;
+        aFields.push_back(rLine.copy(nFrom, nBlank - nFrom));
+        nFrom = nBlank + 1;
+    }
+    aFields.push_back(rLine.copy(nFrom));
+    return aFields;
+}
+}
+
+std::vector<git::FileChange> GitRepository::ReadChanges()
+{
+    // -z: names are not quoted, and what separates the records is a NUL
+    const GitResult aResult
+        = Git({ u"status"_ustr, u"--porcelain=v2"_ustr, u"-z"_ustr, u"--untracked-files=all"_ustr },
+              false, [] { return false; });
+    if (!aResult.Ok())
+        Fail(u"cannot read the changes"_ustr, aResult);
+
+    OUStringBuffer aAll;
+    for (size_t i = 0; i < aResult.aOut.size(); ++i)
+        aAll.append((i ? u"\n"_ustr : u""_ustr) + aResult.aOut[i]);
+    const std::vector<OUString> aRecords = Split(aAll.makeStringAndClear(), 0);
+
+    auto urlOf = [&](const OUString& rPath)
+    {
+        OUString aUrl;
+        osl::FileBase::getFileURLFromSystemPath(m_aRootPath + "/" + rPath, aUrl);
+        return aUrl;
+    };
+
+    std::vector<git::FileChange> aChanges;
+    for (size_t i = 0; i < aRecords.size(); ++i)
+    {
+        const OUString& rRecord = aRecords[i];
+        if (rRecord.getLength() < 3)
+            continue;
+        git::FileChange aChange;
+        const sal_Unicode cKind = rRecord[0];
+        if (cKind == '?')
+        {
+            aChange.Path = rRecord.copy(2);
+            aChange.HasUnstaged = true;
+            aChange.Unstaged = git::ChangeKind_UNTRACKED;
+        }
+        else if (cKind == '1' || cKind == '2' || cKind == 'u')
+        {
+            const int nFields = cKind == '1' ? 9 : cKind == '2' ? 10 : 11;
+            const std::vector<OUString> aFields = SplitFields(rRecord, nFields);
+            if (static_cast<int>(aFields.size()) != nFields || aFields[1].getLength() != 2)
+                continue;
+            aChange.Path = aFields.back();
+            if (cKind == '2' && i + 1 < aRecords.size())
+                aChange.OldPath = aRecords[++i]; // the record that follows is where it was
+            const sal_Unicode cStaged = aFields[1][0];
+            const sal_Unicode cUnstaged = aFields[1][1];
+            if (cKind == 'u')
+            {
+                aChange.HasUnstaged = true;
+                aChange.Unstaged = git::ChangeKind_CONFLICTED;
+            }
+            else
+            {
+                if (cStaged != '.')
+                {
+                    aChange.HasStaged = true;
+                    aChange.Staged = KindOf(cStaged);
+                }
+                if (cUnstaged != '.')
+                {
+                    aChange.HasUnstaged = true;
+                    aChange.Unstaged = KindOf(cUnstaged);
+                }
+            }
+        }
+        else
+            continue; // ignored files, headers
+        aChange.Url = urlOf(aChange.Path);
+        aChanges.push_back(std::move(aChange));
+    }
+    return aChanges;
+}
+
+uno::Sequence<git::FileChange> GitRepository::getChanges()
+{
+    return comphelper::containerToSequence(ReadChanges());
+}
+
+// A command on files: "--" ends the options, so a name that starts with a dash is a name.
+void GitRepository::RunOnPaths(const OUString& rWhat, std::vector<OUString> aArguments,
+                               const uno::Sequence<OUString>& rPaths)
+{
+    if (!rPaths.hasElements())
+        return;
+    aArguments.push_back(u"--"_ustr);
+    aArguments.insert(aArguments.end(), rPaths.begin(), rPaths.end());
+    Run(rWhat, aArguments);
+}
+
+void GitRepository::stage(const uno::Sequence<OUString>& rPaths)
+{
+    RunOnPaths(u"cannot stage"_ustr, { u"add"_ustr }, rPaths);
+    Refresh(true);
+}
+
+void GitRepository::addUntracked(const uno::Sequence<OUString>& rPaths) { stage(rPaths); }
+
+void GitRepository::unstage(const uno::Sequence<OUString>& rPaths)
+{
+    if (RefExists(u"HEAD"_ustr))
+        RunOnPaths(u"cannot unstage"_ustr, { u"restore"_ustr, u"--staged"_ustr }, rPaths);
+    else // no commit yet: there is nothing to restore from; forget the files
+        RunOnPaths(u"cannot unstage"_ustr, { u"rm"_ustr, u"--cached"_ustr, u"-r"_ustr, u"-q"_ustr },
+                   rPaths);
+    Refresh(true);
+}
+
+void GitRepository::rollback(const uno::Sequence<OUString>& rPaths)
+{
+    // each kind of file is thrown away by its own command: restore knows only
+    // what the last commit has, an untracked file is for clean, and a file that
+    // was added and never committed has nothing to go back to but nothing
+    const std::vector<git::FileChange> aChanges = ReadChanges();
+    std::vector<OUString> aRestore, aRemove, aClean;
+    for (const OUString& rPath : rPaths)
+    {
+        auto it = std::find_if(aChanges.begin(), aChanges.end(),
+                               [&](const git::FileChange& r) { return r.Path == rPath; });
+        if (it == aChanges.end())
+            continue; // already as in the last commit
+        if (it->HasUnstaged && it->Unstaged == git::ChangeKind_UNTRACKED)
+            aClean.push_back(rPath);
+        else if (it->HasStaged && it->Staged == git::ChangeKind_ADDED)
+            aRemove.push_back(rPath);
+        else
+            aRestore.push_back(rPath);
+    }
+    if (!aRestore.empty())
+        RunOnPaths(u"cannot roll back"_ustr,
+                   { u"restore"_ustr, u"--source=HEAD"_ustr, u"--staged"_ustr, u"--worktree"_ustr },
+                   comphelper::containerToSequence(aRestore));
+    if (!aRemove.empty())
+        RunOnPaths(u"cannot roll back"_ustr, { u"rm"_ustr, u"-f"_ustr, u"-r"_ustr, u"-q"_ustr },
+                   comphelper::containerToSequence(aRemove));
+    if (!aClean.empty())
+        RunOnPaths(u"cannot roll back"_ustr, { u"clean"_ustr, u"-f"_ustr, u"-q"_ustr },
+                   comphelper::containerToSequence(aClean));
+    Refresh(true);
+}
+
+void GitRepository::commit(const OUString& rMessage, sal_Bool bAll, sal_Bool bAmend)
+{
+    if (rMessage.trim().isEmpty() && !bAmend)
+        throw lang::IllegalArgumentException(u"a commit needs a message"_ustr, getXWeak(), 0);
+
+    std::vector<OUString> aArguments{ u"commit"_ustr };
+    if (bAll)
+        aArguments.push_back(u"-a"_ustr);
+    // The message goes by a file: no quoting, and any characters, whatever the
+    // command line and the locale make of them.
+    const std::filesystem::path aMessageFile = m_aGitDir / "CODE_COMMIT_MSG";
+    const bool bMessage = !rMessage.trim().isEmpty();
+    if (bAmend)
+        aArguments.push_back(u"--amend"_ustr);
+    if (bMessage)
+    {
+        const OString aUtf8 = OUStringToOString(rMessage, RTL_TEXTENCODING_UTF8);
+        {
+            std::ofstream aFile(aMessageFile, std::ios::binary | std::ios::trunc);
+            aFile.write(aUtf8.getStr(), aUtf8.getLength());
+            if (!aFile)
+                throw VcsException(u"cannot write the commit message"_ustr, getXWeak(), OUString());
+        }
+        aArguments.push_back(u"-F"_ustr);
+        aArguments.push_back(OUString::fromUtf8(aMessageFile.string()));
+    }
+    else
+        aArguments.push_back(u"--no-edit"_ustr);
+
+    const GitResult aResult = Git(aArguments, true, [] { return false; });
+    if (bMessage)
+    {
+        std::error_code aError;
+        std::filesystem::remove(aMessageFile, aError);
+    }
+    if (!aResult.Ok())
+    {
+        // "nothing to commit" says so on stdout
+        OUString aWhy = Reason(aResult);
+        for (const OUString& rLine : aResult.aOut)
+            if (rLine.startsWith("nothing to commit") || rLine.startsWith("no changes added"))
+            {
+                aWhy = rLine;
+                break;
+            }
+        throw VcsException("cannot commit: " + aWhy, getXWeak(), Joined(aResult));
+    }
+    Refresh(true);
+}
+
+uno::Sequence<git::StashEntry> GitRepository::getStashes()
+{
+    const GitResult aResult
+        = Git({ u"stash"_ustr, u"list"_ustr, u"--format=%gd%x09%gs"_ustr }, false);
+    if (!aResult.Ok())
+        Fail(u"cannot list the stashes"_ustr, aResult);
+    std::vector<git::StashEntry> aStashes;
+    for (const OUString& rLine : aResult.aOut)
+    {
+        const sal_Int32 nTab = rLine.indexOf('\t');
+        if (nTab < 0)
+            continue;
+        git::StashEntry aStash;
+        // "stash@{N}"
+        const OUString aName = rLine.copy(0, nTab);
+        const sal_Int32 nOpen = aName.indexOf('{');
+        aStash.Index = nOpen < 0 ? 0 : aName.copy(nOpen + 1).toInt32();
+        // "WIP on <branch>: <commit> <subject>" or "On <branch>: <message>"
+        OUString aSubject = rLine.copy(nTab + 1);
+        const sal_Int32 nOn = aSubject.indexOf(" on ") >= 0 ? aSubject.indexOf(" on ") + 4
+                              : aSubject.startsWith("On ") ? 3
+                                                           : -1;
+        const sal_Int32 nColon = nOn < 0 ? -1 : aSubject.indexOf(": ", nOn);
+        if (nOn >= 0 && nColon > nOn)
+        {
+            aStash.Branch = aSubject.copy(nOn, nColon - nOn);
+            aStash.Message = aSubject.copy(nColon + 2);
+            if (aSubject.startsWith("WIP"))
+                aStash.Message = u"WIP: "_ustr + aStash.Message;
+        }
+        else
+            aStash.Message = aSubject;
+        aStashes.push_back(std::move(aStash));
+    }
+    return comphelper::containerToSequence(aStashes);
+}
+
+void GitRepository::stash(const OUString& rMessage, sal_Bool bIncludeUntracked)
+{
+    std::vector<OUString> aArguments{ u"stash"_ustr, u"push"_ustr };
+    if (bIncludeUntracked)
+        aArguments.push_back(u"--include-untracked"_ustr);
+    if (!rMessage.trim().isEmpty())
+    {
+        aArguments.push_back(u"-m"_ustr);
+        aArguments.push_back(rMessage.trim());
+    }
+    Run(u"cannot stash"_ustr, aArguments);
+    Refresh(true);
+}
+
+void GitRepository::stashPop(sal_Int32 nIndex)
+{
+    Run(u"cannot pop the stash"_ustr, { u"stash"_ustr, u"pop"_ustr, StashName(nIndex) });
+    Refresh(true);
+}
+
+void GitRepository::stashApply(sal_Int32 nIndex)
+{
+    Run(u"cannot apply the stash"_ustr, { u"stash"_ustr, u"apply"_ustr, StashName(nIndex) });
+    Refresh(true);
+}
+
+void GitRepository::stashDrop(sal_Int32 nIndex)
+{
+    Run(u"cannot drop the stash"_ustr, { u"stash"_ustr, u"drop"_ustr, StashName(nIndex) });
+    Refresh(true);
 }
 
 class GitProvider final : public cppu::WeakImplHelper<XVcsProvider>

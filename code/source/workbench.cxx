@@ -20,6 +20,7 @@
 #include <com/sun/star/code/project/theProjectManager.hpp>
 #include <com/sun/star/code/vcs/XRepositoryListener.hpp>
 #include <com/sun/star/code/vcs/XVcsManager.hpp>
+#include <com/sun/star/code/vcs/git/XGitWorkingCopy.hpp>
 #include <com/sun/star/code/vcs/theVcsManager.hpp>
 #include <sfx2/sidebar/SidebarController.hxx>
 
@@ -82,6 +83,7 @@ Workbench::Workbench(uno::Reference<uno::XComponentContext> xContext)
         SAL_WARN("code", "the sidebar cannot follow the projects: " << rException.Message);
     }
     UpdateSolutionDeck();
+    UpdateGitChangesDeck();
 
     m_xJobNotifier = std::make_shared<UiNotifier>([this] { InvalidateStatus(); });
     m_xJobListener = new ServiceListener(m_xJobNotifier);
@@ -271,8 +273,44 @@ void Workbench::UpdateSolutionDeck()
         sfx2::sidebar::SidebarController::SetDeckHiddenForApplication(aApplication, aDeck, !bAvailable);
 }
 
+void Workbench::UpdateGitChangesDeck()
+{
+    bool bGit = false;
+    try
+    {
+        for (const auto& xRepository : css::code::vcs::theVcsManager::get(m_xContext)->getRepositories())
+            if (css::uno::Reference<css::code::vcs::git::XGitWorkingCopy>(xRepository, css::uno::UNO_QUERY).is())
+            {
+                bGit = true;
+                break;
+            }
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot tell whether Git Changes has anything to show: " << rException.Message);
+    }
+
+    static constexpr std::u16string_view aApplication = u"com.sun.star.code.CodeDocument";
+    static constexpr std::u16string_view aDeck = u"GitChangesDeck";
+    if (m_oGitDeckHidden == !bGit)
+        return; // as it is: do not make the sidebar lay itself out again
+    SfxViewFrame* pFrame = SfxViewFrame::Current();
+    sfx2::sidebar::SidebarController* pController
+        = pFrame ? sfx2::sidebar::SidebarController::GetSidebarControllerForView(pFrame->GetViewShell())
+                 : nullptr;
+    if (pController)
+    {
+        pController->SetDeckHidden(aDeck, aApplication, !bGit);
+        m_oGitDeckHidden = !bGit;
+    }
+    else // no sidebar yet: it will start out right
+        sfx2::sidebar::SidebarController::SetDeckHiddenForApplication(aApplication, aDeck, !bGit);
+}
+
 void Workbench::InvalidateStatus()
 {
+    // the repositories are found after the projects open, on another thread
+    UpdateGitChangesDeck();
     if (SfxViewFrame* pFrame = SfxViewFrame::Current())
     {
         pFrame->GetBindings().Invalidate(SID_CODE_STATUS_READY);

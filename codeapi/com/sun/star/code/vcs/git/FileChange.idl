@@ -1,0 +1,30 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs { module git {
+
+/** One file that differs from the last commit, once: a file changed both in the
+    index and in the working tree is one entry with both halves, as git status
+    shows it.  An untracked file has only the unstaged half, of kind UNTRACKED. */
+struct FileChange
+{
+    /** relative to the top of the working copy, with "/" */
+    string Path;
+    string Url;
+    /** where a renamed or copied file was, else empty */
+    string OldPath;
+    boolean HasStaged;
+    ::com::sun::star::code::vcs::git::ChangeKind Staged;
+    boolean HasUnstaged;
+    ::com::sun::star::code::vcs::git::ChangeKind Unstaged;
+};
+
+}; }; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

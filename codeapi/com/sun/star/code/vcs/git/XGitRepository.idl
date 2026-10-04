@@ -22,6 +22,11 @@ interface XGitRepository
     void fetch() raises( ::com::sun::star::code::vcs::VcsException );
     void pull() raises( ::com::sun::star::code::vcs::VcsException );
     void push() raises( ::com::sun::star::code::vcs::VcsException );
+    /** The commits that a push would send, the newest first: those of the
+        current branch that its upstream does not have, or, if it follows
+        nothing yet, those that no remote branch has. */
+    sequence< ::com::sun::star::code::vcs::git::CommitInfo > getOutgoingCommits()
+        raises( ::com::sun::star::code::vcs::VcsException );
     sequence< string > getRemotes()
         raises( ::com::sun::star::code::vcs::VcsException );
 };

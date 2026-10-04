@@ -52,6 +52,35 @@
         </prop>
       </node>
 
+      <!-- Git Changes, next to Solution Explorer: shown only while a project is
+           in a Git working copy (Workbench::UpdateGitChangesDeck).  The
+           "any, any, visible" ContextList caveat of SolutionDeck applies. -->
+      <node oor:name="GitChangesDeck" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Git Changes</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>GitChangesDeck</value>
+        </prop>
+        <prop oor:name="IconURL" oor:type="xs:string">
+          <value>private:graphicrepository/cmd/lc_mergedocuments.png</value>
+        </prop>
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>15</value>
+        </prop>
+        <prop oor:name="HiddenInViewer" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <prop oor:name="FreeResize" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+      </node>
+
       <node oor:name="SolutionDeck" oor:op="replace">
         <prop oor:name="Title" oor:type="xs:string">
           <value xml:lang="en-US">Solution Explorer</value>
@@ -605,6 +634,35 @@
         </prop>
         <prop oor:name="ImplementationURL" oor:type="xs:string">
           <value>private:resource/toolpanel/CodePanelFactory/SolutionPanel</value>
+        </prop>
+        <prop oor:name="OrderIndex" oor:type="xs:int">
+          <value>100</value>
+        </prop>
+        <prop oor:name="WantsAWT" oor:type="xs:boolean">
+          <value>false</value>
+        </prop>
+      </node>
+
+      <node oor:name="GitChangesPanel" oor:op="replace">
+        <prop oor:name="Title" oor:type="xs:string">
+          <value xml:lang="en-US">Git Changes</value>
+        </prop>
+        <prop oor:name="TitleBarIsOptional" oor:type="xs:boolean">
+          <value>true</value>
+        </prop>
+        <prop oor:name="Id" oor:type="xs:string">
+          <value>GitChangesPanel</value>
+        </prop>
+        <prop oor:name="DeckId" oor:type="xs:string">
+          <value>GitChangesDeck</value>
+        </prop>
+        <prop oor:name="ContextList">
+          <value oor:separator=";">
+            any, any, visible ;
+          </value>
+        </prop>
+        <prop oor:name="ImplementationURL" oor:type="xs:string">
+          <value>private:resource/toolpanel/CodePanelFactory/GitChangesPanel</value>
         </prop>
         <prop oor:name="OrderIndex" oor:type="xs:int">
           <value>100</value>

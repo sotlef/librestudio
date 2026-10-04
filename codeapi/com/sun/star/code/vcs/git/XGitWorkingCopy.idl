@@ -1,0 +1,62 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module vcs { module git {
+
+/** What a Git working copy does with its changes: look at them, put them in
+    the index, commit, set aside, throw away.  A capability of the Git
+    repository, apart from XGitRepository (which is about branches and the
+    network): a client that only shows the changes asks for this one alone.
+
+    The calls return when the operation is over; call them from a thread of
+    your own.  Paths are those of FileChange::Path. */
+interface XGitWorkingCopy
+{
+    sequence< ::com::sun::star::code::vcs::git::FileChange > getChanges()
+        raises( ::com::sun::star::code::vcs::VcsException );
+
+    /** puts the changes of the files into the index (git add) */
+    void stage( [in] sequence< string > Paths )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** takes them out of it again; the working tree stays as it is */
+    void unstage( [in] sequence< string > Paths )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** Makes untracked files tracked.  The same as stage for Git; a separate
+        call because a client says what it means. */
+    void addUntracked( [in] sequence< string > Paths )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** Throws the changes of the files away, in the index and in the working
+        tree: they are as in the last commit again.  Untracked files among
+        them are deleted.  It cannot be undone. */
+    void rollback( [in] sequence< string > Paths )
+        raises( ::com::sun::star::code::vcs::VcsException );
+
+    /** Commits what is in the index, or with All every change of the tracked
+        files; with Amend into the last commit, whose message Message then
+        replaces (empty: it stays). */
+    void commit( [in] string Message, [in] boolean All, [in] boolean Amend )
+        raises( ::com::sun::star::code::vcs::VcsException );
+
+    sequence< ::com::sun::star::code::vcs::git::StashEntry > getStashes()
+        raises( ::com::sun::star::code::vcs::VcsException );
+    void stash( [in] string Message, [in] boolean IncludeUntracked )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** applies it and drops it if that went well */
+    void stashPop( [in] long Index )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    /** applies it and keeps it */
+    void stashApply( [in] long Index )
+        raises( ::com::sun::star::code::vcs::VcsException );
+    void stashDrop( [in] long Index )
+        raises( ::com::sun::star::code::vcs::VcsException );
+};
+
+}; }; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

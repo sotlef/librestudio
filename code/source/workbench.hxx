@@ -163,6 +163,9 @@ private:
     // is; one that needs no configuration (an opened folder) always does.  The
     // deck is hidden or shown as projects open, close and change.
     void UpdateSolutionDeck();
+    // Git Changes exists only while some open project is in a Git working copy
+    void UpdateGitChangesDeck();
+    std::optional<bool> m_oGitDeckHidden;
     // adds a project that has just been opened to the recent list
     void RememberOpenedProjects();
     std::vector<OUString> m_aKnownProjects;
