@@ -2445,6 +2445,7 @@ SalInstanceNotebook::SalInstanceNotebook(TabControl* pNotebook, SalInstanceBuild
 {
     m_xNotebook->SetActivatePageHdl(LINK(this, SalInstanceNotebook, ActivatePageHdl));
     m_xNotebook->SetDeactivatePageHdl(LINK(this, SalInstanceNotebook, DeactivatePageHdl));
+    m_xNotebook->SetCloseTabHdl(LINK(this, SalInstanceNotebook, CloseTabHdl));
 }
 
 int SalInstanceNotebook::get_current_page() const
@@ -2553,6 +2554,21 @@ void SalInstanceNotebook::set_show_tabs(bool bShow)
     m_xNotebook->set_property(u"show-tabs"_ustr, OUString::boolean(bShow));
 }
 
+void SalInstanceNotebook::set_tabs_at_bottom(bool bBottom)
+{
+    m_xNotebook->SetTabsAtBottom(bBottom);
+}
+
+void SalInstanceNotebook::set_tabs_closable(bool bClosable)
+{
+    m_xNotebook->SetTabsClosable(bClosable);
+}
+
+IMPL_LINK(SalInstanceNotebook, CloseTabHdl, sal_uInt16, nPageId, void)
+{
+    m_aTabCloseHdl.Call(m_xNotebook->GetPageName(nPageId));
+}
+
 SalInstanceNotebook::~SalInstanceNotebook()
 {
     for (auto& rItem : m_aAddedPages)
@@ -2562,6 +2578,7 @@ SalInstanceNotebook::~SalInstanceNotebook()
     }
     m_xNotebook->SetActivatePageHdl(Link<TabControl*, void>());
     m_xNotebook->SetDeactivatePageHdl(Link<TabControl*, bool>());
+    m_xNotebook->SetCloseTabHdl(Link<sal_uInt16, void>());
 }
 
 IMPL_LINK_NOARG(SalInstanceNotebook, DeactivatePageHdl, TabControl*, bool)

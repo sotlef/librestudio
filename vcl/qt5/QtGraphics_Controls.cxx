@@ -754,6 +754,7 @@ bool QtGraphics_Controls::drawNativeControl(ControlType type, ControlPart part,
 
         QStyleOptionTabWidgetFrame option;
         fullQStyleOptionTabWidgetFrame(option, false);
+        option.shape = lcl_mapTabBarPosition(rValue.m_eTabBarPosition);
         option.tabBarRect = toQRect(rValue.m_aTabHeaderRect);
         option.selectedTabRect
             = rValue.m_aSelectedTabRect.IsEmpty() ? QRect() : toQRect(rValue.m_aSelectedTabRect);

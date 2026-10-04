@@ -308,6 +308,15 @@ class SAL_DLLPUBLIC_RTTI SliderValue final : public ImplControlValue
         SliderValue & operator =(SliderValue &&) = delete; // due to ImplControlValue
 };
 
+/* Tab bar position (relative to content on the tab page). */
+enum class TabBarPosition
+{
+    Top,
+    Left,
+    Right,
+    Bottom
+};
+
 class VCL_DLLPUBLIC TabPaneValue final : public ImplControlValue
 {
 public:
@@ -316,11 +325,14 @@ public:
     // increased tab size, so it'll overlap the frame rect when drawing
     // static value, as there is currently no sane way to return additional data
     static int m_nOverlap;
+    TabBarPosition m_eTabBarPosition;
 
-    TabPaneValue(const tools::Rectangle &rTabHeaderRect, const tools::Rectangle &rSelectedTabRect)
+    TabPaneValue(const tools::Rectangle &rTabHeaderRect, const tools::Rectangle &rSelectedTabRect,
+                 TabBarPosition eTabBarPosition = TabBarPosition::Top)
         : ImplControlValue(ControlType::TabPane, 0)
         , m_aTabHeaderRect(rTabHeaderRect)
         , m_aSelectedTabRect(rSelectedTabRect)
+        , m_eTabBarPosition(eTabBarPosition)
     {
     }
     TabPaneValue* clone() const override;
@@ -349,15 +361,6 @@ namespace o3tl
 {
     template<> struct typed_flags<TabitemFlags> : is_typed_flags<TabitemFlags, 0x0f> {};
 }
-
-/* Tab bar position (relative to content on the tab page). */
-enum class TabBarPosition
-{
-    Top,
-    Left,
-    Right,
-    Bottom
-};
 
 class SAL_DLLPUBLIC_RTTI TabitemValue final : public ImplControlValue
 {

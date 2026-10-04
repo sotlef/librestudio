@@ -35,6 +35,8 @@
 #include <vcl/menu.hxx>
 #include <vcl/mnemonic.hxx>
 #include <vcl/toolkit/lstbox.hxx>
+#include <tools/poly.hxx>
+#include <vcl/lineinfo.hxx>
 #include <vcl/uitest/uiobject.hxx>
 
 #include <bitmaps.hlst>
@@ -119,6 +121,10 @@ void TabControl::ImplInit( vcl::Window* pParent, WinBits nStyle )
     mbShowTabs                  = true;
     mbRestoreHelpId             = false;
     mbSmallInvalidate           = false;
+    mbTabsAtBottom              = false;
+    mbTabsClosable              = false;
+    mnCloseHoverId              = 0;
+    mnClosePressId              = 0;
     mpTabCtrlData.reset(new ImplTabCtrlData);
     mpTabCtrlData->mpListBox    = nullptr;
 
@@ -234,6 +240,9 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, tools::Long nMaxWidth )
             aImageSize.AdjustWidth(GetTextHeight()/4 );
     }
     aSize.AdjustWidth(aImageSize.Width() );
+    // room for the close button and the gap before it
+    const tools::Long nCloseWidth = mbTabsClosable ? ImplGetCloseSize() + TAB_ITEM_OFFSET_X / 2 : 0;
+    aSize.AdjustWidth(nCloseWidth);
     if( aImageSize.Height() > aSize.Height() )
         aSize.setHeight( aImageSize.Height() );
 
@@ -245,7 +254,7 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, tools::Long nMaxWidth )
     const TabitemValue aControlValue(tools::Rectangle(TAB_ITEM_OFFSET_X, TAB_ITEM_OFFSET_Y,
                                                       aSize.Width() - TAB_ITEM_OFFSET_X * 2,
                                                       aSize.Height() - TAB_ITEM_OFFSET_Y * 2),
-                                     TabBarPosition::Top);
+                                     ImplGetTabBarPosition());
     if(GetNativeControlRegion( ControlType::TabItem, ControlPart::Entire, aCtrlRegion,
                                            ControlState::ENABLED, aControlValue,
                                            aBoundingRgn, aContentRgn ) )
@@ -269,6 +278,7 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, tools::Long nMaxWidth )
                 pItem->maFormatText = pItem->maFormatText.replaceAt( pItem->maFormatText.getLength()-aAppendStr.getLength()-1, 1, u"" );
             aSize.setWidth( GetOutDev()->GetCtrlTextWidth( pItem->maFormatText ) );
             aSize.AdjustWidth(aImageSize.Width() );
+            aSize.AdjustWidth(nCloseWidth);
             aSize.AdjustWidth(TAB_ITEM_OFFSET_X*2 );
         }
         while ( (aSize.Width()+4 >= nMaxWidth) && (pItem->maFormatText.getLength() > aAppendStr.getLength()) );
@@ -577,6 +587,17 @@ tools::Rectangle TabControl::ImplGetTabRect( sal_uInt16 nItemPos, tools::Long nW
         if (aRect.IsEmpty())
             return aRect;
 
+        if (mbTabsAtBottom)
+        {
+            // the page runs from the top of the TabControl down to the tabs
+            tools::Long nPageBottom = mbShowTabs ? aRect.Top() : nHeight;
+            tools::Long nW = nWidth-TAB_OFFSET*2;
+            tools::Long nH = nPageBottom - TAB_OFFSET*2;
+            return (nW > 0 && nH > 0)
+                ? tools::Rectangle( Point( TAB_OFFSET, TAB_OFFSET ), Size( nW, nH ) )
+                : tools::Rectangle();
+        }
+
         // with show-tabs of true (the usual) the page rect is from under the
         // visible tab to the bottom of the TabControl, otherwise it extends
         // from the top of the TabControl
@@ -611,6 +632,20 @@ tools::Rectangle TabControl::ImplGetTabRect(const ImplTabItem* pItem, tools::Lon
         if ( !bRet )
             return tools::Rectangle();
 
+        if (mbTabsAtBottom)
+        {
+            // the rows are placed from the top, mirror them to the bottom edge
+            for (auto& rItem : mpTabCtrlData->maItemList)
+            {
+                if (!rItem.m_bVisible)
+                    continue;
+                const tools::Long nNewTop = nHeight - 1 - rItem.maRect.Bottom();
+                const tools::Long nNewBottom = nHeight - 1 - rItem.maRect.Top();
+                rItem.maRect.SetTop(nNewTop);
+                rItem.maRect.SetBottom(nNewBottom);
+            }
+        }
+
         mnLastWidth     = nWidth;
         mnLastHeight    = nHeight;
         mbFormat        = false;
@@ -635,7 +670,10 @@ void TabControl::ImplChangeTabPage( sal_uInt16 nId, sal_uInt16 nOldId )
         if ( !pOldItem || !pItem || (pOldItem->mnLine != pItem->mnLine) )
         {
             aRect.SetLeft( 0 );
-            aRect.SetTop( 0 );
+            if (mbTabsAtBottom)
+                aRect.SetBottom( Control::GetOutputSizePixel().Height() );
+            else
+                aRect.SetTop( 0 );
             aRect.SetRight( Control::GetOutputSizePixel().Width() );
         }
         else
@@ -880,7 +918,7 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem co
                                               pItem->maRect.Top() + TAB_ITEM_OFFSET_Y,
                                               pItem->maRect.Right() - TAB_ITEM_OFFSET_X,
                                               pItem->maRect.Bottom() - TAB_ITEM_OFFSET_Y),
-                             TabBarPosition::Top);
+                             ImplGetTabBarPosition());
         if (pItem->maRect.Left() < 5)
             tiValue.mnAlignment |= TabitemFlags::LeftAligned;
         if (pItem->maRect.Right() > mnLastWidth - 5)
@@ -893,7 +931,12 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem co
         tools::Rectangle aCtrlRegion(pItem->maRect);
         // overlap the bottom line to visually merge tabitem and tabpane
         if (nState & ControlState::SELECTED)
-            aCtrlRegion.AdjustBottom(TabPaneValue::m_nOverlap);
+        {
+            if (mbTabsAtBottom)
+                aCtrlRegion.AdjustTop(-TabPaneValue::m_nOverlap);
+            else
+                aCtrlRegion.AdjustBottom(TabPaneValue::m_nOverlap);
+        }
 
         bNativeOK
             = rRenderContext.DrawNativeControl(ControlType::TabItem, ControlPart::Entire,
@@ -961,7 +1004,8 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem co
         if (!pItem->maFormatText.isEmpty())
             aImageSize.AdjustWidth(GetTextHeight() / 4 );
     }
-    tools::Long nXPos = aRect.Left() + ((aTabSize.Width() - nTextWidth - aImageSize.Width()) / 2) - nOff - nOff3;
+    const tools::Long nCloseWidth = mbTabsClosable ? ImplGetCloseSize() + TAB_ITEM_OFFSET_X / 2 : 0;
+    tools::Long nXPos = aRect.Left() + ((aTabSize.Width() - nCloseWidth - nTextWidth - aImageSize.Width()) / 2) - nOff - nOff3;
     tools::Long nYPos = aRect.Top() + ((aTabSize.Height() - nTextHeight) / 2) - nOff3;
     if (!pItem->maFormatText.isEmpty())
     {
@@ -993,6 +1037,85 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem co
             aImgTL.AdjustY((aRect.GetHeight() - aImageSize.Height()) / 2 );
         rRenderContext.DrawImage(aImgTL, pItem->maTabImage, pItem->m_bEnabled ? DrawImageFlags::NONE : DrawImageFlags::Disable );
     }
+
+    if (mbTabsClosable)
+    {
+        Color aColor(rStyleSettings.GetTabTextColor());
+        if (nState & ControlState::SELECTED)
+            aColor = rStyleSettings.GetTabHighlightTextColor();
+        else if (nState & ControlState::ROLLOVER)
+            aColor = rStyleSettings.GetTabRolloverTextColor();
+
+        const tools::Rectangle aClose = ImplGetCloseRect(*pItem);
+        if (mnCloseHoverId == pItem->id())
+        {
+            rRenderContext.SetLineColor();
+            rRenderContext.SetFillColor(aColor);
+            rRenderContext.DrawTransparent(
+                tools::PolyPolygon(tools::Polygon(aClose, aClose.GetWidth() / 4, aClose.GetWidth() / 4)), 80);
+        }
+
+        // the cross, inset from the button edge
+        const tools::Long nInset = aClose.GetWidth() / 4 + 1;
+        const tools::Rectangle aCross(aClose.Left() + nInset, aClose.Top() + nInset,
+                                      aClose.Right() - nInset, aClose.Bottom() - nInset);
+        const LineInfo aLineInfo(LineStyle::Solid, std::max<tools::Long>(1, aClose.GetWidth() / 8));
+        rRenderContext.SetLineColor(aColor);
+        rRenderContext.DrawLine(aCross.TopLeft(), aCross.BottomRight(), aLineInfo);
+        rRenderContext.DrawLine(aCross.TopRight(), aCross.BottomLeft(), aLineInfo);
+    }
+}
+
+TabBarPosition TabControl::ImplGetTabBarPosition() const
+{
+    return mbTabsAtBottom ? TabBarPosition::Bottom : TabBarPosition::Top;
+}
+
+tools::Long TabControl::ImplGetCloseSize() const
+{
+    return std::max<tools::Long>(GetTextHeight() * 3 / 4, 8);
+}
+
+tools::Rectangle TabControl::ImplGetCloseRect(const ImplTabItem& rItem) const
+{
+    const tools::Long nSize = ImplGetCloseSize();
+    const tools::Long nRight = rItem.maRect.Right() - TAB_ITEM_OFFSET_X / 2;
+    const tools::Long nTop = rItem.maRect.Top() + (rItem.maRect.GetHeight() - nSize) / 2;
+    return tools::Rectangle(Point(nRight - nSize + 1, nTop), Size(nSize, nSize));
+}
+
+void TabControl::ImplSetCloseHover(sal_uInt16 nId)
+{
+    if (nId == mnCloseHoverId)
+        return;
+    const sal_uInt16 nOld = mnCloseHoverId;
+    mnCloseHoverId = nId;
+    for (sal_uInt16 nChanged : { nOld, nId })
+    {
+        if (ImplTabItem* pItem = ImplGetItem(nChanged))
+            Invalidate(ImplGetCloseRect(*pItem));
+    }
+}
+
+void TabControl::SetTabsAtBottom(bool bBottom)
+{
+    if (mbTabsAtBottom == bBottom)
+        return;
+    mbTabsAtBottom = bBottom;
+    mbFormat = true;
+    queue_resize();
+    Invalidate();
+}
+
+void TabControl::SetTabsClosable(bool bClosable)
+{
+    if (mbTabsClosable == bClosable)
+        return;
+    mbTabsClosable = bClosable;
+    mnCloseHoverId = 0;
+    mbFormat = true;
+    queue_resize();
+    Invalidate();
 }
 
 bool TabControl::ImplHandleKeyEvent( const KeyEvent& rKeyEvent )
@@ -1048,12 +1171,44 @@ IMPL_LINK( TabControl, ImplWindowEventListener, VclWindowEvent&, rEvent, void )
 
 void TabControl::MouseButtonDown( const MouseEvent& rMEvt )
 {
-    if (mpTabCtrlData->mpListBox || !rMEvt.IsLeft())
+    if (mpTabCtrlData->mpListBox)
         return;
 
+    mnClosePressId = 0;
     ImplTabItem *pItem = ImplGetItem(rMEvt.GetPosPixel());
+
+    if (mbTabsClosable && pItem
+        && ((rMEvt.IsMiddle() && !rMEvt.IsLeft())
+            || (rMEvt.IsLeft() && ImplGetCloseRect(*pItem).Contains(rMEvt.GetPosPixel()))))
+    {
+        // closed on the release, as long as it is still over the same tab
+        mnClosePressId = pItem->id();
+        return;
+    }
+
+    if (!rMEvt.IsLeft())
+        return;
+
     if (pItem && pItem->m_bEnabled)
         SelectTabPage(pItem->id());
+}
+
+void TabControl::MouseButtonUp( const MouseEvent& rMEvt )
+{
+    const sal_uInt16 nPressed = mnClosePressId;
+    mnClosePressId = 0;
+    if (nPressed)
+    {
+        const ImplTabItem* pItem = ImplGetItem(rMEvt.GetPosPixel());
+        if (pItem && pItem->id() == nPressed
+            && (rMEvt.IsMiddle() || ImplGetCloseRect(*pItem).Contains(rMEvt.GetPosPixel())))
+        {
+            // the handler usually removes the page, nothing may touch the tab after it
+            maCloseHdl.Call(nPressed);
+            return;
+        }
+    }
+    Control::MouseButtonUp(rMEvt);
 }
 
 void TabControl::KeyInput( const KeyEvent& rKEvt )
@@ -1133,10 +1288,16 @@ void TabControl::Paint( vcl::RenderContext& rRenderContext, const tools::Rectang
     {
         const bool bPaneWithHeader = mbShowTabs && rRenderContext.IsNativeControlSupported(ControlType::TabPane, ControlPart::TabPaneWithHeader);
         tools::Rectangle aHeaderRect(aRect.Left(), 0, aRect.Right(), aRect.Top());
+        if (mbTabsAtBottom)
+            aHeaderRect = tools::Rectangle(aRect.Left(), aRect.Bottom(), aRect.Right(),
+                                           Control::GetOutputSizePixel().Height());
 
         if (bPaneWithHeader)
         {
-            aRect.SetTop(0);
+            if (mbTabsAtBottom)
+                aRect.SetBottom(Control::GetOutputSizePixel().Height());
+            else
+                aRect.SetTop(0);
             if (!mpTabCtrlData->maItemList.empty())
             {
                 tools::Long nLeft = LONG_MAX;
@@ -1153,7 +1314,8 @@ void TabControl::Paint( vcl::RenderContext& rRenderContext, const tools::Rectang
             }
         }
 
-        const TabPaneValue aTabPaneValue(aHeaderRect, pCurItem ? pCurItem->maRect : tools::Rectangle());
+        const TabPaneValue aTabPaneValue(aHeaderRect, pCurItem ? pCurItem->maRect : tools::Rectangle(),
+                                         ImplGetTabBarPosition());
 
         ControlState nState = ControlState::ENABLED;
         if (!IsEnabled())
@@ -1577,6 +1739,16 @@ bool TabControl::PreNotify( NotifyEvent& rNEvt )
         const MouseEvent* pMouseEvt = rNEvt.GetMouseEvent();
         if( pMouseEvt && !pMouseEvt->GetButtons() && !pMouseEvt->IsSynthetic() && !pMouseEvt->IsModifierChanged() )
         {
+            if (mbTabsClosable)
+            {
+                sal_uInt16 nHover = 0;
+                const ImplTabItem* pHover = pMouseEvt->IsLeaveWindow()
+                                                ? nullptr : ImplGetItem(pMouseEvt->GetPosPixel());
+                if (pHover && ImplGetCloseRect(*pHover).Contains(pMouseEvt->GetPosPixel()))
+                    nHover = pHover->id();
+                ImplSetCloseHover(nHover);
+            }
+
             // trigger redraw if mouse over state has changed
             if( IsNativeControlSupported(ControlType::TabItem, ControlPart::Entire) )
             {

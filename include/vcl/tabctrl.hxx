@@ -28,6 +28,8 @@
 
 class ImplTabItem;
 struct ImplTabCtrlData;
+class ImplTabItem;
+enum class TabBarPosition;
 class TabPage;
 class Button;
 class PushButton;
@@ -52,6 +54,11 @@ protected:
     bool                mbRestoreHelpId;
     bool                mbSmallInvalidate;
     bool                mbLayoutDirty;
+    bool                mbTabsAtBottom;
+    bool                mbTabsClosable;
+    sal_uInt16          mnCloseHoverId; ///< tab whose close button is under the pointer
+    sal_uInt16          mnClosePressId; ///< tab a close click was started on
+    Link<sal_uInt16,void> maCloseHdl;
     Link<TabControl*,void> maActivateHdl;
     Link<TabControl*,bool> maDeactivateHdl;
 
@@ -66,6 +73,10 @@ protected:
     SAL_DLLPRIVATE bool         ImplPosCurTabPage();
     virtual void                ImplActivateTabPage( bool bNext );
     SAL_DLLPRIVATE void         ImplShowFocus();
+    SAL_DLLPRIVATE TabBarPosition ImplGetTabBarPosition() const;
+    SAL_DLLPRIVATE tools::Long  ImplGetCloseSize() const;
+    SAL_DLLPRIVATE tools::Rectangle ImplGetCloseRect(const ImplTabItem& rItem) const;
+    SAL_DLLPRIVATE void         ImplSetCloseHover(sal_uInt16 nId);
     SAL_DLLPRIVATE void         ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem const * pItem,
                                              const tools::Rectangle& rCurRect, bool bFirstInGroup,
                                              bool bLastInGroup);
@@ -89,6 +100,7 @@ public:
     virtual void        dispose() override;
 
     virtual void        MouseButtonDown( const MouseEvent& rMEvt ) override;
+    virtual void        MouseButtonUp( const MouseEvent& rMEvt ) override;
     virtual void        KeyInput( const KeyEvent& rKEvt ) override;
     virtual void        Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
     virtual void        Resize() override;
@@ -151,6 +163,14 @@ public:
 
     void                SetActivatePageHdl( const Link<TabControl*,void>& rLink ) { maActivateHdl = rLink; }
     void                SetDeactivatePageHdl( const Link<TabControl*, bool>& rLink ) { maDeactivateHdl = rLink; }
+
+    /// tabs along the bottom edge, the page above them
+    void                SetTabsAtBottom( bool bBottom );
+    bool                IsTabsAtBottom() const { return mbTabsAtBottom; }
+    /// a close button inside each tab (a middle click closes too); the handler gets the page id
+    void                SetTabsClosable( bool bClosable );
+    bool                IsTabsClosable() const { return mbTabsClosable; }
+    void                SetCloseTabHdl( const Link<sal_uInt16,void>& rLink ) { maCloseHdl = rLink; }
 
     // returns the rectangle of the tab for page nPageId
     tools::Rectangle GetTabBounds( sal_uInt16 nPageId ) const;

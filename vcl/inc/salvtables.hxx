@@ -1161,6 +1161,7 @@ private:
 
     DECL_LINK(DeactivatePageHdl, TabControl*, bool);
     DECL_LINK(ActivatePageHdl, TabControl*, void);
+    DECL_LINK(CloseTabHdl, sal_uInt16, void);
 
 public:
     SalInstanceNotebook(TabControl* pNotebook, SalInstanceBuilder* pBuilder, bool bTakeOwnership);
@@ -1191,6 +1192,10 @@ public:
     virtual void set_tab_label_text(const OUString& rIdent, const OUString& rText) override;
 
     virtual void set_show_tabs(bool bShow) override;
+
+    virtual void set_tabs_at_bottom(bool bBottom) override;
+
+    virtual void set_tabs_closable(bool bClosable) override;
 
     virtual ~SalInstanceNotebook() override;
 };
