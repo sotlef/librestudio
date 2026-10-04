@@ -46,6 +46,9 @@ public:
                               const css::code::core::Position* pPosition) override;
     virtual bool SaveCurrentDocument() override;
 
+    /// Tools > Options changed: every open editor lays its text out anew.
+    void SettingsChanged();
+
 private:
     // weld::MDI itself only owns the tab strip and a bare native container
     // per document (the same relationship weld::Notebook::get_page() has

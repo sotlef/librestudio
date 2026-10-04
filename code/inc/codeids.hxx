@@ -65,4 +65,8 @@
 // Build > Clean Solution (.uno:CodeClean): removes what the builds produced.
 #define SID_CODE_CLEAN               (SID_CODE_START + 12)
 
+// Tools > Options... (.uno:CodeOptions): Code's own settings dialog, in place
+// of the cui-hosted .uno:OptionsTreeDialog of the office applications.
+#define SID_CODE_OPTIONS             (SID_CODE_START + 13)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

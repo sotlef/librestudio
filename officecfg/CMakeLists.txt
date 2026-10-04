@@ -298,6 +298,7 @@ set(OFFICECFG_SCHEMA_FILES
     org/openoffice/Office/CalcAddIns.xcs
     org/openoffice/Office/Canvas.xcs
     org/openoffice/Office/Chart.xcs
+    org/openoffice/Office/Code.xcs
     org/openoffice/Office/Commands.xcs
     org/openoffice/Office/Common.xcs
     org/openoffice/Office/Compatibility.xcs
@@ -557,6 +558,7 @@ set(OFFICECFG_MAIN_XCS
     Office/CalcAddIns.xcs
     Office/Canvas.xcs
     Office/Chart.xcs
+    Office/Code.xcs
     Office/Commands.xcs
     Office/Common.xcs
     Office/Compatibility.xcs

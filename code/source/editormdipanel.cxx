@@ -108,6 +108,13 @@ void EditorMDIPanel::dispose()
     InterimItemWindow::dispose();
 }
 
+void EditorMDIPanel::SettingsChanged()
+{
+    for (auto& rEntry : maDocumentContents)
+        if (rEntry.second.mxView)
+            rEntry.second.mxView->SettingsChanged();
+}
+
 void EditorMDIPanel::ShowDocument(const OUString& rUrl, const css::code::core::Position* pPosition)
 {
     if (!mxMDI)

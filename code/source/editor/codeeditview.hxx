@@ -55,6 +55,9 @@ public:
     void RevealPosition(const css::code::core::Position& rPosition);
     OUString GetText() const;
 
+    /// Reads the Tools > Options settings again and lays the text out anew.
+    void SettingsChanged();
+
     void Undo();
     void Redo();
 
@@ -90,6 +93,7 @@ private:
     DECL_LINK(ScrollHdl, weld::ScrolledWindow&, void);
     DECL_LINK(BlinkHdl, Timer*, void);
 
+    static void LoadSettings();
     void MeasureFont(vcl::RenderContext& rRenderContext);
     void ConfigureScrollBars();
     // width in pixels of the column of line numbers, with its padding

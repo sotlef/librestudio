@@ -161,6 +161,24 @@ SfxVoidItem CodeClean SID_CODE_CLEAN
     GroupId = SfxGroupId::Application;
 ]
 
+// Tools > Options...: Code's own settings dialog.
+SfxVoidItem CodeOptions SID_CODE_OPTIONS
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // Build > Cancel: stops the running build.
 SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
 ()
@@ -268,6 +286,11 @@ shell code_Shell
     [
         ExecMethod = Execute;
         StateMethod = GetState;
+    ]
+
+    SID_CODE_OPTIONS
+    [
+        ExecMethod = Execute;
     ]
 
     SID_CODE_CANCELBUILD

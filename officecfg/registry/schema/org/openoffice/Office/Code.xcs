@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ -->
+<!DOCTYPE oor:component-schema SYSTEM "../../../../component-schema.dtd">
+<oor:component-schema xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" oor:name="Code" oor:package="org.openoffice.Office" xml:lang="en-US">
+  <info>
+    <desc>Contains the user's preferences for the Code application (Tools > Options).</desc>
+  </info>
+  <component>
+    <group oor:name="Editor">
+      <info>
+        <desc>The text editor.</desc>
+      </info>
+      <prop oor:name="FontName" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>The family of the editor's font; it should be a fixed-pitch one.</desc>
+        </info>
+        <value>monospace</value>
+      </prop>
+      <prop oor:name="FontSize" oor:type="xs:int" oor:nillable="false">
+        <info>
+          <desc>The height of the editor's font in points; 0 is the size of the system's field font.</desc>
+        </info>
+        <constraints>
+          <minInclusive oor:value="0"/>
+          <maxInclusive oor:value="72"/>
+        </constraints>
+        <value>0</value>
+      </prop>
+      <prop oor:name="TabWidth" oor:type="xs:int" oor:nillable="false">
+        <info>
+          <desc>The distance between two tab stops, in characters.</desc>
+        </info>
+        <constraints>
+          <minInclusive oor:value="1"/>
+          <maxInclusive oor:value="16"/>
+        </constraints>
+        <value>4</value>
+      </prop>
+      <prop oor:name="InsertSpaces" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the Tab key inserts spaces up to the next tab stop instead of a tab character.</desc>
+        </info>
+        <value>true</value>
+      </prop>
+      <prop oor:name="LineNumbers" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the line numbers are shown on the left of the text.</desc>
+        </info>
+        <value>true</value>
+      </prop>
+    </group>
+  </component>
+</oor:component-schema>

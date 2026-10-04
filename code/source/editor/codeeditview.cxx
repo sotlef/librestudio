@@ -22,6 +22,7 @@
 #include <com/sun/star/datatransfer/XTransferable.hpp>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <vcl/event.hxx>
+#include <officecfg/Office/Code.hxx>
 #include <vcl/keycodes.hxx>
 #include <vcl/unohelp2.hxx>
 #include <vcl/ptrstyle.hxx>
@@ -40,7 +41,13 @@ namespace code
 {
 namespace
 {
-constexpr sal_Int32 TabWidth = 4;
+// The user's Tools > Options settings (officecfg Office/Code.xcs, Editor): one
+// set for every editor of the process, reloaded by CodeEditView::LoadSettings().
+sal_Int32 TabWidth = 4;
+bool InsertSpaces = true;
+bool LineNumbers = true;
+OUString FontName = u"monospace"_ustr;
+sal_Int32 FontSize = 0;
 constexpr tools::Long Padding = 6; // around the line numbers, and before the text
 
 struct Palette
@@ -117,10 +124,33 @@ CodeEditView::CodeEditView(weld::Builder& rBuilder,
     m_xScroll->connect_vadjustment_value_changed(LINK(this, CodeEditView, ScrollHdl));
     m_xScroll->connect_hadjustment_value_changed(LINK(this, CodeEditView, ScrollHdl));
     m_xDrawing = std::make_unique<weld::CustomWeld>(rBuilder, u"editview"_ustr, *this);
+    LoadSettings();
     Refresh();
 }
 
 CodeEditView::~CodeEditView() { m_aBlink.Stop(); }
+
+void CodeEditView::LoadSettings()
+{
+    TabWidth = std::clamp<sal_Int32>(officecfg::Office::Code::Editor::TabWidth::get(), 1, 16);
+    InsertSpaces = officecfg::Office::Code::Editor::InsertSpaces::get();
+    LineNumbers = officecfg::Office::Code::Editor::LineNumbers::get();
+    FontName = officecfg::Office::Code::Editor::FontName::get();
+    if (FontName.isEmpty())
+        FontName = u"monospace"_ustr;
+    FontSize = std::max<sal_Int32>(0, officecfg::Office::Code::Editor::FontSize::get());
+}
+
+void CodeEditView::SettingsChanged()
+{
+    LoadSettings();
+    m_bFontMeasured = false;
+    if (GetDrawingArea())
+    {
+        ConfigureScrollBars();
+        Invalidate();
+    }
+}
 
 void CodeEditView::SetDrawingArea(weld::DrawingArea* pDrawingArea)
 {
@@ -135,8 +165,11 @@ void CodeEditView::MeasureFont(vcl::RenderContext& rRenderContext)
     if (m_bFontMeasured)
         return;
     m_aFont = Application::GetSettings().GetStyleSettings().GetFieldFont();
-    m_aFont.SetFamilyName(u"monospace"_ustr);
+    m_aFont.SetFamilyName(FontName);
     m_aFont.SetPitch(PITCH_FIXED);
+    if (FontSize > 0)
+        m_aFont.SetFontSize(Size(0, std::max<tools::Long>(
+                                        1, FontSize * rRenderContext.GetDPIY() / 72)));
     rRenderContext.SetFont(m_aFont);
     m_nCharWidth = std::max<tools::Long>(1, rRenderContext.GetTextWidth(u"0000000000"_ustr) / 10);
     m_nLineHeight = std::max<tools::Long>(1, rRenderContext.GetTextHeight() + 2);
@@ -452,6 +485,8 @@ void CodeEditView::SelectWordAt(const Position& rPosition)
 
 tools::Long CodeEditView::GutterWidth() const
 {
+    if (!LineNumbers)
+        return 0;
     sal_Int32 nDigits = 3;
     for (size_t n = m_aLines.size(); n >= 1000; n /= 10)
         ++nDigits;
@@ -1148,7 +1183,12 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
             const sal_Int32 nVisual
                 = m_bRect ? RectLeft()
                           : VisualColumn(m_aLines[Selection().Start.Line], Selection().Start.Column);
-            InsertText(u"    "_ustr.copy(0, TabWidth - nVisual % TabWidth), false);
+            if (InsertSpaces)
+                InsertText(OUString::Concat(std::u16string_view(u"                ")
+                                                .substr(0, TabWidth - nVisual % TabWidth)),
+                           false);
+            else
+                InsertText(u"\t"_ustr, false);
             return true;
         }
         default:
@@ -1387,18 +1427,21 @@ void CodeEditView::Paint(vcl::RenderContext& rRenderContext, const tools::Rectan
     rRenderContext.SetClipRegion();
 
     // the line numbers
-    rRenderContext.SetFillColor(rStyle.GetFaceColor());
-    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(nGutter - 1, aSize.Height())));
-    for (sal_Int32 nLine = nFirst; nLine <= nLast; ++nLine)
+    if (nGutter > 0)
     {
-        const OUString aNumber = OUString::number(nLine + 1);
-        // the caret's line stands out
-        rRenderContext.SetTextColor(nLine == m_aCaret.Line ? rStyle.GetFieldTextColor()
-                                                           : rStyle.GetDisableColor());
-        rRenderContext.DrawText(
-            Point(nGutter - Padding - aNumber.getLength() * m_nCharWidth,
-                  nLine * m_nLineHeight - nTop + 1),
-            aNumber);
+        rRenderContext.SetFillColor(rStyle.GetFaceColor());
+        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(nGutter - 1, aSize.Height())));
+        for (sal_Int32 nLine = nFirst; nLine <= nLast; ++nLine)
+        {
+            const OUString aNumber = OUString::number(nLine + 1);
+            // the caret's line stands out
+            rRenderContext.SetTextColor(nLine == m_aCaret.Line ? rStyle.GetFieldTextColor()
+                                                               : rStyle.GetDisableColor());
+            rRenderContext.DrawText(
+                Point(nGutter - Padding - aNumber.getLength() * m_nCharWidth,
+                      nLine * m_nLineHeight - nTop + 1),
+                aNumber);
+        }
     }
 }
 }
