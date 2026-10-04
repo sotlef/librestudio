@@ -12,6 +12,10 @@
 #include "../uibridge.hxx"
 
 #include <com/sun/star/code/core/theCode.hpp>
+#include <com/sun/star/code/document/DocumentState.hpp>
+#include <com/sun/star/code/document/XDocument.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
 #include <com/sun/star/code/frontend/XEditorHost.hpp>
 #include <com/sun/star/code/frontend/XWorkbench.hpp>
 #include <com/sun/star/code/search/FindResult.hpp>
@@ -117,6 +121,18 @@ FindResultsPanel::FindResultsPanel(weld::Widget* pParent)
     {
         SAL_WARN("code", "Find in Files cannot reach the finder: " << rException.Message);
     }
+    mxDocNotifier = std::make_shared<::code::UiNotifier>([this] { DocumentsChanged(); });
+    mxDocListener = new ::code::ServiceListener(mxDocNotifier);
+    try
+    {
+        css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
+            ->addDocumentListener(mxDocListener);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "Find in Files cannot reach the documents: " << rException.Message);
+    }
+    ReadDocuments();
     // the search may have been started before this panel was made
     Refresh();
 }
@@ -126,6 +142,15 @@ FindResultsPanel::~FindResultsPanel()
     maPump.Stop();
     maFocusEditor.Stop();
     mxNotifier->Detach();
+    mxDocNotifier->Detach();
+    try
+    {
+        css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
+            ->removeDocumentListener(mxDocListener);
+    }
+    catch (const uno::Exception&)
+    {
+    }
     try
     {
         css::code::search::theFinder::get(comphelper::getProcessComponentContext())
@@ -171,6 +196,7 @@ FindResultsPanel::Tab& FindResultsPanel::AddTab()
 
     t.mxSearch->set_entry_placeholder_text(u"Search Find Results"_ustr);
     t.mxSearch->connect_changed(LINK(this, FindResultsPanel, SearchChangedHdl));
+    t.mxScope->connect_changed(LINK(this, FindResultsPanel, ScopeChangedHdl));
     t.mxToolbar->connect_clicked(LINK(this, FindResultsPanel, ToolbarClickHdl));
 
     // Fixed widths for File / Line / Col, Code takes the rest -- the table
@@ -371,8 +397,76 @@ void FindResultsPanel::AddResults(Tab& t, std::vector<Result> aResults)
     UpdateSummary(t);
 }
 
+void FindResultsPanel::ReadDocuments()
+{
+    maOpenUrls.clear();
+    maChangedUrls.clear();
+    msCurrentUrl.clear();
+    try
+    {
+        const uno::Reference<css::code::core::XCode> xCode
+            = css::code::core::theCode::get(comphelper::getProcessComponentContext());
+        const uno::Reference<css::code::frontend::XWorkbench> xWorkbench = xCode->getWorkbench();
+        if (xWorkbench.is() && xWorkbench->getEditorHost().is())
+            msCurrentUrl = xWorkbench->getEditorHost()->getCurrentDocumentUrl();
+        for (const auto& xDocument :
+             css::code::document::theDocumentManager::get(comphelper::getProcessComponentContext())
+                 ->getOpenDocuments())
+        {
+            maOpenUrls.insert(xDocument->getUrl());
+            if (xDocument->getState() == css::code::document::DocumentState_MODIFIED)
+                maChangedUrls.insert(xDocument->getUrl());
+        }
+    }
+    catch (const uno::Exception&)
+    {
+    }
+}
+
+void FindResultsPanel::DocumentsChanged()
+{
+    ReadDocuments();
+    for (const auto& rTab : maTabs)
+        if (rTab->mxScope->get_active() > 0)
+        {
+            UpdateTable(*rTab);
+            UpdateListText(*rTab);
+            UpdateSummary(*rTab);
+        }
+}
+
+IMPL_LINK_NOARG(FindResultsPanel, ScopeChangedHdl, weld::ComboBox&, void)
+{
+    ReadDocuments();
+    if (Tab* pTab = CurrentTab())
+    {
+        UpdateTable(*pTab);
+        UpdateListText(*pTab);
+        UpdateSummary(*pTab);
+    }
+}
+
 bool FindResultsPanel::IsShown(const Tab& t, const Result& rResult) const
 {
+    // the items: All Files, Current Document, Changed Documents, Open Documents
+    switch (t.mxScope->get_active())
+    {
+        case 1:
+            if (rResult.msUrl != msCurrentUrl)
+                return false;
+            break;
+        case 2:
+            if (!maChangedUrls.count(rResult.msUrl))
+                return false;
+            break;
+        case 3:
+            if (!maOpenUrls.count(rResult.msUrl))
+                return false;
+            break;
+        default:
+            break;
+    }
+
     const OUString aNeedle = t.mxSearch->get_active_text().toAsciiLowerCase();
     if (aNeedle.isEmpty())
         return true;

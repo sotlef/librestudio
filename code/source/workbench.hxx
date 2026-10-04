@@ -119,6 +119,7 @@ public:
                                  const css::code::core::Position& rPosition) override;
     void SAL_CALL revealRange(const OUString& rUrl, const css::code::core::Range& rRange,
                               sal_Bool bTakeFocus) override;
+    OUString SAL_CALL getCurrentDocumentUrl() override { return CurrentDocumentUrl(); }
 
     // XDialogs
     css::code::frontend::SaveChoice SAL_CALL askSaveChanges(const OUString& rDocumentName) override;

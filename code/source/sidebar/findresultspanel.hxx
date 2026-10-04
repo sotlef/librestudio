@@ -17,7 +17,9 @@
 #include <vcl/weld/Container.hxx>
 #include <vcl/weld/Notebook.hxx>
 
+#include <com/sun/star/code/document/XDocumentListener.hpp>
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace weld { class ComboBox; class TextView; class Toolbar; class TreeView; class TreeIter; class TextWidget; class ItemView; class Widget; class Label; }
@@ -108,6 +110,10 @@ private:
     void UpdateSummary(Tab& rTab);
     /// "Find all "x", Match case, All open documents, "*.cpp""
     static OUString Describe(const css::code::search::FindOptions& rOptions);
+    /// reads which documents are open, which are changed and which is current
+    void ReadDocuments();
+    /// the documents changed: what the scope lets through may be another
+    void DocumentsChanged();
     bool IsShown(const Tab& rTab, const Result& rResult) const;
     void SelectRelative(Tab& rTab, int nDelta);
 
@@ -120,6 +126,7 @@ private:
     DECL_LINK(PumpHdl, Timer*, void);
     DECL_LINK(FocusEditorHdl, Timer*, void);
     DECL_LINK(SearchChangedHdl, weld::ComboBox&, void);
+    DECL_LINK(ScopeChangedHdl, weld::ComboBox&, void);
     DECL_LINK(ListSizeAllocHdl, const Size&, void);
 
     std::unique_ptr<weld::Notebook> mxTabs;
@@ -133,6 +140,12 @@ private:
     /// takes the focus to the editor once the key or click that asked for it is handled
     Idle maFocusEditor;
     std::shared_ptr<::code::UiNotifier> mxNotifier;
+    /// tells of the documents opened, closed, changed (the scope of the tabs filters by them)
+    std::shared_ptr<::code::UiNotifier> mxDocNotifier;
+    css::uno::Reference<css::code::document::XDocumentListener> mxDocListener;
+    OUString msCurrentUrl;
+    std::set<OUString> maOpenUrls;
+    std::set<OUString> maChangedUrls;
     rtl::Reference<FindSearchListener> mxListener;
 };
 
