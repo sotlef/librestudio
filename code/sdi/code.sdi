@@ -215,6 +215,24 @@ SfxVoidItem CodeReplaceInFiles SID_CODE_REPLACEINFILES
     GroupId = SfxGroupId::Application;
 ]
 
+// Modify Find of the Find in Files results: no menu entry, called by the panel.
+SfxVoidItem CodeModifyFind SID_CODE_MODIFYFIND
+(SfxUnoAnyItem Options SID_CODE_ARG_FINDOPTIONS)
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Application;
+]
+
 // Build > Cancel: stops the running build.
 SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
 ()
@@ -335,6 +353,11 @@ shell code_Shell
     ]
 
     SID_CODE_REPLACEINFILES
+    [
+        ExecMethod = Execute;
+    ]
+
+    SID_CODE_MODIFYFIND
     [
         ExecMethod = Execute;
     ]

@@ -54,22 +54,55 @@ public:
     virtual ~FindResultsPanel() override;
 
 private:
+    /// One tab of the window: a search and everything that shows it.
+    struct Tab
+    {
+        OUString msIdent;
+        std::unique_ptr<weld::Builder> mxPageBuilder;
+        std::unique_ptr<weld::Container> mxPageRoot;
+        std::unique_ptr<weld::ComboBox> mxScope;
+        std::unique_ptr<weld::ComboBox> mxSearch;
+        std::unique_ptr<weld::Toolbar> mxToolbar;
+        std::unique_ptr<weld::Widget> mxTableBox;
+        std::unique_ptr<weld::TreeView> mxTable;
+        std::unique_ptr<weld::Widget> mxListBox;
+        std::unique_ptr<weld::TextView> mxList;
+        std::unique_ptr<weld::Label> mxDescription;
+        std::unique_ptr<weld::Label> mxSummary;
+
+        std::vector<Result> maResults;
+        // indexes into maResults of the rows shown (those matching the search box)
+        std::vector<size_t> maShown;
+        sal_Int32 mnFilesSearched = 0;
+
+        css::uno::Reference<css::code::search::XFindEnumeration> mxEnumeration;
+        /// what the search was started with: Modify Find and Refresh need it
+        css::code::search::FindOptions maOptions;
+        bool mbHasOptions = false;
+    };
+
     /// takes up the search theFinder shows, if it is another one than the shown
     void Refresh();
-    /// the tab is made when the first search comes, not before
-    void EnsurePage();
-    void ClosePage();
-    /// reads results for a little while; false when the search is over
+    /// a tab for the next search: the first one whose Keep Results is not pressed, or a new one
+    Tab& FreeTab();
+    Tab& AddTab();
+    void CloseTab(const OUString& rIdent);
+    Tab* FindTab(const OUString& rIdent) const;
+    Tab* CurrentTab() const;
+    /// reads results for a little while; false when no search is going on
     bool Pump();
-    void AddResults(std::vector<Result> aResults);
-    void AppendRow(const Result& rResult);
-    void ClearResults();
+    bool PumpTab(Tab& rTab);
+    void AddResults(Tab& rTab, std::vector<Result> aResults);
+    void AppendRow(Tab& rTab, const Result& rResult);
+    void ClearResults(Tab& rTab);
 
-    void UpdateTable();
-    void UpdateListText();
-    void UpdateSummary();
-    bool IsShown(const Result& rResult) const;
-    void SelectRelative(int nDelta);
+    void UpdateTable(Tab& rTab);
+    void UpdateListText(Tab& rTab);
+    void UpdateSummary(Tab& rTab);
+    /// "Find all "x", Match case, All open documents, "*.cpp""
+    static OUString Describe(const css::code::search::FindOptions& rOptions);
+    bool IsShown(const Tab& rTab, const Result& rResult) const;
+    void SelectRelative(Tab& rTab, int nDelta);
 
     DECL_LINK(ToolbarClickHdl, const OUString&, void);
     DECL_LINK(TabCloseHdl, const OUString&, void);
@@ -78,25 +111,11 @@ private:
     DECL_LINK(ListSizeAllocHdl, const Size&, void);
 
     std::unique_ptr<weld::Notebook> mxTabs;
-    std::unique_ptr<weld::Builder> mxPageBuilder;
-    std::unique_ptr<weld::Container> mxPageRoot;
-    std::unique_ptr<weld::ComboBox> mxScope;
-    std::unique_ptr<weld::ComboBox> mxSearch;
-    std::unique_ptr<weld::Toolbar> mxToolbar;
-    std::unique_ptr<weld::Widget> mxTableBox;
-    std::unique_ptr<weld::TreeView> mxTable;
-    std::unique_ptr<weld::Widget> mxListBox;
-    std::unique_ptr<weld::TextView> mxList;
-    std::unique_ptr<weld::Label> mxSummary;
+    std::vector<std::unique_ptr<Tab>> maTabs;
+    int mnTabCounter = 0;
+    /// the tab a Refresh asked its search for: the next search belongs to it
+    Tab* mpRefreshTab = nullptr;
 
-    std::vector<Result> maResults;
-    // indexes into maResults of the rows shown (those matching the search box)
-    std::vector<size_t> maShown;
-    sal_Int32 mnFilesSearched = 0;
-
-    css::uno::Reference<css::code::search::XFindEnumeration> mxEnumeration;
-    css::code::search::FindOptions maOptions;
-    bool mbHasOptions = false;
     Idle maPump;
     std::shared_ptr<::code::UiNotifier> mxNotifier;
     rtl::Reference<FindSearchListener> mxListener;

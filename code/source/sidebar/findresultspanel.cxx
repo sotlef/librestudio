@@ -18,6 +18,12 @@
 #include <comphelper/processfactory.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <osl/file.hxx>
+#include "../../inc/codeids.hxx"
+#include <sfx2/dispatch.hxx>
+#include <svl/poolitem.hxx>
+#include <svl/itemset.hxx>
+#include <sfx2/frame.hxx>
+#include <sfx2/viewfrm.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <tools/time.hxx>
@@ -123,70 +129,99 @@ FindResultsPanel::~FindResultsPanel()
     }
 }
 
-void FindResultsPanel::EnsurePage()
+FindResultsPanel::Tab& FindResultsPanel::AddTab()
 {
-    if (mxTable)
-        return;
+    if (maTabs.empty())
+    {
+        mxTabs->set_tabs_at_bottom(true);
+        mxTabs->set_tabs_closable(true);
+        mxTabs->connect_tab_close(LINK(this, FindResultsPanel, TabCloseHdl));
+    }
 
-    mxTabs->set_tabs_at_bottom(true);
-    mxTabs->set_tabs_closable(true);
-    mxTabs->connect_tab_close(LINK(this, FindResultsPanel, TabCloseHdl));
-    mxTabs->append_page(u"find"_ustr, u"Find"_ustr);
-    mxPageBuilder = Application::CreateBuilder(mxTabs->get_page(u"find"_ustr),
-                                               u"code/ui/findresultspage.ui"_ustr);
+    auto xTab = std::make_unique<Tab>();
+    Tab& t = *xTab;
+    t.msIdent = "find" + OUString::number(++mnTabCounter);
+    mxTabs->append_page(t.msIdent, u"Find"_ustr);
+    t.mxPageBuilder = Application::CreateBuilder(mxTabs->get_page(t.msIdent),
+                                                 u"code/ui/findresultspage.ui"_ustr);
     // welding the root is what puts the page into its tab
-    mxPageRoot = mxPageBuilder->weld_container(u"FindResultsPage"_ustr);
-    mxScope = mxPageBuilder->weld_combo_box(u"scope"_ustr);
-    mxSearch = mxPageBuilder->weld_combo_box(u"search"_ustr);
-    mxToolbar = mxPageBuilder->weld_toolbar(u"toolbar"_ustr);
-    mxTableBox = mxPageBuilder->weld_widget(u"tablebox"_ustr);
-    mxTable = mxPageBuilder->weld_tree_view(u"results"_ustr);
-    mxListBox = mxPageBuilder->weld_widget(u"listbox"_ustr);
-    mxList = mxPageBuilder->weld_text_view(u"list"_ustr);
-    mxSummary = mxPageBuilder->weld_label(u"summary"_ustr);
+    t.mxPageRoot = t.mxPageBuilder->weld_container(u"FindResultsPage"_ustr);
+    t.mxScope = t.mxPageBuilder->weld_combo_box(u"scope"_ustr);
+    t.mxSearch = t.mxPageBuilder->weld_combo_box(u"search"_ustr);
+    t.mxToolbar = t.mxPageBuilder->weld_toolbar(u"toolbar"_ustr);
+    t.mxTableBox = t.mxPageBuilder->weld_widget(u"tablebox"_ustr);
+    t.mxTable = t.mxPageBuilder->weld_tree_view(u"results"_ustr);
+    t.mxListBox = t.mxPageBuilder->weld_widget(u"listbox"_ustr);
+    t.mxList = t.mxPageBuilder->weld_text_view(u"list"_ustr);
+    t.mxDescription = t.mxPageBuilder->weld_label(u"description"_ustr);
+    t.mxSummary = t.mxPageBuilder->weld_label(u"summary"_ustr);
 
-    mxScope->append_text(u"All Files"_ustr);
-    mxScope->append_text(u"Current Document"_ustr);
-    mxScope->append_text(u"Changed Documents"_ustr);
-    mxScope->append_text(u"Open Documents"_ustr);
-    mxScope->set_active(0);
+    t.mxScope->append_text(u"All Files"_ustr);
+    t.mxScope->append_text(u"Current Document"_ustr);
+    t.mxScope->append_text(u"Changed Documents"_ustr);
+    t.mxScope->append_text(u"Open Documents"_ustr);
+    t.mxScope->set_active(0);
 
-    mxSearch->set_entry_placeholder_text(u"Search Find Results"_ustr);
-    mxSearch->connect_changed(LINK(this, FindResultsPanel, SearchChangedHdl));
-    mxToolbar->connect_clicked(LINK(this, FindResultsPanel, ToolbarClickHdl));
+    t.mxSearch->set_entry_placeholder_text(u"Search Find Results"_ustr);
+    t.mxSearch->connect_changed(LINK(this, FindResultsPanel, SearchChangedHdl));
+    t.mxToolbar->connect_clicked(LINK(this, FindResultsPanel, ToolbarClickHdl));
 
     // Fixed widths for File / Line / Col, Code takes the rest -- the table
     // renders at all on the generic-vcl path (qt6) only once the widths are
     // set from here, see ErrorListPanel.
-    mxTable->connect_size_allocate(LINK(this, FindResultsPanel, ListSizeAllocHdl));
+    t.mxTable->connect_size_allocate(LINK(this, FindResultsPanel, ListSizeAllocHdl));
 
-    mxListBox->set_visible(false);
-    UpdateSummary();
+    t.mxListBox->set_visible(false);
+    UpdateSummary(t);
 
+    maTabs.push_back(std::move(xTab));
+    return t;
 }
 
-IMPL_LINK_NOARG(FindResultsPanel, TabCloseHdl, const OUString&, void) { ClosePage(); }
+IMPL_LINK(FindResultsPanel, TabCloseHdl, const OUString&, rIdent, void) { CloseTab(rIdent); }
 
-void FindResultsPanel::ClosePage()
+FindResultsPanel::Tab* FindResultsPanel::FindTab(const OUString& rIdent) const
 {
-    if (!mxTable)
+    for (const auto& rTab : maTabs)
+        if (rTab->msIdent == rIdent)
+            return rTab.get();
+    return nullptr;
+}
+
+FindResultsPanel::Tab* FindResultsPanel::CurrentTab() const
+{
+    return FindTab(mxTabs->get_current_page_ident());
+}
+
+void FindResultsPanel::CloseTab(const OUString& rIdent)
+{
+    auto it = std::find_if(maTabs.begin(), maTabs.end(),
+                           [&](const auto& rTab) { return rTab->msIdent == rIdent; });
+    if (it == maTabs.end())
         return;
-    maPump.Stop();
-    mxEnumeration.clear();
-    mbHasOptions = false;
-    mxScope.reset();
-    mxSearch.reset();
-    mxToolbar.reset();
-    mxTableBox.reset();
-    mxTable.reset();
-    mxListBox.reset();
-    mxList.reset();
-    mxSummary.reset();
-    mxPageRoot.reset();
-    mxPageBuilder.reset();
-    mxTabs->remove_page(u"find"_ustr);
-    maResults.clear();
-    maShown.clear();
+    if (mpRefreshTab == it->get())
+        mpRefreshTab = nullptr;
+    // the widgets go before the page they stand in
+    std::unique_ptr<Tab> xTab = std::move(*it);
+    maTabs.erase(it);
+    xTab.reset();
+    mxTabs->remove_page(rIdent);
+}
+
+FindResultsPanel::Tab& FindResultsPanel::FreeTab()
+{
+    // a search that was asked for by a tab's Refresh stays in it
+    if (mpRefreshTab)
+    {
+        Tab* pTab = mpRefreshTab;
+        mpRefreshTab = nullptr;
+        return *pTab;
+    }
+    // the first tab whose Keep Results is not pressed
+    for (const auto& rTab : maTabs)
+        if (!rTab->mxToolbar->get_item_active(u"keep"_ustr))
+            return *rTab;
+    return AddTab();
 }
 
 void FindResultsPanel::Refresh()
@@ -200,27 +235,33 @@ void FindResultsPanel::Refresh()
     catch (const uno::Exception&)
     {
     }
-    if (!xShown.is() || xShown == mxEnumeration)
+    if (!xShown.is())
         return;
+    for (const auto& rTab : maTabs)
+        if (rTab->mxEnumeration == xShown)
+            return;
 
-    EnsurePage();
-    ClearResults();
-    mxEnumeration = xShown;
-    mbHasOptions = mxListener->Last(maOptions);
-    if (mbHasOptions)
-        mxTabs->set_tab_label_text(u"find"_ustr, "Find \"" + maOptions.FindWhat + "\"");
+    Tab& t = FreeTab();
+    ClearResults(t);
+    t.mxEnumeration = xShown;
+    t.mbHasOptions = mxListener->Last(t.maOptions);
+    if (t.mbHasOptions)
+        mxTabs->set_tab_label_text(t.msIdent, "Find \"" + t.maOptions.FindWhat + "\"");
+    t.mxDescription->set_label(t.mbHasOptions ? Describe(t.maOptions) : OUString());
+    t.mxDescription->set_tooltip_text(t.mxDescription->get_label());
+    mxTabs->set_current_page(t.msIdent);
     maPump.Start();
 }
 
-void FindResultsPanel::ClearResults()
+void FindResultsPanel::ClearResults(Tab& t)
 {
-    maPump.Stop();
-    maResults.clear();
-    maShown.clear();
-    mnFilesSearched = 0;
-    mxTable->clear();
-    mxList->set_text(OUString());
-    UpdateSummary();
+    t.mxEnumeration.clear();
+    t.maResults.clear();
+    t.maShown.clear();
+    t.mnFilesSearched = 0;
+    t.mxTable->clear();
+    t.mxList->set_text(OUString());
+    UpdateSummary(t);
 }
 
 IMPL_LINK_NOARG(FindResultsPanel, PumpHdl, Timer*, void)
@@ -231,9 +272,15 @@ IMPL_LINK_NOARG(FindResultsPanel, PumpHdl, Timer*, void)
 
 bool FindResultsPanel::Pump()
 {
-    if (!mxEnumeration.is())
-        return false;
+    bool bAnyMore = false;
+    for (const auto& rTab : maTabs)
+        if (rTab->mxEnumeration.is() && PumpTab(*rTab))
+            bAnyMore = true;
+    return bAnyMore;
+}
 
+bool FindResultsPanel::PumpTab(Tab& t)
+{
     // As many results as fit into a few milliseconds: the window stays alive
     // while a search of a big solution goes on, and the first results are
     // there at once.
@@ -245,12 +292,12 @@ bool FindResultsPanel::Pump()
     {
         while (tools::Time::GetSystemTicks() - nStart < nBudgetMs)
         {
-            if (!mxEnumeration->hasMoreResults())
+            if (!t.mxEnumeration->hasMoreResults())
             {
                 bMore = false;
                 break;
             }
-            const css::code::search::FindResult aFound = mxEnumeration->nextResult();
+            const css::code::search::FindResult aFound = t.mxEnumeration->nextResult();
             Result aResult;
             aResult.msCode = aFound.LineText.trim();
             aResult.msFile = aFound.Url;
@@ -259,7 +306,7 @@ bool FindResultsPanel::Pump()
             aResult.mnColumn = aFound.Match.Start.Column + 1;
             aBatch.push_back(std::move(aResult));
         }
-        mnFilesSearched = mxEnumeration->getFilesSearched();
+        t.mnFilesSearched = t.mxEnumeration->getFilesSearched();
     }
     catch (const uno::Exception& rException)
     {
@@ -267,160 +314,224 @@ bool FindResultsPanel::Pump()
         bMore = false;
     }
 
-    AddResults(std::move(aBatch));
+    AddResults(t, std::move(aBatch));
     return bMore;
 }
 
-void FindResultsPanel::AppendRow(const Result& rResult)
+void FindResultsPanel::AppendRow(Tab& t, const Result& rResult)
 {
-    const int nRow = mxTable->n_children();
-    mxTable->append();
-    mxTable->set_text(nRow, rResult.msCode, COL_CODE);
-    mxTable->set_text(nRow, rResult.msFile, COL_FILE);
-    mxTable->set_text(nRow, OUString::number(rResult.mnLine), COL_LINE);
-    mxTable->set_text(nRow, OUString::number(rResult.mnColumn), COL_COLUMN);
+    const int nRow = t.mxTable->n_children();
+    t.mxTable->append();
+    t.mxTable->set_text(nRow, rResult.msCode, COL_CODE);
+    t.mxTable->set_text(nRow, rResult.msFile, COL_FILE);
+    t.mxTable->set_text(nRow, OUString::number(rResult.mnLine), COL_LINE);
+    t.mxTable->set_text(nRow, OUString::number(rResult.mnColumn), COL_COLUMN);
 }
 
-void FindResultsPanel::AddResults(std::vector<Result> aResults)
+void FindResultsPanel::AddResults(Tab& t, std::vector<Result> aResults)
 {
     if (!aResults.empty())
     {
-        mxTable->freeze();
+        t.mxTable->freeze();
         for (Result& rResult : aResults)
         {
-            maResults.push_back(std::move(rResult));
-            if (IsShown(maResults.back()))
+            t.maResults.push_back(std::move(rResult));
+            if (IsShown(t, t.maResults.back()))
             {
-                maShown.push_back(maResults.size() - 1);
-                AppendRow(maResults.back());
+                t.maShown.push_back(t.maResults.size() - 1);
+                AppendRow(t, t.maResults.back());
             }
         }
-        mxTable->thaw();
-        UpdateListText();
+        t.mxTable->thaw();
+        UpdateListText(t);
     }
-    UpdateSummary();
+    UpdateSummary(t);
 }
 
-bool FindResultsPanel::IsShown(const Result& rResult) const
+bool FindResultsPanel::IsShown(const Tab& t, const Result& rResult) const
 {
-    const OUString aNeedle = mxSearch->get_active_text().toAsciiLowerCase();
+    const OUString aNeedle = t.mxSearch->get_active_text().toAsciiLowerCase();
     if (aNeedle.isEmpty())
         return true;
     return rResult.msCode.toAsciiLowerCase().indexOf(aNeedle) >= 0
            || rResult.msFile.toAsciiLowerCase().indexOf(aNeedle) >= 0;
 }
 
-void FindResultsPanel::UpdateTable()
+void FindResultsPanel::UpdateTable(Tab& t)
 {
-    maShown.clear();
-    for (size_t i = 0; i < maResults.size(); ++i)
-        if (IsShown(maResults[i]))
-            maShown.push_back(i);
+    t.maShown.clear();
+    for (size_t i = 0; i < t.maResults.size(); ++i)
+        if (IsShown(t, t.maResults[i]))
+            t.maShown.push_back(i);
 
-    mxTable->freeze();
-    mxTable->clear();
-    for (size_t nIndex : maShown)
-        AppendRow(maResults[nIndex]);
-    mxTable->thaw();
+    t.mxTable->freeze();
+    t.mxTable->clear();
+    for (size_t nIndex : t.maShown)
+        AppendRow(t, t.maResults[nIndex]);
+    t.mxTable->thaw();
 }
 
-void FindResultsPanel::UpdateListText()
+void FindResultsPanel::UpdateListText(Tab& t)
 {
     // "<full file name>(<line>): <code>", one line per row of the table
     OUStringBuffer aText;
-    for (size_t nIndex : maShown)
+    for (size_t nIndex : t.maShown)
     {
-        const Result& rResult = maResults[nIndex];
+        const Result& rResult = t.maResults[nIndex];
         aText.append(rResult.msFile + "(" + OUString::number(rResult.mnLine) + "): " + rResult.msCode
                      + "\n");
     }
-    mxList->set_text(aText.makeStringAndClear());
+    t.mxList->set_text(aText.makeStringAndClear());
 }
 
-void FindResultsPanel::UpdateSummary()
+OUString FindResultsPanel::Describe(const css::code::search::FindOptions& rOptions)
+{
+    using namespace css::code::search;
+    OUString aText = "Find all \"" + rOptions.FindWhat + "\"";
+    if (rOptions.MatchCase)
+        aText += ", Match case";
+    if (rOptions.MatchWholeWord)
+        aText += ", Match whole word";
+    if (rOptions.UseRegex)
+        aText += ", Use regular expressions";
+    switch (rOptions.Scope)
+    {
+        case FindScope_ENTIRE_SOLUTION:
+            aText += ", Entire solution";
+            break;
+        case FindScope_CURRENT_PROJECT:
+            aText += ", Current project";
+            break;
+        case FindScope_OPEN_DOCUMENTS:
+            aText += ", All open documents";
+            break;
+        case FindScope_CURRENT_DOCUMENT:
+            aText += ", Current document";
+            break;
+        default:
+        {
+            OUString aPath;
+            osl::FileBase::getSystemPathFromFileURL(rOptions.Directory, aPath);
+            aText += ", \"" + aPath + "\"";
+            if (rOptions.IncludeSubfolders)
+                aText += ", Include subfolders";
+            break;
+        }
+    }
+    if (!rOptions.FileTypes.isEmpty() && rOptions.FileTypes != "*.*")
+        aText += ", \"" + rOptions.FileTypes + "\"";
+    return aText;
+}
+
+void FindResultsPanel::UpdateSummary(Tab& t)
 {
     std::set<OUString> aFiles;
-    for (size_t nIndex : maShown)
-        aFiles.insert(maResults[nIndex].msFile);
-    mxSummary->set_label("Matching lines: " + OUString::number(maShown.size())
+    for (size_t nIndex : t.maShown)
+        aFiles.insert(t.maResults[nIndex].msFile);
+    t.mxSummary->set_label("Matching lines: " + OUString::number(t.maShown.size())
                          + "    Matching files: " + OUString::number(aFiles.size())
-                         + "    Total files searched: " + OUString::number(mnFilesSearched));
+                         + "    Total files searched: " + OUString::number(t.mnFilesSearched));
 }
 
-void FindResultsPanel::SelectRelative(int nDelta)
+void FindResultsPanel::SelectRelative(Tab& t, int nDelta)
 {
-    const int nRows = mxTable->n_children();
+    const int nRows = t.mxTable->n_children();
     if (nRows == 0)
         return;
-    const int nCurrent = mxTable->get_selected_index();
+    const int nCurrent = t.mxTable->get_selected_index();
     const int nNew = nCurrent < 0 ? (nDelta > 0 ? 0 : nRows - 1)
                                   : std::clamp(nCurrent + nDelta, 0, nRows - 1);
-    mxTable->select(nNew);
-    mxTable->scroll_to_row(nNew);
+    t.mxTable->select(nNew);
+    t.mxTable->scroll_to_row(nNew);
 }
 
 IMPL_LINK(FindResultsPanel, ToolbarClickHdl, const OUString&, rIdent, void)
 {
+    // the buttons of a tab can only be pressed while it is the current one
+    Tab* pTab = CurrentTab();
+    if (!pTab)
+        return;
+    Tab& t = *pTab;
     if (rIdent == "copy")
     {
         // what is shown: the selected row, else every row, as the list view's lines
         OUStringBuffer aText;
-        const int nSelected = mxTable->get_selected_index();
-        for (size_t i = 0; i < maShown.size(); ++i)
+        const int nSelected = t.mxTable->get_selected_index();
+        for (size_t i = 0; i < t.maShown.size(); ++i)
         {
             if (nSelected >= 0 && static_cast<int>(i) != nSelected)
                 continue;
-            const Result& rResult = maResults[maShown[i]];
+            const Result& rResult = t.maResults[t.maShown[i]];
             aText.append(rResult.msFile + "(" + OUString::number(rResult.mnLine) + "): "
                          + rResult.msCode + "\n");
         }
         vcl::unohelper::TextDataObject::CopyStringTo(aText.makeStringAndClear(),
-                                                      mxTable->get_clipboard());
+                                                      t.mxTable->get_clipboard());
     }
     else if (rIdent == "refresh")
     {
         // the same search again; theFinder tells the panel of it
-        if (mbHasOptions)
+        if (t.mbHasOptions)
             try
             {
+                mpRefreshTab = &t;
                 css::code::search::theFinder::get(comphelper::getProcessComponentContext())
-                    ->startSearch(maOptions);
+                    ->startSearch(t.maOptions);
             }
             catch (const uno::Exception& rException)
             {
+                mpRefreshTab = nullptr;
                 SAL_WARN("code", "cannot search again: " << rException.Message);
             }
     }
     else if (rIdent == "prev")
-        SelectRelative(-1);
+        SelectRelative(t, -1);
     else if (rIdent == "next")
-        SelectRelative(1);
+        SelectRelative(t, 1);
     else if (rIdent == "clearfilters")
     {
-        mxScope->set_active(0);
-        mxSearch->set_entry_text(u""_ustr);
+        t.mxScope->set_active(0);
+        t.mxSearch->set_entry_text(u""_ustr);
     }
     else if (rIdent == "listview")
     {
-        const bool bList = mxToolbar->get_item_active(u"listview"_ustr);
-        mxTableBox->set_visible(!bList);
-        mxListBox->set_visible(bList);
+        const bool bList = t.mxToolbar->get_item_active(u"listview"_ustr);
+        t.mxTableBox->set_visible(!bList);
+        t.mxListBox->set_visible(bList);
     }
-    // keep / modify: not there yet
+    else if (rIdent == "modify")
+    {
+        // the dialog of Find All as it was left; the options are the tab's own
+        if (t.mbHasOptions)
+        {
+            // the dialog is run by the main window's shell (the options go as an Any)
+            if (SfxViewFrame* pFrame = SfxViewFrame::Current())
+            {
+                const SfxUnoAnyItem aOptions(SID_CODE_ARG_FINDOPTIONS, uno::Any(t.maOptions));
+                pFrame->GetDispatcher()->ExecuteList(SID_CODE_MODIFYFIND,
+                                                     SfxCallMode::ASYNCHRON, { &aOptions });
+            }
+        }
+    }
 }
 
 IMPL_LINK_NOARG(FindResultsPanel, SearchChangedHdl, weld::ComboBox&, void)
 {
-    UpdateTable();
-    UpdateListText();
-    UpdateSummary();
+    Tab* pTab = CurrentTab();
+    if (!pTab)
+        return;
+    Tab& t = *pTab;
+    UpdateTable(t);
+    UpdateListText(t);
+    UpdateSummary(t);
 }
 
 IMPL_LINK(FindResultsPanel, ListSizeAllocHdl, const Size&, rSize, void)
 {
     static constexpr int nFile = 220, nLine = 50, nColumn = 50;
     const int nCode = std::max(150, static_cast<int>(rSize.Width()) - nFile - nLine - nColumn);
-    mxTable->set_column_fixed_widths({ nCode, nFile, nLine, nColumn });
+    for (const auto& rTab : maTabs)
+        rTab->mxTable->set_column_fixed_widths({ nCode, nFile, nLine, nColumn });
 }
 
 } // namespace code::sidebar

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <com/sun/star/code/search/FindOptions.hpp>
+
 #include <functional>
 namespace weld { class Window; }
 
@@ -21,9 +23,11 @@ namespace code
 /// put the entered text into the histories.
 /// Runs the dialog.  Find All starts the search in theFinder and closes the
 /// dialog; rShowResults is called just before, so that the window that shows the
-/// results exists to hear of the search.
+/// results exists to hear of the search.  pInitial, if given, is what the
+/// dialog shows in place of the remembered options (Modify Find of the results).
 void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
-                   const std::function<void()>& rShowResults);
+                   const std::function<void()>& rShowResults,
+                   const css::code::search::FindOptions* pInitial = nullptr);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

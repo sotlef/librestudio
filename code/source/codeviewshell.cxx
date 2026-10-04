@@ -39,6 +39,7 @@
 #include <sfx2/objface.hxx>
 #include <vector>
 #include <sfx2/request.hxx>
+#include <sfx2/frame.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svl/stritem.hxx>
 #include <svl/voiditem.hxx>
@@ -194,6 +195,16 @@ void Shell::Execute(SfxRequest& rReq)
             break;
         case SID_CODE_FINDINFILES:
         case SID_CODE_REPLACEINFILES:
+        case SID_CODE_MODIFYFIND:
+        {
+            css::code::search::FindOptions aInitial;
+            bool bInitial = false;
+            if (rReq.GetSlot() == SID_CODE_MODIFYFIND)
+            {
+                const SfxUnoAnyItem* pOptions
+                    = rReq.GetArg<SfxUnoAnyItem>(SID_CODE_ARG_FINDOPTIONS);
+                bInitial = pOptions && (pOptions->GetValue() >>= aInitial);
+            }
             RunFindDialog(
                 rReq.GetFrameWeld(), rReq.GetSlot() == SID_CODE_REPLACEINFILES,
                 [this]
@@ -206,8 +217,10 @@ void Shell::Execute(SfxRequest& rReq)
                         if (auto* pDock = dynamic_cast<sidebar::OutputDockingWindow*>(
                                 pChild->GetWindow()))
                             pDock->ShowDeck(u"FindResultsDeck");
-                });
+                },
+                bInitial ? &aInitial : nullptr);
             break;
+        }
         case SID_CODE_CANCELBUILD:
             try
             {

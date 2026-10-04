@@ -145,7 +145,7 @@ target_include_directories(codesidebar PRIVATE
 add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
 
 target_link_libraries(codesidebar PRIVATE
-    comphelper cppu cppuhelper sal sfx svt tk tl ucbhelper vcl)
+    comphelper cppu cppuhelper sal sfx svl svt tk tl ucbhelper vcl)
 
 librestudio_add_component(codesidebar
     COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codesidebar.component"

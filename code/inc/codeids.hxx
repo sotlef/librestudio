@@ -74,4 +74,9 @@
 #define SID_CODE_FINDINFILES         (SID_CODE_START + 14)
 #define SID_CODE_REPLACEINFILES      (SID_CODE_START + 15)
 
+// Modify Find of the Find in Files results: the Find dialog as it was left by
+// the Find All that made the results; the argument is its FindOptions, as an Any.
+#define SID_CODE_MODIFYFIND          (SID_CODE_START + 16)
+#define SID_CODE_ARG_FINDOPTIONS     (SID_CODE_START + 17)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

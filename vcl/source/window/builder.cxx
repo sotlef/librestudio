@@ -1675,6 +1675,11 @@ VclPtr<vcl::Window> VclBuilder::makeObject(vcl::Window *pParent, const OUString 
             else if (name == "GtkRadioToolButton")
                 nBits |= ToolBoxItemBits::AUTOCHECK | ToolBoxItemBits::RADIOCHECK;
 
+            // GtkToolItem "is-important": the label is shown beside the icon
+            const auto aImportantIt = rMap.find(u"is-important"_ustr);
+            if (aImportantIt != rMap.end() && toBool(aImportantIt->second))
+                nBits |= ToolBoxItemBits::TEXT_ONLY | ToolBoxItemBits::ICON_ONLY;
+
             if (!aCommand.isEmpty() && m_xFrame.is())
             {
                 pToolBox->InsertItem(aCommand, m_xFrame, nBits, extractSizeRequest(rMap));

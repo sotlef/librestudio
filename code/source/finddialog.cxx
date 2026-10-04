@@ -271,7 +271,8 @@ IMPL_LINK_NOARG(FindPage, LookInHdl, weld::ComboBox&, void) { UpdateSkipFile(); 
 class FindDialog
 {
 public:
-    FindDialog(weld::Window* pParent, bool bReplaceTab)
+    FindDialog(weld::Window* pParent, bool bReplaceTab,
+               const css::code::search::FindOptions* pInitial)
         : m_xBuilder(Application::CreateBuilder(pParent, u"code/ui/finddialog.ui"_ustr))
         , m_xDialog(m_xBuilder->weld_dialog(u"FindDialog"_ustr))
         , m_xTabs(m_xBuilder->weld_notebook(u"tabs"_ustr))
@@ -299,6 +300,8 @@ public:
         const css::uno::Sequence<OUString> aReplaces = Hist<Find::ReplaceHistory>();
         if (aReplaces.hasElements())
             aState.aReplaceWith = aReplaces[0];
+        if (pInitial)
+            ApplyOptions(aState, *pInitial);
         m_aFind.Set(aState);
         m_aReplace.Set(aState);
         m_aFind.SetDefaultScope();
@@ -368,6 +371,42 @@ private:
             osl::FileBase::getFileURLFromSystemPath(aPath, aOptions.Directory);
         }
         return aOptions;
+    }
+
+    /// the page as it was when the search of rOptions was started
+    static void ApplyOptions(FindState& rState, const css::code::search::FindOptions& rOptions)
+    {
+        using namespace css::code::search;
+        rState.aFindWhat = rOptions.FindWhat;
+        rState.bMatchCase = rOptions.MatchCase;
+        rState.bWholeWord = rOptions.MatchWholeWord;
+        rState.bRegex = rOptions.UseRegex;
+        rState.bSubfolders = rOptions.IncludeSubfolders;
+        rState.bExternal = rOptions.IncludeExternal;
+        rState.bMisc = rOptions.IncludeMisc;
+        rState.aFileTypes = rOptions.FileTypes;
+        switch (rOptions.Scope)
+        {
+            case FindScope_ENTIRE_SOLUTION:
+                rState.aLookIn = u"Entire solution"_ustr;
+                break;
+            case FindScope_CURRENT_PROJECT:
+                rState.aLookIn = u"Current project"_ustr;
+                break;
+            case FindScope_OPEN_DOCUMENTS:
+                rState.aLookIn = u"All open documents"_ustr;
+                break;
+            case FindScope_CURRENT_DOCUMENT:
+                rState.aLookIn = CurrentDocument();
+                break;
+            default:
+            {
+                OUString aPath;
+                osl::FileBase::getSystemPathFromFileURL(rOptions.Directory, aPath);
+                rState.aLookIn = u"Current directory (" + aPath + u")";
+                break;
+            }
+        }
     }
 
     FindPage& Active() { return m_nTab == 1 ? m_aReplace : m_aFind; }
@@ -447,11 +486,12 @@ IMPL_LINK(FindDialog, ButtonHdl, weld::Button&, rButton, void)
 }
 
 void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
-                   const std::function<void()>& rShowResults)
+                   const std::function<void()>& rShowResults,
+                   const css::code::search::FindOptions* pInitial)
 {
     css::code::search::FindOptions aOptions;
     {
-        FindDialog aDialog(pParent, bReplaceTab);
+        FindDialog aDialog(pParent, bReplaceTab, pInitial);
         if (!aDialog.Run(aOptions))
             return;
     }
