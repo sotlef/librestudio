@@ -59,6 +59,16 @@
       single-instance="true">
     <singleton name="com.sun.star.code.semantic.theSemanticTokenController"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.SymbolIndex"
+      constructor="com_sun_star_comp_code_SymbolIndex_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.index.theSymbolIndex"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.CompileCommandProvider"
+      constructor="com_sun_star_comp_code_CompileCommandProvider_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.index.theCompileCommandProvider"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.TaskHub"
       constructor="com_sun_star_comp_code_TaskHub_get_implementation"
       single-instance="true">

@@ -131,6 +131,18 @@ OUString Workbench::CurrentDocumentUrl()
     return m_pEditorSurface ? m_pEditorSurface->CurrentDocumentUrl() : OUString();
 }
 
+bool Workbench::DoEditCommand(EditCommand eCommand)
+{
+    SolarMutexGuard aGuard;
+    return m_pEditorSurface && m_pEditorSurface->DoEditCommand(eCommand);
+}
+
+bool Workbench::CurrentCaret(css::code::core::Position& rCaret)
+{
+    SolarMutexGuard aGuard;
+    return m_pEditorSurface && m_pEditorSurface->CurrentCaret(rCaret);
+}
+
 namespace
 {
 // "Building DemoProject (40%)"

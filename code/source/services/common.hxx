@@ -11,6 +11,7 @@
 
 #include <com/sun/star/code/core/JobStatus.hpp>
 #include <com/sun/star/code/search/FindOptions.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
 #include <rtl/character.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <rtl/ustring.hxx>
@@ -25,6 +26,11 @@ OUString GetMimeType(const OUString& rUrl);
 /// Strips a trailing '/' (but never from a bare "file:///"), so that one
 /// directory has one URL and therefore one identity in the managers.
 OUString NormalizeUrl(const OUString& rUrl);
+
+/// The text of a file: what the editor holds if it is open, else what is on
+/// disk; false for what is not text (binary, unreadable, too large).
+bool ReadText(const css::uno::Reference<css::uno::XComponentContext>& xContext, const OUString& rUrl,
+              OUString& rText);
 
 /// the text to search for as an ICU regular expression: what was typed, taken
 /// literally unless it is one, with the whole-word frame if asked for

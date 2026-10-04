@@ -1,0 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module index {
+
+/** Tells how a source file is compiled, so that an analyser sees the same
+    macros and include paths the compiler does. */
+interface XCompileCommandProvider
+{
+    /** The compiler arguments for Url, without the compiler and the file
+        itself.  For a file the build does not name (a header) those of a
+        neighbouring source file; empty if nothing is known. */
+    sequence< string > getCompileArguments( [in] string Url );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

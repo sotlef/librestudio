@@ -13,4 +13,8 @@
       constructor="com_sun_star_comp_code_ClangSemanticPlugin_get_implementation">
     <service name="com.sun.star.code.core.Plugin"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.ClangSymbolPlugin"
+      constructor="com_sun_star_comp_code_ClangSymbolPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
 </component>

@@ -36,6 +36,7 @@
 #include <codeids.hxx>
 #include "optionsdialog.hxx"
 #include "finddialog.hxx"
+#include "gotosymboldialog.hxx"
 #include <sfx2/objface.hxx>
 #include <vector>
 #include <sfx2/request.hxx>
@@ -222,6 +223,29 @@ void Shell::Execute(SfxRequest& rReq)
                 bInitial ? &aInitial : nullptr);
             break;
         }
+        case SID_COPY:
+        case SID_CUT:
+        case SID_PASTE:
+        case SID_UNDO:
+        case SID_REDO:
+        case SID_SELECTALL:
+            if (Workbench* pWorkbench = Workbench::Instance())
+            {
+                static const std::pair<sal_uInt16, EditCommand> aCommands[]
+                    = { { SID_COPY, EditCommand::Copy },     { SID_CUT, EditCommand::Cut },
+                        { SID_PASTE, EditCommand::Paste },   { SID_UNDO, EditCommand::Undo },
+                        { SID_REDO, EditCommand::Redo },     { SID_SELECTALL, EditCommand::SelectAll } };
+                for (const auto& [nSlot, eCommand] : aCommands)
+                    if (nSlot == rReq.GetSlot())
+                        pWorkbench->DoEditCommand(eCommand);
+            }
+            break;
+        case SID_CODE_GOTODEFINITION:
+            GoToDefinition(rReq.GetFrameWeld());
+            break;
+        case SID_CODE_GOTOSYMBOL:
+            RunGoToSymbolDialog(rReq.GetFrameWeld());
+            break;
         case SID_CODE_CANCELBUILD:
             try
             {

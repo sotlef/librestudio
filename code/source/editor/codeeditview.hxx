@@ -58,12 +58,18 @@ public:
     /// Replaces the range, as an edit that can be undone, and puts the caret after the new text.
     void ReplaceRange(const css::code::core::Range& rRange, const OUString& rNewText);
     OUString GetText() const;
+    /// where the caret is
+    css::code::core::Position GetCaret() const { return m_aCaret; }
 
     /// Reads the Tools > Options settings again and lays the text out anew.
     void SettingsChanged();
 
     void Undo();
     void Redo();
+    void Copy();
+    void Cut();
+    void Paste();
+    void SelectAll();
 
     // weld::CustomWidgetController
     virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
@@ -136,9 +142,6 @@ private:
     void DeleteBackward(bool bWord);
     void DeleteForward(bool bWord);
     void InsertNewLine();
-    void Copy();
-    void Cut();
-    void Paste();
     bool HandleKey(const KeyEvent& rEvent);
 
     // The rectangular selection: the lines between the anchor's and the caret's,

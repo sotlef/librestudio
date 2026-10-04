@@ -45,6 +45,16 @@
           <value xml:lang="en-US">Replace in F~iles...</value>
         </prop>
       </node>
+      <node oor:name=".uno:CodeGoToDefinition" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Go To ~Definition</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeGoToSymbol" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Go To ~Symbol...</value>
+        </prop>
+      </node>
       <node oor:name=".uno:CodeOptions" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">~Options...</value>

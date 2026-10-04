@@ -30,6 +30,9 @@ namespace code
 {
 /// The editor area, as the workbench needs it.  Implemented by EditorMDIPanel,
 /// which registers itself for as long as it exists.
+/// What the shell asks of the editor of the tab that is showing.
+enum class EditCommand { Copy, Cut, Paste, Undo, Redo, SelectAll };
+
 class EditorSurface
 {
 public:
@@ -51,6 +54,12 @@ public:
 
     /// Saves the document of the tab that is showing; false if there is none.
     virtual bool SaveCurrentDocument() = 0;
+
+    /// The caret of the tab that is showing; false if there is none.
+    virtual bool CurrentCaret(css::code::core::Position& rCaret) = 0;
+
+    /// An editing command on the tab that is showing; false if there is none.
+    virtual bool DoEditCommand(EditCommand eCommand) = 0;
 
     /// The URL of the document of the tab that is showing; empty if there is none.
     virtual OUString CurrentDocumentUrl() = 0;
@@ -90,6 +99,12 @@ public:
 
     /// The URL of the document in the tab that is showing; empty if no tab is.
     OUString CurrentDocumentUrl();
+
+    /// The caret of the tab that is showing; false if no tab is.  Main thread.
+    bool CurrentCaret(css::code::core::Position& rCaret);
+
+    /// An editing command on the tab that is showing; false if no tab is.  Main thread.
+    bool DoEditCommand(EditCommand eCommand);
 
     /// What the status bar's text item shows: the current message, else "Ready".
     OUString GetStatusText() const;

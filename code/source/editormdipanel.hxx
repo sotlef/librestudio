@@ -52,6 +52,8 @@ public:
     void ShowDocumentAt(const OUString& rUrl, const css::code::core::Position* pPosition,
                         const css::code::core::Range* pRange, bool bTakeFocus = false);
     virtual OUString CurrentDocumentUrl() override;
+    virtual bool CurrentCaret(css::code::core::Position& rCaret) override;
+    virtual bool DoEditCommand(::code::EditCommand eCommand) override;
 
     /// Tools > Options changed: every open editor lays its text out anew.
     void SettingsChanged();

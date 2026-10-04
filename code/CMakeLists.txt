@@ -37,6 +37,7 @@ add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/editor/codeeditview.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/editormdipanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/finddialog.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/gotosymboldialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/optionsdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/optionspages.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/tasksstatusbarcontrol.cxx"
@@ -192,6 +193,7 @@ target_link_libraries(codecommon PUBLIC comphelper cppu cppuhelper sal)
 add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/buildcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/compilecommands.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
@@ -202,6 +204,8 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/projectformatregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/semantictokencontroller.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/symbolindex.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/symbolstore.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx")
 
 target_include_directories(codeservices PRIVATE
@@ -258,7 +262,7 @@ add_dependencies(code cmakeproj)
 
 # --- codeclang -------------------------------------------------------------
 #
-# The semantic-token provider for C and C++, on libclang.  A library of its own
+# The semantic-token and symbol providers for C and C++, on libclang.  A library of its own
 # so that libclang is a dependency of this one plugin only, and optional: where
 # it is not found Code simply has no highlighting for C and C++.  Discovered
 # through services.rdb, like cmakeproj.
@@ -271,7 +275,8 @@ find_library(LIBCLANG_LIBRARY NAMES clang libclang.so.19.1 libclang.so.20.1 libc
     PATH_SUFFIXES lib lib64)
 if (LIBCLANG_INCLUDE_DIR AND LIBCLANG_LIBRARY)
     add_library(codeclang SHARED
-        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsemantictokens.cxx")
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsemantictokens.cxx"
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsymbols.cxx")
     target_include_directories(codeclang PRIVATE
         "${LIBCLANG_INCLUDE_DIR}"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -362,6 +367,7 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findresultspanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findresultspage.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findpage.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/gotosymboldialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionsdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorfont.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorgeneral.ui"

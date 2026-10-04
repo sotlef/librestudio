@@ -1,0 +1,42 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module index {
+
+/** Where the symbols are kept and how they are looked up.  The index fills it
+    and reads it back; it knows nothing about languages or documents.  It is a
+    separate service so that the storage can be replaced (in memory today, a
+    database on disk later) without touching the rest.
+
+    The symbols of one file are stored and replaced as a whole.  All methods
+    may be called from any thread. */
+interface XSymbolStore
+{
+    /** Replaces everything known about Url.  Version is whatever the caller
+        tracks (a document version, a file's change time); it is returned by
+        getDocumentVersion. */
+    void replaceDocument( [in] string Url, [in] hyper Version,
+        [in] sequence< ::com::sun::star::code::index::Symbol > Symbols );
+    void removeDocument( [in] string Url );
+    /** -1 if the file is not stored */
+    hyper getDocumentVersion( [in] string Url );
+    sequence< string > getDocumentUrls();
+    sequence< ::com::sun::star::code::index::Symbol > getDocumentSymbols( [in] string Url );
+    /** Symbols whose name contains Query, ignoring case; best matches first
+        (prefix before substring, shorter before longer).  At most Limit,
+        or all if Limit is 0. */
+    sequence< ::com::sun::star::code::index::Symbol > findByName(
+        [in] string Query, [in] long Limit );
+    /** All symbols with this Id, definitions first. */
+    sequence< ::com::sun::star::code::index::Symbol > findById( [in] string Id );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

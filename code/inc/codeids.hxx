@@ -79,4 +79,12 @@
 #define SID_CODE_MODIFYFIND          (SID_CODE_START + 16)
 #define SID_CODE_ARG_FINDOPTIONS     (SID_CODE_START + 17)
 
+// Edit > Go To Definition (.uno:CodeGoToDefinition, F12): the definition of the
+// name at the caret, from the symbol index.
+#define SID_CODE_GOTODEFINITION      (SID_CODE_START + 18)
+
+// Edit > Go To Symbol... (.uno:CodeGoToSymbol, Ctrl+T): a symbol of the open
+// projects, found by a part of its name.
+#define SID_CODE_GOTOSYMBOL          (SID_CODE_START + 19)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

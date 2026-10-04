@@ -9,8 +9,68 @@
 
 #include "common.hxx"
 
+#include <com/sun/star/code/document/XDocument.hpp>
+#include <com/sun/star/code/document/XDocumentManager.hpp>
+#include <com/sun/star/code/document/XTextDocument.hpp>
+#include <com/sun/star/code/document/theDocumentManager.hpp>
+#include <osl/file.hxx>
+#include <rtl/string.hxx>
+#include <rtl/strbuf.hxx>
+#include <rtl/textcvt.h>
+
+using namespace css;
+
 namespace codeservices
 {
+namespace
+{
+// A file larger than this is not text anyone reads by hand.
+constexpr sal_uInt64 MaxFileSize = 16 * 1024 * 1024;
+}
+
+bool ReadText(const uno::Reference<uno::XComponentContext>& xContext, const OUString& rUrl,
+              OUString& rText)
+{
+    try
+    {
+        uno::Reference<code::document::XTextDocument> xDocument(
+            code::document::theDocumentManager::get(xContext)->getDocument(rUrl), uno::UNO_QUERY);
+        if (xDocument.is())
+        {
+            rText = xDocument->getText();
+            return rText.indexOf(u'\0') < 0;
+        }
+    }
+    catch (const uno::Exception&)
+    {
+    }
+
+    osl::File aFile(rUrl);
+    if (aFile.open(osl_File_OpenFlag_Read) != osl::FileBase::E_None)
+        return false;
+    osl::DirectoryItem aItem;
+    osl::FileStatus aStatus(osl_FileStatus_Mask_FileSize);
+    if (osl::DirectoryItem::get(rUrl, aItem) != osl::FileBase::E_None
+        || aItem.getFileStatus(aStatus) != osl::FileBase::E_None
+        || aStatus.getFileSize() > MaxFileSize)
+        return false;
+
+    OStringBuffer aBytes;
+    char aBuffer[16384];
+    sal_uInt64 nRead = 0;
+    while (aFile.read(aBuffer, sizeof aBuffer, nRead) == osl::FileBase::E_None && nRead > 0)
+        aBytes.append(aBuffer, static_cast<sal_Int32>(nRead));
+    const OString aAll = aBytes.makeStringAndClear();
+    // a NUL byte: a binary file
+    if (aAll.indexOf('\0') >= 0)
+        return false;
+    rText = OUString(aAll.getStr(), aAll.getLength(), RTL_TEXTENCODING_UTF8,
+                     RTL_TEXTTOUNICODE_FLAGS_UNDEFINED_DEFAULT
+                         | RTL_TEXTTOUNICODE_FLAGS_MBUNDEFINED_DEFAULT
+                         | RTL_TEXTTOUNICODE_FLAGS_INVALID_DEFAULT);
+    return true;
+}
+
 OUString GetMimeType(const OUString& rUrl)
 {
     // Only the file name's extension counts, not a dot in a directory name.

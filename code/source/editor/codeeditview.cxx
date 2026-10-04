@@ -21,6 +21,7 @@
 #include <com/sun/star/datatransfer/DataFlavor.hpp>
 #include <com/sun/star/datatransfer/XTransferable.hpp>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
+#include <sfx2/viewsh.hxx>
 #include <vcl/event.hxx>
 #include <officecfg/Office/Code.hxx>
 #include <vcl/keycodes.hxx>
@@ -1212,43 +1213,20 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
             break;
     }
 
-    if (bCtrl)
+    // Shortcuts are not the editor's to decide: a Ctrl combination, a function
+    // key, Shift+Insert mean what the accelerator configuration says (and so
+    // what the active key scheme says), and the command they name comes back
+    // to the editor as a slot (Copy, Undo, ...).  A key the configuration does
+    // not bind does nothing, and is never text.  gtk would offer the keys to
+    // the accelerators anyway, Qt does not, so they are asked here, the same
+    // on both.
+    if (!rCode.IsMod2()
+        && (bCtrl || (nKey >= KEY_F1 && nKey <= KEY_F26) || (bShift && nKey == KEY_INSERT)))
     {
-        switch (nKey)
-        {
-            case KEY_A:
-                m_bRect = false;
-                m_aAnchor = { 0, 0 };
-                MoveCaret({ static_cast<sal_Int32>(m_aLines.size()) - 1, m_aLines.back().getLength() },
-                          true);
+        if (SfxViewShell* pShell = SfxViewShell::Current())
+            if (pShell->KeyInput(rEvent))
                 return true;
-            case KEY_C:
-            case KEY_INSERT:
-                Copy();
-                return true;
-            case KEY_X:
-                Cut();
-                return true;
-            case KEY_V:
-                Paste();
-                return true;
-            case KEY_Z:
-                if (bShift)
-                    Redo();
-                else
-                    Undo();
-                return true;
-            case KEY_Y:
-                Redo();
-                return true;
-            default:
-                return false;
-        }
-    }
-    if (bShift && nKey == KEY_INSERT)
-    {
-        Paste();
-        return true;
+        return false;
     }
 
     const sal_Unicode cChar = rEvent.GetCharCode();
@@ -1258,6 +1236,13 @@ bool CodeEditView::HandleKey(const KeyEvent& rEvent)
         return true;
     }
     return false;
+}
+
+void CodeEditView::SelectAll()
+{
+    m_bRect = false;
+    m_aAnchor = { 0, 0 };
+    MoveCaret({ static_cast<sal_Int32>(m_aLines.size()) - 1, m_aLines.back().getLength() }, true);
 }
 
 bool CodeEditView::KeyInput(const KeyEvent& rEvent) { return HandleKey(rEvent); }

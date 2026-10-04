@@ -1,0 +1,46 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module index {
+
+/** The symbols of the open projects and documents, kept up to date: when a
+    project is opened its files are scanned in the background, and when a
+    document is edited, saved or closed its symbols are replaced (after a short
+    pause, so that typing does not start an analysis per key).
+
+    Queries answer from what is known at the moment, which during State
+    INDEXING may be incomplete. */
+interface XSymbolIndex
+{
+    void registerProvider( [in] ::com::sun::star::code::index::XSymbolProvider Provider );
+    void unregisterProvider( [in] string Name );
+    sequence< ::com::sun::star::code::index::XSymbolProvider > getProviders();
+
+    /** Where the symbols are kept; assign another to keep them elsewhere
+        (the symbols known so far are not carried over). */
+    [attribute] ::com::sun::star::code::index::XSymbolStore Store;
+
+    [attribute, readonly] ::com::sun::star::code::index::IndexState State;
+
+    sequence< ::com::sun::star::code::index::Symbol > getDocumentSymbols( [in] string Url );
+    sequence< ::com::sun::star::code::index::Symbol > findSymbols(
+        [in] string Query, [in] long Limit );
+    /** Where the name at Position is defined; the declarations if no
+        definition is known; empty if it is unknown.  The name is looked up in
+        the current text of the document, saved or not. */
+    sequence< ::com::sun::star::code::index::Symbol > findDefinition(
+        [in] string Url, [in] ::com::sun::star::code::core::Position Position );
+
+    void addIndexListener( [in] ::com::sun::star::code::index::XSymbolIndexListener Listener );
+    void removeIndexListener( [in] ::com::sun::star::code::index::XSymbolIndexListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

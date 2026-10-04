@@ -213,6 +213,49 @@ OUString EditorMDIPanel::CurrentDocumentUrl()
     return it == maDocumentContents.end() ? OUString() : it->second.msUrl;
 }
 
+bool EditorMDIPanel::DoEditCommand(::code::EditCommand eCommand)
+{
+    if (!mxMDI)
+        return false;
+    const auto it = maDocumentContents.find(mxMDI->get_current_document());
+    if (it == maDocumentContents.end())
+        return false;
+    ::code::CodeEditView& rView = *it->second.mxView;
+    switch (eCommand)
+    {
+        case ::code::EditCommand::Copy:
+            rView.Copy();
+            break;
+        case ::code::EditCommand::Cut:
+            rView.Cut();
+            break;
+        case ::code::EditCommand::Paste:
+            rView.Paste();
+            break;
+        case ::code::EditCommand::Undo:
+            rView.Undo();
+            break;
+        case ::code::EditCommand::Redo:
+            rView.Redo();
+            break;
+        case ::code::EditCommand::SelectAll:
+            rView.SelectAll();
+            break;
+    }
+    return true;
+}
+
+bool EditorMDIPanel::CurrentCaret(css::code::core::Position& rCaret)
+{
+    if (!mxMDI)
+        return false;
+    const auto it = maDocumentContents.find(mxMDI->get_current_document());
+    if (it == maDocumentContents.end())
+        return false;
+    rCaret = it->second.mxView->GetCaret();
+    return true;
+}
+
 uno::Reference<css::code::document::XTextDocument> EditorMDIPanel::DocumentOf(const OUString& rUrl)
 {
     try

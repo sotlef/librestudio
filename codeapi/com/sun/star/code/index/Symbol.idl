@@ -1,0 +1,36 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module index {
+
+/** One declared name of a source file.  A function declared in a header and
+    defined in a source file is two symbols with the same Id. */
+struct Symbol
+{
+    /** identity across files: two declarations of one entity share it (for C
+        and C++ the unified symbol resolution string, USR, of libclang) */
+    string Id;
+    string Name;
+    /** the name with its enclosing scopes, e.g. "ns::Class::method" */
+    string QualifiedName;
+    /** the enclosing scope as QualifiedName spells it; empty at top level */
+    string Container;
+    /** what a user is shown beside the name: a signature or a type */
+    string Detail;
+    ::com::sun::star::code::index::SymbolKind Kind;
+    string Url;
+    /** the declared name itself, not the whole declaration */
+    ::com::sun::star::code::core::Range Range;
+    /** true if this is the definition, not only a declaration */
+    boolean IsDefinition;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */
