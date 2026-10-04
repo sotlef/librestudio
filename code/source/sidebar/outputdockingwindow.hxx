@@ -32,6 +32,9 @@ public:
     virtual ~OutputDockingWindow() override;
     virtual void dispose() override;
 
+    /// brings the deck (a tab of the dock) to the front
+    void ShowDeck(std::u16string_view rsDeckId);
+
 private:
     virtual SfxChildAlignment CheckAlignment(SfxChildAlignment eCurrentAlignment,
                                               SfxChildAlignment eRequestedAlignment) override;

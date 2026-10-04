@@ -19,6 +19,7 @@ class VCL_DLLPUBLIC Notebook : virtual public Widget
 protected:
     Link<const OUString&, bool> m_aLeavePageHdl;
     Link<const OUString&, void> m_aEnterPageHdl;
+    Link<const OUString&, void> m_aTabCloseHdl;
 
 public:
     virtual int get_current_page() const = 0;
@@ -41,6 +42,12 @@ public:
     virtual void set_show_tabs(bool bShow) = 0;
     virtual int get_n_pages() const = 0;
     virtual weld::Container* get_page(const OUString& rIdent) const = 0;
+
+    /// tabs at the bottom edge instead of the top; only where the backend can
+    virtual void set_tabs_at_bottom(bool /*bBottom*/) {}
+    /// a close button on each tab; clicking it calls the handler with the page ident
+    virtual void set_tabs_closable(bool /*bClosable*/) {}
+    void connect_tab_close(const Link<const OUString&, void>& rLink) { m_aTabCloseHdl = rLink; }
 
     void connect_leave_page(const Link<const OUString&, bool>& rLink) { m_aLeavePageHdl = rLink; }
     void connect_enter_page(const Link<const OUString&, void>& rLink) { m_aEnterPageHdl = rLink; }

@@ -1,0 +1,38 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module search {
+
+/** What to search for and where. */
+struct FindOptions
+{
+    string FindWhat;
+    boolean MatchCase;
+    boolean MatchWholeWord;
+    /** FindWhat is a regular expression (ICU syntax) */
+    boolean UseRegex;
+
+    ::com::sun::star::code::search::FindScope Scope;
+    /** the directory of DIRECTORY, a file URL */
+    string Directory;
+    /** DIRECTORY: also the directories below it */
+    boolean IncludeSubfolders;
+    /** the file URL of the document that CURRENT_DOCUMENT stands for */
+    string DocumentUrl;
+    /** the items of a project that are not part of it (EXTERNAL) */
+    boolean IncludeExternal;
+    /** the open documents that no project has */
+    boolean IncludeMisc;
+    /** file name masks separated by ";", e.g. "*.cpp;*.h"; empty or "*.*" is every file */
+    string FileTypes;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

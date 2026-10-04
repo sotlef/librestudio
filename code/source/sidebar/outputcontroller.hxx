@@ -57,15 +57,15 @@ public:
     virtual const sfx2::sidebar::Context& GetCurrentContext() const override { return maContext; }
     virtual bool IsDocked() const override;
 
-    /// Re-layout the TabBar+Deck for the parent docking window's current size.
-    void NotifyResize();
-
-private:
     /** Show rsDeckId (creating it through DeckPanelBuilder on first use,
         which caches it in maResourceManager's DeckDescriptor), hiding the
         previously shown deck. */
     void SwitchToDeck(std::u16string_view rsDeckId);
 
+    /// Re-layout the TabBar+Deck for the parent docking window's current size.
+    void NotifyResize();
+
+private:
     DockingWindow* mpParentWindow;
     SfxBindings& mrBindings;
     css::uno::Reference<css::frame::XFrame> mxFrame;

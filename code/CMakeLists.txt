@@ -194,6 +194,7 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/finder.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/jobregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/outputcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectconfigstore.cxx"
@@ -210,7 +211,7 @@ target_include_directories(codeservices PRIVATE
 add_dependencies(codeservices udkapi_normal_headers offapi_normal_headers
     codeapi_normal_headers)
 
-target_link_libraries(codeservices PRIVATE codecommon comphelper cppu cppuhelper sal)
+target_link_libraries(codeservices PRIVATE codecommon comphelper cppu cppuhelper sal ICU::uc ICU::i18n)
 
 librestudio_add_component(codeservices
     COMPONENT "${CMAKE_SOURCE_DIR}/code/util/codeservices.component"
@@ -358,6 +359,7 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/folderviewpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/finddialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findresultspanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findresultspage.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/findpage.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionsdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorfont.ui"

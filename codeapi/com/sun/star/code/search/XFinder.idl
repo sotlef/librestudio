@@ -1,0 +1,34 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module search {
+
+interface XFinder
+{
+    /** a search of its own, nobody else hears of it
+        @throws IllegalArgumentException the expression is not valid */
+    ::com::sun::star::code::search::XFindEnumeration find( [in] ::com::sun::star::code::search::FindOptions Options )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** The search that the front end shows: the same as find(), and the
+        listeners are told of it.  A search that was shown before is cancelled. */
+    ::com::sun::star::code::search::XFindEnumeration startSearch( [in] ::com::sun::star::code::search::FindOptions Options )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** the enumeration of the search the front end shows now (the last
+        startSearch()); null if there was none */
+    [attribute, readonly] ::com::sun::star::code::search::XFindEnumeration ShownSearch;
+
+    void addFindListener( [in] ::com::sun::star::code::search::XFindListener Listener );
+    void removeFindListener( [in] ::com::sun::star::code::search::XFindListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

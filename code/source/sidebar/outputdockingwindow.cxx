@@ -53,6 +53,12 @@ void OutputDockingWindow::dispose()
     SfxDockingWindow::dispose();
 }
 
+void OutputDockingWindow::ShowDeck(std::u16string_view rsDeckId)
+{
+    if (mpOutputController)
+        mpOutputController->SwitchToDeck(rsDeckId);
+}
+
 SfxChildAlignment OutputDockingWindow::CheckAlignment(SfxChildAlignment eCurrentAlignment,
                                                        SfxChildAlignment eRequestedAlignment)
 {

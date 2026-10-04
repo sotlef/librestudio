@@ -45,6 +45,7 @@ public:
     virtual void ShowDocument(const OUString& rUrl,
                               const css::code::core::Position* pPosition) override;
     virtual bool SaveCurrentDocument() override;
+    virtual OUString CurrentDocumentUrl() override;
 
     /// Tools > Options changed: every open editor lays its text out anew.
     void SettingsChanged();

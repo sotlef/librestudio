@@ -1,0 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module search {
+
+/** One matching line. */
+struct FindResult
+{
+    string Url;
+    /** where in the line the first match is (End is on the same line) */
+    ::com::sun::star::code::core::Range Match;
+    /** the text of the line, without its terminator */
+    string LineText;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

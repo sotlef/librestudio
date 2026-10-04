@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkListStore" id="liststore">
+    <columns>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkTextBuffer" id="buffer"/>
+  <!-- n-columns=1 n-rows=4 -->
+  <object class="GtkGrid" id="FindResultsPage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+    <child>
+      <object class="GtkBox" id="toolbarstrip">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="spacing">6</property>
+        <property name="margin-start">3</property>
+        <property name="margin-end">3</property>
+        <child>
+          <object class="GtkComboBoxText" id="scope">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <!-- explicit, see errorlistpanel.ui -->
+            <property name="hexpand">False</property>
+            <property name="width-request">150</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToolbar" id="toolbar">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="toolbar-style">both-horiz</property>
+            <property name="show-arrow">False</property>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator0">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="copy">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|copy|tooltip_text">Copy</property>
+                <property name="icon-name">cmd/sc_copy.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator1">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="prev">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|prev|tooltip_text">Go to the previous location in the list</property>
+                <property name="icon-name">cmd/sc_upsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="next">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|next|tooltip_text">Go to the next location in the list</property>
+                <property name="icon-name">cmd/sc_downsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator2">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="clearfilters">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|clearfilters|tooltip_text">Clear All Filters</property>
+                <property name="icon-name">cmd/sc_removefiltersort.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator3">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="refresh">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|refresh|tooltip_text">Refresh search results</property>
+                <property name="icon-name">cmd/sc_reload.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="keep">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="is-important">True</property>
+                <property name="label" translatable="yes" context="findresultspanel|keep|label">Keep Results</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|keep|tooltip_text">Keep these results and show subsequent results in a new window</property>
+                <property name="icon-name">cmd/sc_lock.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleToolButton" id="listview">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="is-important">True</property>
+                <property name="label" translatable="yes" context="findresultspanel|listview|label">List View</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|listview|tooltip_text">Show results as a simple list</property>
+                <property name="icon-name">cmd/sc_bulletsandnumberingdialog.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="separator4">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="modify">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="is-important">True</property>
+                <property name="label" translatable="yes" context="findresultspanel|modify|label">Modify Find</property>
+                <property name="tooltip-text" translatable="yes" context="findresultspanel|modify|tooltip_text">Modify find action associated with the current window</property>
+                <property name="icon-name">cmd/sc_searchdialog.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <!-- magnifier + search box as ONE end-packed child, see errorlistpanel.ui -->
+          <object class="GtkBox" id="searchgroup">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkImage" id="searchimage">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="valign">center</property>
+                <property name="icon-name">cmd/sc_recsearch.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBoxText" id="search">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="has-entry">True</property>
+                <property name="hexpand">False</property>
+                <property name="width-request">180</property>
+                <child internal-child="entry">
+                  <object class="GtkEntry">
+                    <property name="truncate-multiline">True</property>
+                    <property name="can-focus">True</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">0</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkBox" id="tablebox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+        <child>
+          <object class="GtkScrolledWindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <property name="propagate-natural-width">True</property>
+            <property name="propagate-natural-height">True</property>
+            <child>
+              <object class="GtkTreeView" id="results">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="model">liststore</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection" id="results-selection"/>
+                </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columncode">
+                <property name="resizable">True</property>
+                <property name="expand">True</property>
+                <property name="title" translatable="yes" context="findresultspanel|code">Code</property>
+                <child>
+                  <object class="GtkCellRendererText" id="renderercode"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnfile">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="findresultspanel|file">File</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererfile"/>
+                  <attributes>
+                    <attribute name="text">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columnline">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="findresultspanel|line">Line</property>
+                <child>
+                  <object class="GtkCellRendererText" id="rendererline"/>
+                  <attributes>
+                    <attribute name="text">2</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="columncol">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes" context="findresultspanel|col">Col</property>
+                <child>
+                  <object class="GtkCellRendererText" id="renderercol"/>
+                  <attributes>
+                    <attribute name="text">3</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">1</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkBox" id="listbox">
+        <property name="visible">False</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+        <child>
+          <object class="GtkScrolledWindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <property name="propagate-natural-width">True</property>
+            <property name="propagate-natural-height">True</property>
+            <child>
+              <object class="GtkTextView" id="list">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="editable">False</property>
+                <property name="monospace">True</property>
+                <property name="wrap-mode">none</property>
+                <property name="buffer">buffer</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">2</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkLabel" id="summary">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="halign">start</property>
+        <property name="margin-start">3</property>
+        <property name="margin-end">3</property>
+        <property name="label" translatable="yes" context="findresultspanel|summary">Matching lines: 0    Matching files: 0    Total files searched: 0</property>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">3</property>
+      </packing>
+    </child>
+  </object>
+</interface>

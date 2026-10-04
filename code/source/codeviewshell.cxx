@@ -31,6 +31,7 @@
 #include <com/sun/star/code/project/theProjectManager.hpp>
 #include <comphelper/processfactory.hxx>
 #include "sidebar/outputchildwindow.hxx"
+#include "sidebar/outputdockingwindow.hxx"
 
 #include <codeids.hxx>
 #include "optionsdialog.hxx"
@@ -193,7 +194,19 @@ void Shell::Execute(SfxRequest& rReq)
             break;
         case SID_CODE_FINDINFILES:
         case SID_CODE_REPLACEINFILES:
-            RunFindDialog(rReq.GetFrameWeld(), rReq.GetSlot() == SID_CODE_REPLACEINFILES);
+            RunFindDialog(
+                rReq.GetFrameWeld(), rReq.GetSlot() == SID_CODE_REPLACEINFILES,
+                [this]
+                {
+                    // the results come in the bottom dock, on the Find in Files tab
+                    SfxViewFrame& rFrame = GetViewFrame();
+                    rFrame.ShowChildWindow(sidebar::OutputChildWindow::GetChildWindowId());
+                    if (SfxChildWindow* pChild = rFrame.GetChildWindow(
+                            sidebar::OutputChildWindow::GetChildWindowId()))
+                        if (auto* pDock = dynamic_cast<sidebar::OutputDockingWindow*>(
+                                pChild->GetWindow()))
+                            pDock->ShowDeck(u"FindResultsDeck");
+                });
             break;
         case SID_CODE_CANCELBUILD:
             try

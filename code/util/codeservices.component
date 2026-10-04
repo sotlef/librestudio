@@ -49,6 +49,11 @@
       single-instance="true">
     <singleton name="com.sun.star.code.output.theOutputController"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.Finder"
+      constructor="com_sun_star_comp_code_Finder_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.search.theFinder"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.SemanticTokenController"
       constructor="com_sun_star_comp_code_SemanticTokenController_get_implementation"
       single-instance="true">

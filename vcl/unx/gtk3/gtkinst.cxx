@@ -8754,6 +8754,7 @@ private:
     guint m_nLaunchSplitTimeoutId;
     bool m_bOverFlowBoxActive;
     bool m_bOverFlowBoxIsStart;
+    bool m_bTabsClosable = false;
     bool m_bInternalPageChange;
     int m_nStartTabCount;
     int m_nEndTabCount;
@@ -8916,6 +8917,18 @@ private:
             gtk_label_set_label(GTK_LABEL(pTabWidget), sUtf8.getStr());
             return;
         }
+        if (pTabWidget && GTK_IS_BOX(pTabWidget))
+        {
+            GList* pKids = gtk_container_get_children(GTK_CONTAINER(pTabWidget));
+            for (GList* p = pKids; p; p = p->next)
+                if (GTK_IS_LABEL(p->data))
+                {
+                    gtk_label_set_label(GTK_LABEL(p->data), sUtf8.getStr());
+                    break;
+                }
+            g_list_free(pKids);
+            return;
+        }
 
         gtk_notebook_set_tab_label_text(pNotebook, pPage, sUtf8.getStr());
     }
@@ -8970,6 +8983,19 @@ private:
 #if !GTK_CHECK_VERSION(4, 0, 0)
             gtk_widget_show_all(pTabWidget);
 #endif
+        }
+        else if (m_bTabsClosable)
+        {
+            GtkWidget* pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+            GtkWidget* pClose = gtk_button_new_from_icon_name("window-close-symbolic", GTK_ICON_SIZE_MENU);
+            gtk_button_set_relief(GTK_BUTTON(pClose), GTK_RELIEF_NONE);
+            gtk_widget_set_focus_on_click(pClose, false);
+            g_object_set_data_full(G_OBJECT(pClose), "tab-ident", g_strdup(OUStringToOString(rIdent, RTL_TEXTENCODING_UTF8).getStr()), g_free);
+            g_signal_connect(pClose, "clicked", G_CALLBACK(signalTabClose), this);
+            gtk_box_pack_start(GTK_BOX(pBox), pLabel, true, true, 0);
+            gtk_box_pack_start(GTK_BOX(pBox), pClose, false, false, 0);
+            gtk_widget_show_all(pBox);
+            pTabWidget = pBox;
         }
         else
         {
@@ -9472,6 +9498,20 @@ public:
             set_tab_label_text(m_pOverFlowNotebook, nPageNum, rText);
         }
     }
+
+    static void signalTabClose(GtkButton* pButton, gpointer pData)
+    {
+        GtkInstanceNotebook* pThis = static_cast<GtkInstanceNotebook*>(pData);
+        const char* pId = static_cast<const char*>(g_object_get_data(G_OBJECT(pButton), "tab-ident"));
+        pThis->m_aTabCloseHdl.Call(OUString::fromUtf8(pId));
+    }
+
+    virtual void set_tabs_at_bottom(bool bBottom) override
+    {
+        gtk_notebook_set_tab_pos(m_pNotebook, bBottom ? GTK_POS_BOTTOM : GTK_POS_TOP);
+    }
+
+    virtual void set_tabs_closable(bool bClosable) override { m_bTabsClosable = bClosable; }
 
     virtual void set_show_tabs(bool bShow) override
     {

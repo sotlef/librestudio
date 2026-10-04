@@ -34,6 +34,33 @@ QtInstanceNotebook::QtInstanceNotebook(QTabWidget* pTabWidget)
             &QtInstanceNotebook::currentTabChanged);
 }
 
+void QtInstanceNotebook::set_tabs_at_bottom(bool bBottom)
+{
+    SolarMutexGuard g;
+    GetQtInstance().RunInMainThread([&] {
+        m_pTabWidget->setTabPosition(bBottom ? QTabWidget::South : QTabWidget::North);
+    });
+}
+
+void QtInstanceNotebook::set_tabs_closable(bool bClosable)
+{
+    SolarMutexGuard g;
+    GetQtInstance().RunInMainThread([&] {
+        m_pTabWidget->setTabsClosable(bClosable);
+        disconnect(m_pTabWidget, &QTabWidget::tabCloseRequested, this, nullptr);
+        if (bClosable)
+            connect(m_pTabWidget, &QTabWidget::tabCloseRequested, this,
+                    &QtInstanceNotebook::tabCloseRequested);
+    });
+}
+
+void QtInstanceNotebook::tabCloseRequested(int nIndex)
+{
+    SolarMutexGuard g;
+    const OUString sIdent = get_page_ident(nIndex);
+    m_aTabCloseHdl.Call(sIdent);
+}
+
 int QtInstanceNotebook::get_current_page() const
 {
     SolarMutexGuard g;

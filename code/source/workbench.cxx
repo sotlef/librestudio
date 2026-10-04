@@ -125,6 +125,12 @@ void Workbench::SetEditorSurface(EditorSurface* pSurface)
     m_pEditorSurface = pSurface;
 }
 
+OUString Workbench::CurrentDocumentUrl()
+{
+    SolarMutexGuard aGuard;
+    return m_pEditorSurface ? m_pEditorSurface->CurrentDocumentUrl() : OUString();
+}
+
 namespace
 {
 // "Building DemoProject (40%)"

@@ -9,11 +9,21 @@
 
 #include "finddialog.hxx"
 
+#include "workbench.hxx"
+
+#include <com/sun/star/code/search/FindOptions.hpp>
+#include <com/sun/star/code/search/FindScope.hpp>
+#include <com/sun/star/code/search/XFinder.hpp>
+#include <com/sun/star/code/search/theFinder.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <comphelper/configuration.hxx>
+#include <comphelper/processfactory.hxx>
+#include <sal/log.hxx>
 #include <officecfg/Office/Code.hxx>
 #include <osl/file.hxx>
 #include <osl/process.h>
 #include <vcl/svapp.hxx>
+#include <vcl/vclenum.hxx>
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/Button.hxx>
 #include <vcl/weld/CheckButton.hxx>
@@ -22,6 +32,7 @@
 #include <vcl/weld/Container.hxx>
 #include <vcl/weld/Dialog.hxx>
 #include <vcl/weld/Label.hxx>
+#include <vcl/weld/MessageDialog.hxx>
 #include <vcl/weld/Notebook.hxx>
 
 #include <com/sun/star/uno/Sequence.hxx>
@@ -205,6 +216,8 @@ public:
         UpdateSkipFile();
     }
 
+    weld::Button* FindAllButton() { return m_xFindAll.get(); }
+
     void FocusFindWhat() { m_xFindWhat->grab_focus(); }
 
 private:
@@ -300,15 +313,62 @@ public:
         Active().FocusFindWhat();
     }
 
-    void Run()
+    /// true if the dialog was left with Find All; the options are then in rOptions
+    bool Run(css::code::search::FindOptions& rOptions)
     {
         m_xDialog->run();
         Store();
+        if (!m_bFindAll)
+            return false;
+        rOptions = m_aOptions;
+        return true;
     }
 
 private:
     DECL_LINK(TabHdl, const OUString&, void);
     DECL_LINK(ButtonHdl, weld::Button&, void);
+
+    /// what the page asks for, as the search service takes it
+    static css::code::search::FindOptions OptionsOf(const FindState& rState)
+    {
+        using namespace css::code::search;
+        FindOptions aOptions;
+        aOptions.FindWhat = rState.aFindWhat;
+        aOptions.MatchCase = rState.bMatchCase;
+        aOptions.MatchWholeWord = rState.bWholeWord;
+        aOptions.UseRegex = rState.bRegex;
+        aOptions.IncludeSubfolders = rState.bSubfolders;
+        aOptions.IncludeExternal = rState.bExternal;
+        aOptions.IncludeMisc = rState.bMisc;
+        aOptions.FileTypes = rState.aFileTypes;
+
+        const OUString aScope = rState.aLookIn;
+        // the scopes are the items of the list, in this order (see FindPage)
+        if (aScope == u"Entire solution")
+            aOptions.Scope = FindScope_ENTIRE_SOLUTION;
+        else if (aScope == u"Current project")
+            aOptions.Scope = FindScope_CURRENT_PROJECT;
+        else if (aScope == u"All open documents")
+            aOptions.Scope = FindScope_OPEN_DOCUMENTS;
+        else if (aScope == CurrentDocument())
+        {
+            aOptions.Scope = FindScope_CURRENT_DOCUMENT;
+            if (::code::Workbench* pWorkbench = ::code::Workbench::Instance())
+                aOptions.DocumentUrl = pWorkbench->CurrentDocumentUrl();
+            // one file is searched whatever its name is
+            aOptions.FileTypes.clear();
+        }
+        else
+        {
+            aOptions.Scope = FindScope_DIRECTORY;
+            // "Current directory (/path)", or a path that was typed
+            OUString aPath = aScope;
+            if (aScope.startsWith(u"Current directory (") && aScope.endsWith(u")"))
+                aPath = aScope.copy(18, aScope.getLength() - 19);
+            osl::FileBase::getFileURLFromSystemPath(aPath, aOptions.Directory);
+        }
+        return aOptions;
+    }
 
     FindPage& Active() { return m_nTab == 1 ? m_aReplace : m_aFind; }
 
@@ -362,6 +422,8 @@ private:
     FindPage m_aFind;
     FindPage m_aReplace;
     int m_nTab = 0;
+    bool m_bFindAll = false;
+    css::code::search::FindOptions m_aOptions;
 };
 
 IMPL_LINK(FindDialog, TabHdl, const OUString&, rIdent, void)
@@ -369,17 +431,48 @@ IMPL_LINK(FindDialog, TabHdl, const OUString&, rIdent, void)
     SwitchTo(m_xTabs->get_page_index(rIdent));
 }
 
-IMPL_LINK_NOARG(FindDialog, ButtonHdl, weld::Button&, void)
+IMPL_LINK(FindDialog, ButtonHdl, weld::Button&, rButton, void)
 {
-    // no searching yet: keep what was asked for, as the real thing will
+    // Find All of the Find tab: the search is started once the dialog is gone.
+    // The other buttons need the editor (Find Next, Replace) and are not there yet.
+    if (m_nTab == 0 && &rButton == Active().FindAllButton())
+    {
+        m_aOptions = OptionsOf(Active().Get());
+        m_bFindAll = true;
+        m_xDialog->response(RET_OK);
+        return;
+    }
     Store();
 }
 }
 
-void RunFindDialog(weld::Window* pParent, bool bReplaceTab)
+void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
+                   const std::function<void()>& rShowResults)
 {
-    FindDialog aDialog(pParent, bReplaceTab);
-    aDialog.Run();
+    css::code::search::FindOptions aOptions;
+    {
+        FindDialog aDialog(pParent, bReplaceTab);
+        if (!aDialog.Run(aOptions))
+            return;
+    }
+
+    if (rShowResults)
+        rShowResults();
+    try
+    {
+        css::code::search::theFinder::get(comphelper::getProcessComponentContext())
+            ->startSearch(aOptions);
+    }
+    catch (const css::lang::IllegalArgumentException& rException)
+    {
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
+            pParent, VclMessageType::Warning, VclButtonsType::Ok, rException.Message));
+        xBox->run();
+    }
+    catch (const css::uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot search: " << rException.Message);
+    }
 }
 }
 

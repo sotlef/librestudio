@@ -42,6 +42,9 @@ public:
 
     /// Saves the document of the tab that is showing; false if there is none.
     virtual bool SaveCurrentDocument() = 0;
+
+    /// The URL of the document of the tab that is showing; empty if there is none.
+    virtual OUString CurrentDocumentUrl() = 0;
 };
 
 /// The application shell's side of the backend/front-end split: what the
@@ -71,6 +74,9 @@ public:
 
     /// File > Save: the current tab's document.  False if no tab is showing.
     bool SaveCurrentDocument();
+
+    /// The URL of the document in the tab that is showing; empty if no tab is.
+    OUString CurrentDocumentUrl();
 
     /// What the status bar's text item shows: the current message, else "Ready".
     OUString GetStatusText() const;

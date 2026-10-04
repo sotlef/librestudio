@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 namespace weld { class Window; }
 
 namespace code
@@ -18,7 +19,11 @@ namespace code
 /// officecfg's Office/Code.xcs (group Find), so they outlive the dialog and
 /// the application.  The searching itself is not there yet: the buttons only
 /// put the entered text into the histories.
-void RunFindDialog(weld::Window* pParent, bool bReplaceTab);
+/// Runs the dialog.  Find All starts the search in theFinder and closes the
+/// dialog; rShowResults is called just before, so that the window that shows the
+/// results exists to hear of the search.
+void RunFindDialog(weld::Window* pParent, bool bReplaceTab,
+                   const std::function<void()>& rShowResults);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

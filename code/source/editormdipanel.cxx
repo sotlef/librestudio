@@ -179,6 +179,14 @@ bool EditorMDIPanel::SaveCurrentDocument()
     return true;
 }
 
+OUString EditorMDIPanel::CurrentDocumentUrl()
+{
+    if (!mxMDI)
+        return OUString();
+    const auto it = maDocumentContents.find(mxMDI->get_current_document());
+    return it == maDocumentContents.end() ? OUString() : it->second.msUrl;
+}
+
 uno::Reference<css::code::document::XTextDocument> EditorMDIPanel::DocumentOf(const OUString& rUrl)
 {
     try
