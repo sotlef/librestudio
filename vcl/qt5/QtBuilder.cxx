@@ -624,7 +624,12 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
         const OUString sIconName = extractIconName(rProps);
         if (!sIconName.isEmpty())
             pToolButton->setIcon(loadQPixmapIcon(sIconName));
+        // GtkToolItem "is-important": the label is shown beside the icon
+        const auto aImportantIt = rProps.find(u"is-important"_ustr);
+        const bool bImportant = aImportantIt != rProps.end() && toBool(aImportantIt->second);
         pToolButton->setText(toQString(extractLabel(rProps)));
+        if (bImportant && !pToolButton->text().isEmpty())
+            pToolButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         pToolButton->setCheckable(rClass == u"GtkRadioToolButton"
                                   || rClass == u"GtkToggleToolButton");
 

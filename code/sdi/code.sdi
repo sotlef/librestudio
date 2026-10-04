@@ -179,6 +179,42 @@ SfxVoidItem CodeOptions SID_CODE_OPTIONS
     GroupId = SfxGroupId::Application;
 ]
 
+// Edit > Find in Files...: the Find and Replace dialog.
+SfxVoidItem CodeFindInFiles SID_CODE_FINDINFILES
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
+// Edit > Replace in Files...: the Find and Replace dialog, on its Replace tab.
+SfxVoidItem CodeReplaceInFiles SID_CODE_REPLACEINFILES
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
 // Build > Cancel: stops the running build.
 SfxVoidItem CodeCancelBuild SID_CODE_CANCELBUILD
 ()
@@ -289,6 +325,16 @@ shell code_Shell
     ]
 
     SID_CODE_OPTIONS
+    [
+        ExecMethod = Execute;
+    ]
+
+    SID_CODE_FINDINFILES
+    [
+        ExecMethod = Execute;
+    ]
+
+    SID_CODE_REPLACEINFILES
     [
         ExecMethod = Execute;
     ]

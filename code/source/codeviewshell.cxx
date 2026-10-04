@@ -34,6 +34,7 @@
 
 #include <codeids.hxx>
 #include "optionsdialog.hxx"
+#include "finddialog.hxx"
 #include <sfx2/objface.hxx>
 #include <vector>
 #include <sfx2/request.hxx>
@@ -189,6 +190,10 @@ void Shell::Execute(SfxRequest& rReq)
         case SID_CODE_OPTIONS:
             if (RunOptionsDialog(rReq.GetFrameWeld()) && mxEditorArea)
                 mxEditorArea->SettingsChanged();
+            break;
+        case SID_CODE_FINDINFILES:
+        case SID_CODE_REPLACEINFILES:
+            RunFindDialog(rReq.GetFrameWeld(), rReq.GetSlot() == SID_CODE_REPLACEINFILES);
             break;
         case SID_CODE_CANCELBUILD:
             try

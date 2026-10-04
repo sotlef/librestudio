@@ -31,6 +31,9 @@
             <menu:menuitem menu:id=".uno:Cut"/>
             <menu:menuitem menu:id=".uno:Copy"/>
             <menu:menuitem menu:id=".uno:Paste"/>
+            <menu:menuseparator/>
+            <menu:menuitem menu:id=".uno:CodeFindInFiles"/>
+            <menu:menuitem menu:id=".uno:CodeReplaceInFiles"/>
         </menu:menupopup>
     </menu:menu>
     <menu:menu menu:id=".uno:ViewMenu">

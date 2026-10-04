@@ -55,5 +55,88 @@
         <value>true</value>
       </prop>
     </group>
+    <group oor:name="Find">
+      <info>
+        <desc>The Find and Replace dialog (Find in Files, Replace in Files).</desc>
+      </info>
+      <prop oor:name="FindHistory" oor:type="oor:string-list">
+        <info>
+          <desc>The texts searched for earlier, the latest first.</desc>
+        </info>
+        <value/>
+      </prop>
+      <prop oor:name="ReplaceHistory" oor:type="oor:string-list">
+        <info>
+          <desc>The replacement texts used earlier, the latest first.</desc>
+        </info>
+        <value/>
+      </prop>
+      <prop oor:name="FileTypesHistory" oor:type="oor:string-list">
+        <info>
+          <desc>The file type masks used earlier, the latest first.</desc>
+        </info>
+        <value/>
+      </prop>
+      <prop oor:name="MatchCase" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the search tells upper and lower case apart.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="MatchWholeWord" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the search finds whole words only.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="UseRegex" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the text searched for is a regular expression.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="PreserveCase" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether a replacement takes over the upper or lower case of the text it replaces.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="IncludeExternal" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the search includes external items.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="IncludeMisc" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the search includes miscellaneous files.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="IncludeSubfolders" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Whether the search of a directory includes its subfolders.</desc>
+        </info>
+        <value>true</value>
+      </prop>
+      <prop oor:name="SelectionScope" oor:type="xs:int" oor:nillable="false">
+        <info>
+          <desc>The part of the current document to search: 0 entire document, 1 current selection, 2 current block.</desc>
+        </info>
+        <value>0</value>
+      </prop>
+      <prop oor:name="LookIn" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>The scope of the search, as the dialog shows it; empty is the entire solution.</desc>
+        </info>
+        <value></value>
+      </prop>
+      <prop oor:name="FileTypes" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>The mask of the files to search, the masks separated by semicolons.</desc>
+        </info>
+        <value>*.*</value>
+      </prop>
+    </group>
   </component>
 </oor:component-schema>

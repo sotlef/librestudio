@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkGrid" id="FindPage">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+    <property name="row-spacing">6</property>
+    <property name="column-spacing">12</property>
+    <property name="valign">fill</property>
+        <child>
+          <object class="GtkLabel" id="replacelabel">
+            <property name="visible">False</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="findpage|replacelabel">Re_place with:</property>
+            <property name="use-underline">True</property>
+            <property name="mnemonic-widget">replacewith</property>
+            <property name="xalign">0</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">1</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="replacewith">
+            <property name="visible">False</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="has-entry">True</property>
+            <child internal-child="entry">
+              <object class="GtkEntry">
+                <property name="can-focus">True</property>
+                <property name="width-chars">40</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">1</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="findlabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="findpage|findlabel">Fi_nd what:</property>
+            <property name="use-underline">True</property>
+            <property name="mnemonic-widget">findwhat</property>
+            <property name="xalign">0</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">0</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="findwhat">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="has-entry">True</property>
+            <child internal-child="entry">
+              <object class="GtkEntry">
+                <property name="can-focus">True</property>
+                <property name="width-chars">40</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">0</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="matchcase">
+            <property name="label" translatable="yes" context="findpage|matchcase">Match _case</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">2</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="wholeword">
+            <property name="label" translatable="yes" context="findpage|wholeword">Match _whole word</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">3</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="useregex">
+            <property name="label" translatable="yes" context="findpage|useregex">Use regular e_xpressions</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">4</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="preservecase">
+            <property name="label" translatable="yes" context="findpage|preservecase">Preser_ve case</property>
+            <property name="visible">False</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">5</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="lookinlabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="findpage|lookinlabel">_Look in:</property>
+            <property name="use-underline">True</property>
+            <property name="mnemonic-widget">lookin</property>
+            <property name="xalign">0</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">6</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="lookin">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="has-entry">True</property>
+            <child internal-child="entry">
+              <object class="GtkEntry">
+                <property name="can-focus">True</property>
+                <property name="width-chars">40</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">6</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="includesubfolders">
+            <property name="label" translatable="yes" context="findpage|includesubfolders">Include s_ubfolders</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">7</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="selectionbox">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="orientation">vertical</property>
+            <property name="spacing">3</property>
+            <child>
+              <object class="GtkRadioButton" id="entiredocument">
+                <property name="label" translatable="yes" context="findpage|entiredocument">Entire _document</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+                <property name="active">True</property>
+                <property name="draw-indicator">True</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkRadioButton" id="currentselection">
+                <property name="label" translatable="yes" context="findpage|currentselection">Current s_election</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+                                <property name="group">entiredocument</property>
+                <property name="draw-indicator">True</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkRadioButton" id="currentblock">
+                <property name="label" translatable="yes" context="findpage|currentblock">Current _block</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+                                <property name="group">entiredocument</property>
+                <property name="draw-indicator">True</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">8</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="includeexternal">
+            <property name="label" translatable="yes" context="findpage|includeexternal">Include e_xternal items</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">9</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="includemisc">
+            <property name="label" translatable="yes" context="findpage|includemisc">Include misc_ellaneous files</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="use-underline">True</property>
+            <property name="draw-indicator">True</property>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">10</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="filetypeslabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="findpage|filetypeslabel">File t_ypes:</property>
+            <property name="use-underline">True</property>
+            <property name="mnemonic-widget">filetypes</property>
+            <property name="xalign">0</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">11</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="filetypes">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="has-entry">True</property>
+            <child internal-child="entry">
+              <object class="GtkEntry">
+                <property name="can-focus">True</property>
+                <property name="width-chars">40</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">1</property>
+            <property name="top-attach">11</property>
+            <property name="width">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkGrid" id="buttons">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="vexpand">True</property>
+            <property name="halign">end</property>
+            <property name="valign">end</property>
+            <property name="row-spacing">6</property>
+            <property name="column-spacing">6</property>
+            <property name="row-homogeneous">True</property>
+            <property name="column-homogeneous">True</property>
+            <child>
+              <object class="GtkButton" id="findprev">
+                <property name="label" translatable="yes" context="findpage|findprev">Find _Previous</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="findnext">
+                <property name="label" translatable="yes" context="findpage|findnext">Find _Next</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="skipfile">
+                <property name="label" translatable="yes" context="findpage|skipfile">_Skip File</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">2</property>
+                <property name="top-attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="replacenext">
+                <property name="label" translatable="yes" context="findpage|replacenext">Replace Ne_xt</property>
+                <property name="visible">False</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="findall">
+                <property name="label" translatable="yes" context="findpage|findall">Find _All</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="left-attach">2</property>
+                <property name="top-attach">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">12</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+  </object>
+</interface>

@@ -69,4 +69,9 @@
 // of the cui-hosted .uno:OptionsTreeDialog of the office applications.
 #define SID_CODE_OPTIONS             (SID_CODE_START + 13)
 
+// Edit > Find in Files... / Replace in Files... (.uno:CodeFindInFiles,
+// .uno:CodeReplaceInFiles): the Find and Replace dialog on its first or second tab.
+#define SID_CODE_FINDINFILES         (SID_CODE_START + 14)
+#define SID_CODE_REPLACEINFILES      (SID_CODE_START + 15)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
