@@ -1435,6 +1435,11 @@ bool VclMultiLineEdit::PreNotify( NotifyEvent& rNEvt )
 
 // Internals for derived classes, e.g. TextComponent
 
+void VclMultiLineEdit::SetHighlightedParagraph(sal_Int32 nPara, const Color& rColor)
+{
+    GetTextEngine()->SetHighlightedParagraph(nPara, rColor);
+}
+
 ExtTextEngine* VclMultiLineEdit::GetTextEngine() const
 {
     return pImpVclMEdit->GetTextWindow()->GetTextEngine();

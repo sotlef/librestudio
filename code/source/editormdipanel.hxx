@@ -44,7 +44,11 @@ public:
     // code::EditorSurface
     virtual void ShowDocument(const OUString& rUrl,
                               const css::code::core::Position* pPosition) override;
+    virtual void ShowRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                           bool bTakeFocus) override;
     virtual bool SaveCurrentDocument() override;
+    void ShowDocumentAt(const OUString& rUrl, const css::code::core::Position* pPosition,
+                        const css::code::core::Range* pRange, bool bTakeFocus = false);
     virtual OUString CurrentDocumentUrl() override;
 
     /// Tools > Options changed: every open editor lays its text out anew.

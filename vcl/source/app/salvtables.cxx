@@ -5509,6 +5509,11 @@ void SalInstanceTextView::set_monospace(bool bMonospace)
     set_font(aFont);
 }
 
+void SalInstanceTextView::set_line_highlight(int nLine, const Color& rColor)
+{
+    m_xTextView->SetHighlightedParagraph(nLine, rColor);
+}
+
 void SalInstanceTextView::set_word_wrap(bool bWrap)
 {
     // VclMultiLineEdit has no direct wrap switch: wrapping follows the style

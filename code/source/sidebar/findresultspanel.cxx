@@ -11,6 +11,9 @@
 
 #include "../uibridge.hxx"
 
+#include <com/sun/star/code/core/theCode.hpp>
+#include <com/sun/star/code/frontend/XEditorHost.hpp>
+#include <com/sun/star/code/frontend/XWorkbench.hpp>
 #include <com/sun/star/code/search/FindResult.hpp>
 #include <com/sun/star/code/search/XFindListener.hpp>
 #include <com/sun/star/code/search/theFinder.hpp>
@@ -34,6 +37,7 @@
 #include <vcl/weld/TextView.hxx>
 #include <vcl/weld/Toolbar.hxx>
 #include <vcl/weld/TreeView.hxx>
+#include <vcl/event.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/Notebook.hxx>
@@ -96,7 +100,9 @@ FindResultsPanel::FindResultsPanel(weld::Widget* pParent)
     : PanelLayout(pParent, u"FindResultsPanel"_ustr, u"code/ui/findresultspanel.ui"_ustr)
     , mxTabs(m_xBuilder->weld_notebook(u"FindResultsPanel"_ustr))
     , maPump("code::FindResultsPanel pump")
+    , maFocusEditor("code::FindResultsPanel focus editor")
 {
+    maFocusEditor.SetInvokeHandler(LINK(this, FindResultsPanel, FocusEditorHdl));
     maPump.SetPriority(TaskPriority::LOWEST);
     maPump.SetInvokeHandler(LINK(this, FindResultsPanel, PumpHdl));
 
@@ -118,6 +124,7 @@ FindResultsPanel::FindResultsPanel(weld::Widget* pParent)
 FindResultsPanel::~FindResultsPanel()
 {
     maPump.Stop();
+    maFocusEditor.Stop();
     mxNotifier->Detach();
     try
     {
@@ -169,6 +176,9 @@ FindResultsPanel::Tab& FindResultsPanel::AddTab()
     // Fixed widths for File / Line / Col, Code takes the rest -- the table
     // renders at all on the generic-vcl path (qt6) only once the widths are
     // set from here, see ErrorListPanel.
+    t.mxList->connect_cursor_position(LINK(this, FindResultsPanel, ListCursorHdl));
+    t.mxTable->connect_selection_changed(LINK(this, FindResultsPanel, RowSelectedHdl));
+    t.mxTable->connect_item_activated(LINK(this, FindResultsPanel, RowActivatedHdl));
     t.mxTable->connect_size_allocate(LINK(this, FindResultsPanel, ListSizeAllocHdl));
 
     t.mxListBox->set_visible(false);
@@ -259,6 +269,7 @@ void FindResultsPanel::ClearResults(Tab& t)
     t.maResults.clear();
     t.maShown.clear();
     t.mnFilesSearched = 0;
+    t.mnFileWidth = 0;
     t.mxTable->clear();
     t.mxList->set_text(OUString());
     UpdateSummary(t);
@@ -300,6 +311,8 @@ bool FindResultsPanel::PumpTab(Tab& t)
             const css::code::search::FindResult aFound = t.mxEnumeration->nextResult();
             Result aResult;
             aResult.msCode = aFound.LineText.trim();
+            aResult.msUrl = aFound.Url;
+            aResult.maMatch = aFound.Match;
             aResult.msFile = aFound.Url;
             osl::FileBase::getSystemPathFromFileURL(aFound.Url, aResult.msFile);
             aResult.mnLine = aFound.Match.Start.Line + 1;
@@ -324,6 +337,13 @@ void FindResultsPanel::AppendRow(Tab& t, const Result& rResult)
     t.mxTable->append();
     t.mxTable->set_text(nRow, rResult.msCode, COL_CODE);
     t.mxTable->set_text(nRow, rResult.msFile, COL_FILE);
+    // the File column is as wide as its longest name
+    const int nFileWidth = static_cast<int>(t.mxTable->get_pixel_size(rResult.msFile).Width()) + 16;
+    if (nFileWidth > t.mnFileWidth)
+    {
+        t.mnFileWidth = nFileWidth;
+        ApplyColumnWidths(t);
+    }
     t.mxTable->set_text(nRow, OUString::number(rResult.mnLine), COL_LINE);
     t.mxTable->set_text(nRow, OUString::number(rResult.mnColumn), COL_COLUMN);
 }
@@ -381,7 +401,17 @@ void FindResultsPanel::UpdateListText(Tab& t)
         aText.append(rResult.msFile + "(" + OUString::number(rResult.mnLine) + "): " + rResult.msCode
                      + "\n");
     }
+    // setting the text moves the caret, which is no choice of a row
+    mbUpdatingList = true;
     t.mxList->set_text(aText.makeStringAndClear());
+    mbUpdatingList = false;
+    HighlightListRow(t);
+}
+
+void FindResultsPanel::HighlightListRow(Tab& t)
+{
+    // the current row of the table, light blue; the text's own selection is the user's
+    t.mxList->set_line_highlight(t.mxTable->get_selected_index(), Color(0xB5D8FF));
 }
 
 OUString FindResultsPanel::Describe(const css::code::search::FindOptions& rOptions)
@@ -443,6 +473,9 @@ void FindResultsPanel::SelectRelative(Tab& t, int nDelta)
                                   : std::clamp(nCurrent + nDelta, 0, nRows - 1);
     t.mxTable->select(nNew);
     t.mxTable->scroll_to_row(nNew);
+    // select() does not tell of the change; the row's document is opened here
+    HighlightListRow(t);
+    OpenResult(t, nNew, false);
 }
 
 IMPL_LINK(FindResultsPanel, ToolbarClickHdl, const OUString&, rIdent, void)
@@ -526,12 +559,91 @@ IMPL_LINK_NOARG(FindResultsPanel, SearchChangedHdl, weld::ComboBox&, void)
     UpdateSummary(t);
 }
 
+IMPL_LINK_NOARG(FindResultsPanel, RowActivatedHdl, const weld::TreeIter&, bool)
+{
+    // Enter / double click: the same document again, and now the editor is the one to type in
+    // (later: the key that activated the row must not reach the editor as well)
+    maFocusEditor.Start();
+    return true;
+}
+
+IMPL_LINK_NOARG(FindResultsPanel, FocusEditorHdl, Timer*, void)
+{
+    if (Tab* pTab = CurrentTab())
+        OpenResult(*pTab, pTab->mxTable->get_selected_index(), true);
+}
+
+IMPL_LINK_NOARG(FindResultsPanel, RowSelectedHdl, weld::ItemView&, void)
+{
+    if (Tab* pTab = CurrentTab())
+        HighlightListRow(*pTab);
+    // a row gets the focus, by the mouse or the arrow keys: its document opens with the
+    // match selected, and the table keeps the focus so that the keys go on
+    if (Tab* pTab = CurrentTab())
+        OpenResult(*pTab, pTab->mxTable->get_selected_index(), false);
+}
+
+IMPL_LINK(FindResultsPanel, ListCursorHdl, weld::TextWidget&, rWidget, void)
+{
+    // the caret of the list view moves, by the mouse or the keys: its line is the current row
+    if (mbUpdatingList)
+        return;
+    Tab* pTab = CurrentTab();
+    if (!pTab || &rWidget != static_cast<weld::TextWidget*>(pTab->mxList.get()))
+        return;
+    const OUString aText = pTab->mxList->get_text();
+    const sal_Int32 nPos = std::min<sal_Int32>(pTab->mxList->get_position(), aText.getLength());
+    int nRow = 0;
+    for (sal_Int32 i = 0; i < nPos; ++i)
+        if (aText[i] == '\n')
+            ++nRow;
+    // the text ends with a line terminator: the empty line after it is no row
+    if (nRow >= pTab->mxTable->n_children() || nRow == pTab->mxTable->get_selected_index())
+        return;
+    pTab->mxTable->select(nRow);
+    pTab->mxTable->scroll_to_row(nRow);
+    HighlightListRow(*pTab);
+    OpenResult(*pTab, nRow, false);
+}
+
+void FindResultsPanel::OpenResult(Tab& t, int nRow, bool bTakeFocus)
+{
+    if (nRow < 0 || static_cast<size_t>(nRow) >= t.maShown.size())
+        return;
+    const Result& rResult = t.maResults[t.maShown[nRow]];
+    try
+    {
+        uno::Reference<css::code::frontend::XWorkbench> xWorkbench
+            = css::code::core::theCode::get(comphelper::getProcessComponentContext())
+                  ->getWorkbench();
+        if (xWorkbench.is() && xWorkbench->getEditorHost().is())
+            xWorkbench->getEditorHost()->revealRange(rResult.msUrl, rResult.maMatch, bTakeFocus);
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code", "cannot open " << rResult.msUrl << ": " << rException.Message);
+    }
+}
+
+void FindResultsPanel::ApplyColumnWidths(Tab& t)
+{
+    if (t.mnTableWidth <= 0)
+        return;
+    static constexpr int nMinFile = 60, nMinCode = 150, nLine = 50, nColumn = 50;
+    // the File column fits its data, but leaves the code its minimum
+    const int nFileMax = std::max(nMinFile, t.mnTableWidth - nMinCode - nLine - nColumn);
+    const int nFile = std::clamp(t.mnFileWidth, nMinFile, nFileMax);
+    const int nCode = std::max(nMinCode, t.mnTableWidth - nFile - nLine - nColumn);
+    t.mxTable->set_column_fixed_widths({ nCode, nFile, nLine, nColumn });
+}
+
 IMPL_LINK(FindResultsPanel, ListSizeAllocHdl, const Size&, rSize, void)
 {
-    static constexpr int nFile = 220, nLine = 50, nColumn = 50;
-    const int nCode = std::max(150, static_cast<int>(rSize.Width()) - nFile - nLine - nColumn);
     for (const auto& rTab : maTabs)
-        rTab->mxTable->set_column_fixed_widths({ nCode, nFile, nLine, nColumn });
+    {
+        rTab->mnTableWidth = static_cast<int>(rSize.Width());
+        ApplyColumnWidths(*rTab);
+    }
 }
 
 } // namespace code::sidebar

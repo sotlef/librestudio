@@ -338,6 +338,14 @@ void Workbench::revealPosition(const OUString& rUrl, const css::code::core::Posi
         m_pEditorSurface->ShowDocument(rUrl, &rPosition);
 }
 
+void Workbench::revealRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                            sal_Bool bTakeFocus)
+{
+    SolarMutexGuard aGuard;
+    if (m_pEditorSurface)
+        m_pEditorSurface->ShowRange(rUrl, rRange, bTakeFocus);
+}
+
 // ---- dialogs --------------------------------------------------------------
 
 cf::SaveChoice Workbench::askSaveChanges(const OUString& rDocumentName)

@@ -597,6 +597,15 @@ void CodeEditView::RevealPosition(const Position& rPosition)
     ScrollInto(m_aCaret, true);
 }
 
+void CodeEditView::RevealRange(const css::code::core::Range& rRange, bool bTakeFocus)
+{
+    MoveCaret(rRange.Start, false);
+    MoveCaret(rRange.End, true);
+    ScrollInto(m_aCaret, true);
+    if (bTakeFocus)
+        GrabFocus();
+}
+
 // ---- the caret ------------------------------------------------------------
 
 void CodeEditView::ResetBlink()

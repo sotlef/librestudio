@@ -17951,6 +17951,28 @@ public:
         gtk_text_view_set_wrap_mode(m_pTextView, bWrap ? GTK_WRAP_WORD_CHAR : GTK_WRAP_NONE);
     }
 
+    virtual void set_line_highlight(int nLine, const Color& rColor) override
+    {
+        GtkTextIter aStart, aEnd;
+        gtk_text_buffer_get_bounds(m_pTextBuffer, &aStart, &aEnd);
+        gtk_text_buffer_remove_tag_by_name(m_pTextBuffer, "line-highlight", &aStart, &aEnd);
+        if (nLine < 0)
+            return;
+        GtkTextTagTable* pTable = gtk_text_buffer_get_tag_table(m_pTextBuffer);
+        GtkTextTag* pTag = gtk_text_tag_table_lookup(pTable, "line-highlight");
+        if (!pTag)
+            pTag = gtk_text_buffer_create_tag(m_pTextBuffer, "line-highlight", nullptr);
+        GdkRGBA aColor = toGdkColor(rColor);
+        g_object_set(pTag, "paragraph-background-rgba", &aColor, nullptr);
+        if (nLine >= gtk_text_buffer_get_line_count(m_pTextBuffer))
+            return;
+        gtk_text_buffer_get_iter_at_line(m_pTextBuffer, &aStart, nLine);
+        aEnd = aStart;
+        if (!gtk_text_iter_ends_line(&aEnd))
+            gtk_text_iter_forward_to_line_end(&aEnd);
+        gtk_text_buffer_apply_tag(m_pTextBuffer, pTag, &aStart, &aEnd);
+    }
+
     virtual void set_monospace(bool bMonospace) override
     {
         gtk_text_view_set_monospace(m_pTextView, bMonospace);

@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-namespace weld { class ComboBox; class TextView; class Toolbar; class TreeView; class Widget; class Label; }
+namespace weld { class ComboBox; class TextView; class Toolbar; class TreeView; class TreeIter; class TextWidget; class ItemView; class Widget; class Label; }
 
 namespace code { class UiNotifier; }
 
@@ -46,6 +46,8 @@ public:
     {
         OUString msCode;
         OUString msFile; // the full absolute name
+        OUString msUrl;
+        css::code::core::Range maMatch; // zero-based, what the search matched
         sal_Int32 mnLine = 0;
         sal_Int32 mnColumn = 0;
     };
@@ -74,6 +76,9 @@ private:
         // indexes into maResults of the rows shown (those matching the search box)
         std::vector<size_t> maShown;
         sal_Int32 mnFilesSearched = 0;
+        /// the width the File column needs for the longest name, and the table's own
+        int mnFileWidth = 0;
+        int mnTableWidth = 0;
 
         css::uno::Reference<css::code::search::XFindEnumeration> mxEnumeration;
         /// what the search was started with: Modify Find and Refresh need it
@@ -95,9 +100,11 @@ private:
     void AddResults(Tab& rTab, std::vector<Result> aResults);
     void AppendRow(Tab& rTab, const Result& rResult);
     void ClearResults(Tab& rTab);
+    void ApplyColumnWidths(Tab& rTab);
 
     void UpdateTable(Tab& rTab);
     void UpdateListText(Tab& rTab);
+    void HighlightListRow(Tab& rTab);
     void UpdateSummary(Tab& rTab);
     /// "Find all "x", Match case, All open documents, "*.cpp""
     static OUString Describe(const css::code::search::FindOptions& rOptions);
@@ -106,17 +113,25 @@ private:
 
     DECL_LINK(ToolbarClickHdl, const OUString&, void);
     DECL_LINK(TabCloseHdl, const OUString&, void);
+    DECL_LINK(RowActivatedHdl, const weld::TreeIter&, bool);
+    DECL_LINK(ListCursorHdl, weld::TextWidget&, void);
+    DECL_LINK(RowSelectedHdl, weld::ItemView&, void);
+    void OpenResult(Tab& rTab, int nRow, bool bTakeFocus);
     DECL_LINK(PumpHdl, Timer*, void);
+    DECL_LINK(FocusEditorHdl, Timer*, void);
     DECL_LINK(SearchChangedHdl, weld::ComboBox&, void);
     DECL_LINK(ListSizeAllocHdl, const Size&, void);
 
     std::unique_ptr<weld::Notebook> mxTabs;
     std::vector<std::unique_ptr<Tab>> maTabs;
     int mnTabCounter = 0;
+    bool mbUpdatingList = false;
     /// the tab a Refresh asked its search for: the next search belongs to it
     Tab* mpRefreshTab = nullptr;
 
     Idle maPump;
+    /// takes the focus to the editor once the key or click that asked for it is handled
+    Idle maFocusEditor;
     std::shared_ptr<::code::UiNotifier> mxNotifier;
     rtl::Reference<FindSearchListener> mxListener;
 };

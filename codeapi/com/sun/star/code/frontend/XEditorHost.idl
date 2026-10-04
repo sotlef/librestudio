@@ -16,6 +16,10 @@ interface XEditorHost
     void openDocument( [in] string Url );
     /** shows the document and puts the caret at the position */
     void revealPosition( [in] string Url, [in] ::com::sun::star::code::core::Position Position );
+    /** shows the document, selects the range and puts the caret at its end;
+        the editor gets the focus if TakeFocus */
+    void revealRange( [in] string Url, [in] ::com::sun::star::code::core::Range Range,
+                      [in] boolean TakeFocus );
 };
 
 }; }; }; }; };

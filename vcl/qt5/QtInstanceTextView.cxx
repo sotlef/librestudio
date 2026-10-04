@@ -14,7 +14,9 @@
 
 #include <vcl/qt/QtUtils.hxx>
 
+#include <QtGui/QTextBlock>
 #include <QtGui/QTextCursor>
+#include <QtWidgets/QTextEdit>
 #include <QtWidgets/QScrollBar>
 
 QtInstanceTextView::QtInstanceTextView(QPlainTextEdit* pTextEdit)
@@ -136,6 +138,25 @@ void QtInstanceTextView::set_word_wrap(bool bWrap)
     GetQtInstance().RunInMainThread([&] {
         m_pTextEdit->setLineWrapMode(bWrap ? QPlainTextEdit::WidgetWidth
                                            : QPlainTextEdit::NoWrap);
+    });
+}
+
+void QtInstanceTextView::set_line_highlight(int nLine, const Color& rColor)
+{
+    SolarMutexGuard g;
+
+    GetQtInstance().RunInMainThread([&] {
+        QList<QTextEdit::ExtraSelection> aSelections;
+        QTextBlock aBlock = m_pTextEdit->document()->findBlockByNumber(nLine);
+        if (nLine >= 0 && aBlock.isValid())
+        {
+            QTextEdit::ExtraSelection aSelection;
+            aSelection.format.setBackground(toQColor(rColor));
+            aSelection.format.setProperty(QTextFormat::FullWidthSelection, true);
+            aSelection.cursor = QTextCursor(aBlock);
+            aSelections.append(aSelection);
+        }
+        m_pTextEdit->setExtraSelections(aSelections);
     });
 }
 

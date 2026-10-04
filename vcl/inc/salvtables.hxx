@@ -1446,6 +1446,7 @@ public:
     virtual void set_monospace(bool bMonospace) override;
 
     virtual void set_word_wrap(bool bWrap) override;
+    virtual void set_line_highlight(int nLine, const Color& rColor) override;
 
     virtual void set_font(const vcl::Font& rFont) override;
 

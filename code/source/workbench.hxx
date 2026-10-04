@@ -40,6 +40,10 @@ public:
     virtual void ShowDocument(const OUString& rUrl,
                               const css::code::core::Position* pPosition) = 0;
 
+    /// The same, with the range selected and the editor focused.
+    virtual void ShowRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                           bool bTakeFocus) = 0;
+
     /// Saves the document of the tab that is showing; false if there is none.
     virtual bool SaveCurrentDocument() = 0;
 
@@ -104,6 +108,8 @@ public:
     void SAL_CALL openDocument(const OUString& rUrl) override;
     void SAL_CALL revealPosition(const OUString& rUrl,
                                  const css::code::core::Position& rPosition) override;
+    void SAL_CALL revealRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                              sal_Bool bTakeFocus) override;
 
     // XDialogs
     css::code::frontend::SaveChoice SAL_CALL askSaveChanges(const OUString& rDocumentName) override;

@@ -110,6 +110,8 @@ class VCL_DLLPUBLIC TextEngine : public SfxBroadcaster
     tools::Long                mnCurTextWidth;
     tools::Long                mnCurTextHeight;
     tools::Long                mnDefTab;
+    sal_Int32           mnHighlightPara;
+    Color               maHighlightColor;
 
     TxtAlign            meAlign;
 
@@ -233,6 +235,8 @@ public:
     SAL_DLLPRIVATE void                SetMaxTextLen( sal_Int32 nLen );
     sal_Int32           GetMaxTextLen() const { return mnMaxTextLen; }
 
+    /// the paragraph that is painted over its whole width with the color, -1 for none
+    void                SetHighlightedParagraph( sal_Int32 nPara, const Color& rColor );
     void                SetMaxTextWidth( tools::Long nWidth );
     tools::Long                GetMaxTextWidth() const { return mnMaxTextWidth; }
 

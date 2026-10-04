@@ -106,6 +106,9 @@ public:
     virtual         ~VclMultiLineEdit() override;
     virtual void    dispose() override;
 
+    /// the whole paragraph (zero-based) is painted with the color, -1 for none
+    void            SetHighlightedParagraph(sal_Int32 nPara, const Color& rColor);
+
     void            SelectionChanged();
     void            CaretChanged();
     virtual void    Modify() override;

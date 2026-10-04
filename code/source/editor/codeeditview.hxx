@@ -53,6 +53,8 @@ public:
     void Refresh();
     /// Scrolls so that the position is in view, and puts the caret there.
     void RevealPosition(const css::code::core::Position& rPosition);
+    /// Selects the range, puts the caret at its end, scrolls it into view and takes the focus if asked to.
+    void RevealRange(const css::code::core::Range& rRange, bool bTakeFocus);
     OUString GetText() const;
 
     /// Reads the Tools > Options settings again and lays the text out anew.

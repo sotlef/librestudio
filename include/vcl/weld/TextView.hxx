@@ -13,6 +13,7 @@
 #include <vcl/weld/TextWidget.hxx>
 
 enum class TxtAlign;
+class Color;
 
 namespace weld
 {
@@ -44,6 +45,11 @@ public:
     virtual bool can_move_cursor_with_down() const = 0;
 
     virtual void set_alignment(TxtAlign eXAlign) = 0;
+
+    // Paints the whole line (zero-based, a paragraph) with rColor behind its text: a highlight
+    // that is not the selection, which stays free for the user.  nLine -1 removes it; the
+    // line has to be set again after the text was replaced.
+    virtual void set_line_highlight(int /*nLine*/, const Color& /*rColor*/) {}
 
     virtual int vadjustment_get_value() const = 0;
     virtual int vadjustment_get_upper() const = 0;

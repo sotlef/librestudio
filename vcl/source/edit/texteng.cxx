@@ -78,6 +78,7 @@ TextEngine::TextEngine()
     , mnCurTextWidth {-1}
     , mnCurTextHeight {0}
     , mnDefTab {0}
+    , mnHighlightPara {-1}
     , meAlign {TxtAlign::Left}
     , mbIsFormatting {false}
     , mbFormatted {false}
@@ -214,6 +215,16 @@ void TextEngine::SetFont( const vcl::Font& rFont )
 void TextEngine::SetMaxTextLen( sal_Int32 nLen )
 {
     mnMaxTextLen = nLen>=0 ? nLen : EDIT_NOLIMIT;
+}
+
+void TextEngine::SetHighlightedParagraph( sal_Int32 nPara, const Color& rColor )
+{
+    if ( nPara == mnHighlightPara && ( nPara < 0 || rColor == maHighlightColor ) )
+        return;
+    mnHighlightPara = nPara;
+    maHighlightColor = rColor;
+    for ( sal_uInt16 n = 0; n < GetViewCount(); ++n )
+        GetView( n )->GetWindow()->Invalidate();
 }
 
 void TextEngine::SetMaxTextWidth( tools::Long nMaxWidth )
@@ -1915,6 +1926,16 @@ void TextEngine::ImpPaint( OutputDevice* pOutDev, const Point& rStartPos, tools:
 
                 if ( !pPaintArea || ( ( nY + mnCharHeight ) > pPaintArea->Top() ) )
                 {
+                    if ( nPara == static_cast<sal_uInt32>(mnHighlightPara) )
+                    {
+                        // the whole line, also where there is no text
+                        auto popIt = pOutDev->ScopedPush( vcl::PushFlags::FILLCOLOR | vcl::PushFlags::LINECOLOR );
+                        pOutDev->SetLineColor();
+                        pOutDev->SetFillColor( maHighlightColor );
+                        const tools::Long nWidth = std::max( pOutDev->GetOutputSizePixel().Width(),
+                                                             rStartPos.X() + mnCurTextWidth );
+                        pOutDev->DrawRect( tools::Rectangle( Point( 0, nY ), Size( nWidth, mnCharHeight ) ) );
+                    }
                     // for all Portions of the line
                     nIndex = rLine.GetStart();
                     for ( std::size_t y = rLine.GetStartPortion(); y <= rLine.GetEndPortion(); y++ )

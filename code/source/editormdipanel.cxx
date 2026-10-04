@@ -117,6 +117,18 @@ void EditorMDIPanel::SettingsChanged()
 
 void EditorMDIPanel::ShowDocument(const OUString& rUrl, const css::code::core::Position* pPosition)
 {
+    ShowDocumentAt(rUrl, pPosition, nullptr);
+}
+
+void EditorMDIPanel::ShowRange(const OUString& rUrl, const css::code::core::Range& rRange,
+                               bool bTakeFocus)
+{
+    ShowDocumentAt(rUrl, nullptr, &rRange, bTakeFocus);
+}
+
+void EditorMDIPanel::ShowDocumentAt(const OUString& rUrl, const css::code::core::Position* pPosition,
+                                    const css::code::core::Range* pRange, bool bTakeFocus)
+{
     if (!mxMDI)
         return;
 
@@ -161,7 +173,9 @@ void EditorMDIPanel::ShowDocument(const OUString& rUrl, const css::code::core::P
 
     mxMDI->set_current_document(nDocId);
 
-    if (pPosition)
+    if (pRange)
+        maDocumentContents[nDocId].mxView->RevealRange(*pRange, bTakeFocus);
+    else if (pPosition)
         maDocumentContents[nDocId].mxView->RevealPosition(*pPosition);
 }
 
