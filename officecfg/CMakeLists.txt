@@ -841,7 +841,7 @@ add_custom_target(officecfg_registry ALL
 # FCFGMerge.cfg next to it) -- nothing else in this tree sets a custom
 # command's environment, but ${CMAKE_COMMAND} -E env is a standard, portable
 # CMake mechanism, not a workaround.
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 set(OFFICECFG_FCFG_MERGE_TOOL
     "${CMAKE_SOURCE_DIR}/filter/source/config/tools/merge/pyAltFCFGMerge")
@@ -1255,5 +1255,4 @@ librestudio_add_cppunit_test(officecfg_cppheader_test
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/officecfg/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/officecfg/CppunitTest_deferred.cmake")

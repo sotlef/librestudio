@@ -109,6 +109,16 @@ set(EMBOLEOBJ_SOURCES
     embeddedobj/source/msole/xolefactory
 )
 
+# Library_emboleobj.mk, ifeq ($(OS),WNT): the real OLE implementation.
+if (WIN32)
+    list(APPEND EMBOLEOBJ_SOURCES
+        embeddedobj/source/msole/advisesink
+        embeddedobj/source/msole/graphconvert
+        embeddedobj/source/msole/olecomponent
+        embeddedobj/source/msole/olewrapclient
+        embeddedobj/source/msole/xdialogcreator)
+endif ()
+
 librestudio_expand_cxx(EMBOLEOBJ_SOURCES)
 add_library(emboleobj SHARED ${EMBOLEOBJ_SOURCES})
 
@@ -122,9 +132,17 @@ add_dependencies(emboleobj officecfg_headers udkapi_normal_headers offapi_normal
 target_link_libraries(emboleobj PRIVATE
     comphelper cppu cppuhelper sal tl utl vcl
     Boost::boost)
+if (WIN32)
+    target_link_libraries(emboleobj PRIVATE embobj gdi32 ole32 oleaut32 oledlg uuid)
+endif ()
 
+if (WIN32)
+    set(_emboleobj_component "${CMAKE_SOURCE_DIR}/embeddedobj/source/msole/emboleobj.windows.component")
+else ()
+    set(_emboleobj_component "${CMAKE_SOURCE_DIR}/embeddedobj/source/msole/emboleobj.component")
+endif ()
 librestudio_add_component(emboleobj
-    COMPONENT "${CMAKE_SOURCE_DIR}/embeddedobj/source/msole/emboleobj.component"
+    COMPONENT "${_emboleobj_component}"
     LIBRARY   emboleobj
     LAYER     OOO)
 
@@ -141,5 +159,4 @@ install(TARGETS emboleobj LIBRARY DESTINATION program)
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/embeddedobj/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/embeddedobj/CppunitTest_deferred.cmake")

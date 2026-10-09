@@ -28,7 +28,7 @@ target_include_directories(i18nlangtag PRIVATE
 add_dependencies(i18nlangtag udkapi_normal_headers offapi_normal_headers)
 
 target_compile_definitions(i18nlangtag PRIVATE I18NLANGTAG_DLLIMPLEMENTATION)
-target_link_libraries(i18nlangtag PRIVATE sal ICU::uc PkgConfig::LIBLANGTAG)
+target_link_libraries(i18nlangtag PRIVATE sal ICU::uc ${LIBRESTUDIO_LIBLANGTAG_TARGET})
 
 # Library_i18nlangtag.mk: $(eval $(call gb_Library_use_system_win32_libs,
 # i18nlangtag,$(if $(filter $(COM),MSC), kernel32))) -- kernel32 only under
@@ -79,7 +79,7 @@ install(TARGETS i18nlangtag LIBRARY DESTINATION program)
 # established by i18nlangtag's own production block above, and by
 # basic/CppunitTest_deferred.cmake's own comment on the identical
 # icu_headers+icuuc+icui18n -> ICU::uc[+ICU::i18n] mapping). liblangtag ->
-# PkgConfig::LIBLANGTAG (root CMakeLists.txt's own IMPORTED_TARGET, reused
+# ${LIBRESTUDIO_LIBLANGTAG_TARGET} (root CMakeLists.txt's own IMPORTED_TARGET, reused
 # as-is, same target i18nlangtag's own production block links).
 #
 # qa/cppunit/test_languagetag.cxx (grepped directly): a plain
@@ -92,9 +92,9 @@ librestudio_add_cppunit_test(i18nlangtag_test_languagetag
         i18nlangtag/qa/cppunit/test_languagetag
     LIBRARIES
         i18nlangtag cppu cppuhelper sal
-        ICU::uc PkgConfig::LIBLANGTAG
+        ICU::uc ${LIBRESTUDIO_LIBLANGTAG_TARGET}
     INCLUDE
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
         "${offapi_normal_HEADERS_INCLUDE_DIR}"
-    DEFINITIONS SYSTEM_LIBLANGTAG
+    DEFINITIONS $<$<BOOL:${LIBRESTUDIO_LIBLANGTAG_FOUND}>:SYSTEM_LIBLANGTAG>
     DEPENDS udkapi_normal_headers offapi_normal_headers)

@@ -519,7 +519,6 @@ endif ()
 # successfully linked WebsocketConnection.java against java_websocket's own
 # WebSocketClient class before now. Both fixed directly in ridljar/
 # CMakeLists.txt.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/scripting/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/scripting/CppunitTest_deferred.cmake")
 
 endif ()

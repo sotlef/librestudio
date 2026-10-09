@@ -219,6 +219,12 @@ endif ()
 
 librestudio_expand_cxx(CUI_SOURCES)
 add_library(cui SHARED ${CUI_SOURCES})
+# Library_cui.mk, ifeq ($(OS),WNT): the file-extension check dialog and the
+# two Win32 libraries behind it.
+if (WIN32)
+    target_sources(cui PRIVATE "${CMAKE_SOURCE_DIR}/cui/source/dialogs/fileextcheckdlg.cxx")
+    target_link_libraries(cui PRIVATE advapi32 shlwapi)
+endif ()
 
 if (ENABLE_PCH)
     target_precompile_headers(cui PRIVATE
@@ -316,7 +322,11 @@ install(TARGETS cui LIBRARY DESTINATION program)
 # build-time ALL target to depend on, the same reason UIConfig_vcl/UIConfig_svt/
 # UIConfig_svx/UIConfig_basicide each grew their own "<module>_uiconfig"
 # target -- introduced here as "cui_uiconfig".
+if (WIN32)
+    set(CUI_WIN_UI_FILES "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/fileextcheckdialog.ui")
+endif ()
 set(CUI_UICONFIG_UI_FILES
+    ${CUI_WIN_UI_FILES}
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/tipofthedaydialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/aboutdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/ui/aboutconfigdialog.ui"
@@ -564,5 +574,4 @@ unset(_cui_uiconfig_outputs)
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/cui/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/cui/CppunitTest_deferred.cmake")

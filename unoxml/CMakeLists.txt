@@ -110,37 +110,42 @@ install(TARGETS unoxml LIBRARY DESTINATION program)
 # as external/redland/redland.cmake. LIBRESTUDIO_FORCE_VENDOR_REDLAND is
 # declared once in cmake/LibreStudioTarballs.cmake, alongside its 4 sibling
 # force-vendor options -- not re-declared here.
-librestudio_pkgconfig(
-    MODULES redland
-    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_REDLAND)
+# librdf (redland/raptor2/rasqal) is an autotools build with no Windows
+# recipe here yet, so the RDF metadata service is left out on Windows; the
+# UNO service is simply not registered there.  TODO: build redland with MSVC.
+if (NOT WIN32)
+    librestudio_pkgconfig(
+        MODULES redland
+        FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_REDLAND)
 
-set(UNORDF_SOURCES
-    unoxml/source/rdf/CBlankNode
-    unoxml/source/rdf/CURI
-    unoxml/source/rdf/CLiteral
-    unoxml/source/rdf/librdf_repository
-)
-librestudio_expand_cxx(UNORDF_SOURCES)
-add_library(unordf SHARED ${UNORDF_SOURCES})
+    set(UNORDF_SOURCES
+        unoxml/source/rdf/CBlankNode
+        unoxml/source/rdf/CURI
+        unoxml/source/rdf/CLiteral
+        unoxml/source/rdf/librdf_repository
+    )
+    librestudio_expand_cxx(UNORDF_SOURCES)
+    add_library(unordf SHARED ${UNORDF_SOURCES})
 
-target_include_directories(unordf PRIVATE
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(unordf udkapi_normal_headers offapi_normal_headers)
+    target_include_directories(unordf PRIVATE
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(unordf udkapi_normal_headers offapi_normal_headers)
 
-target_link_libraries(unordf PRIVATE
-    comphelper cppuhelper cppu sal
-    Boost::boost
-    LibXml2::LibXml2 PkgConfig::LIBXSLT
-    ${LIBRESTUDIO_REDLAND_TARGET})
+    target_link_libraries(unordf PRIVATE
+        comphelper cppuhelper cppu sal
+        Boost::boost
+        LibXml2::LibXml2 PkgConfig::LIBXSLT
+        ${LIBRESTUDIO_REDLAND_TARGET})
 
-librestudio_add_component(unordf
-    COMPONENT "${CMAKE_SOURCE_DIR}/unoxml/source/rdf/unordf.component"
-    LIBRARY   unordf
-    LAYER     OOO)
+    librestudio_add_component(unordf
+        COMPONENT "${CMAKE_SOURCE_DIR}/unoxml/source/rdf/unordf.component"
+        LIBRARY   unordf
+        LAYER     OOO)
 
-librestudio_set_library_output_name(unordf unordf OOO)
-install(TARGETS unordf LIBRARY DESTINATION program)
+    librestudio_set_library_output_name(unordf unordf OOO)
+    install(TARGETS unordf LIBRARY DESTINATION program)
+endif ()
 
 # unoxml/CppunitTest_deferred.cmake needs data (a COMPONENTS name,
 # program_services_rdb, CONFIGURATION's officecfg_registry/
@@ -151,5 +156,4 @@ install(TARGETS unordf LIBRARY DESTINATION program)
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/unoxml/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/unoxml/CppunitTest_deferred.cmake")

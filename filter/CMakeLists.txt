@@ -413,7 +413,7 @@ install(TARGETS graphicfilter LIBRARY DESTINATION program)
 #    registration. Skipping it costs nothing real: nothing anywhere in
 #    this tree would ever link against it.
 set(FILTER_SVG_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/svg_generated")
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 add_custom_command(
     OUTPUT "${FILTER_SVG_GENERATED_DIR}/svgscript.hxx"
@@ -670,5 +670,4 @@ unset(_filter_uiconfig_outputs)
 # specific per-test constraint, and cmake/LibreStudioTest.cmake's header
 # comment for why CMAKE_SOURCE_DIR (not CMAKE_CURRENT_SOURCE_DIR) is required
 # in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/filter/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/filter/CppunitTest_deferred.cmake")

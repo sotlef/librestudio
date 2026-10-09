@@ -23,6 +23,7 @@
 #include <unx/font/GenericFontFace.hxx>
 #include <unx/font/GenericFontList.hxx>
 #include <unx/font/fontmanager.hxx>
+#include <unx/font/fc_fontoptions.hxx>
 
 #include <font/LogicalFontInstance.hxx>
 #include <fontattributes.hxx>
@@ -30,6 +31,8 @@
 #include <hb.h>
 
 // GenericFont
+
+GenericFont::~GenericFont() = default;
 
 GenericFont::GenericFont(const GenericFontFace& rFontFace, const vcl::font::FontSelectPattern& rFSD)
     : LogicalFontInstance(rFontFace, rFSD)

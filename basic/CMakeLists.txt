@@ -84,10 +84,17 @@ list(APPEND SB_SOURCES
     basic/source/sbx/sbxvalue
     basic/source/sbx/sbxvar
 
-    # ifeq ($(OS)$(CPUNAME),WNTINTEL) / ifeq ($(OS)...,WNT) -- neither applies
-    # on Linux; dllmgr-none is the else-of-else branch.
-    basic/source/runtime/dllmgr-none
 )
+
+# Library_sb.mk: dllmgr-x86 (+ wnt-x86.asm) for 32-bit Windows, dllmgr-x64 for
+# 64-bit Windows, dllmgr-none everywhere else.
+if (WIN32 AND (LIBRESTUDIO_CPUNAME STREQUAL "X86_64" OR LIBRESTUDIO_CPUNAME STREQUAL "AARCH64"))
+    list(APPEND SB_SOURCES basic/source/runtime/dllmgr-x64)
+elseif (WIN32)
+    message(FATAL_ERROR "sb: only the x64 Windows DLL manager is ported (dllmgr-x86 needs wnt-x86.asm)")
+else ()
+    list(APPEND SB_SOURCES basic/source/runtime/dllmgr-none)
+endif ()
 
 librestudio_expand_cxx(SB_SOURCES)
 
@@ -136,6 +143,9 @@ target_link_libraries(sb PRIVATE
     comphelper cppu cppuhelper sal salhelper i18nlangtag sot svl svt tl utl
     vcl xmlscript
     ICU::uc ICU::i18n)
+if (WIN32)
+    target_link_libraries(sb PRIVATE oleaut32)    # Library_sb.mk: use_system_win32_libs
+endif ()
 
 # Library_sb.mk's gb_Library_set_componentfile call sits inside the same
 # SCRIPTING ifneq block as the sources above (its two declared services are
@@ -197,5 +207,4 @@ librestudio_add_cppunit_test(basic_util
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/basic/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/basic/CppunitTest_deferred.cmake")

@@ -25,9 +25,13 @@ are the same.
 #define CONFIG_SKIA_H
 
 // GPU support (set by configure).
-#undef SK_GANESH
+#if @HAVE_FEATURE_SKIA@
+#define SK_GANESH 1
+#endif
 // Vulkan support enabled (set by configure).
-#undef SK_VULKAN
+#if @HAVE_FEATURE_SKIA@
+#define SK_VULKAN 1
+#endif
 // Metal support enabled (set by configure).
 #undef SK_METAL
 

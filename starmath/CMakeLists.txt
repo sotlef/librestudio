@@ -31,7 +31,7 @@
 # own (tokens.hxx-only) need. Only the two headers sm's sources actually
 # include are reproduced -- not the gperf tokenhash.inc or properties.hxx
 # stages, which sm never uses.
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 set(SM_OOX_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(SM_OOX_TOKEN_SRC_DIR "${CMAKE_SOURCE_DIR}/oox/source/token")
@@ -346,5 +346,4 @@ unset(_smath_uiconfig_outputs)
 # full mechanism and its two gotchas -- CMAKE_SOURCE_DIR, never CMAKE_
 # CURRENT_SOURCE_DIR, in the path argument below, since DEFER's arguments are
 # evaluated lazily in the DEFER DIRECTORY's own scope, not this one's).
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/starmath/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/starmath/CppunitTest_deferred.cmake")

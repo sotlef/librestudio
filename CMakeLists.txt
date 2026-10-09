@@ -17,7 +17,20 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-project(LibreStudio LANGUAGES C CXX ASM)
+project(LibreStudio LANGUAGES C CXX)
+
+# The UNO bridge's assembly: MASM (call.asm) with MSVC, the GNU assembler's
+# dialect everywhere else.
+if (MSVC)
+    enable_language(ASM_MASM)
+else ()
+    enable_language(ASM)
+endif ()
+
+# vcl's Windows back end carries a resource script (vcl/win/src/salsrc.rc).
+if (WIN32)
+    enable_language(RC)
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -30,7 +43,13 @@ Requires a JDK." OFF)
 option(LIBRESTUDIO_ENABLE_GPGME
     "Build comphelper's GPGME-backed document signing support. Requires libgpgmepp." OFF)
 
-set(LIBRESTUDIO_TLS_BACKEND "NSS" CACHE STRING
+# NSS has no usable Windows packaging (upstream builds its own); OpenSSL does.
+if (WIN32)
+    set(_librestudio_default_tls_backend "OPENSSL")
+else ()
+    set(_librestudio_default_tls_backend "NSS")
+endif ()
+set(LIBRESTUDIO_TLS_BACKEND "${_librestudio_default_tls_backend}" CACHE STRING
     "Crypto backend for comphelper (NSS or OPENSSL)")
 set_property(CACHE LIBRESTUDIO_TLS_BACKEND PROPERTY STRINGS NSS OPENSSL)
 
@@ -819,7 +838,19 @@ endif ()
 
 # liblangtag is used directly by i18nlangtag; it pulls libxml2 in through its
 # own pkg-config file, which is why the UNO core links libxml2 without using it.
-pkg_check_modules(LIBLANGTAG REQUIRED IMPORTED_TARGET liblangtag>=0.4.0)
+#
+# Resolved like the other externals: a system liblangtag when there is one,
+# otherwise built from download.lst's tarball (external/liblangtag/
+# liblangtag.cmake) -- the only way on Windows.  LIBRESTUDIO_LIBLANGTAG_TARGET
+# is what consumers link; LIBLANGTAG_VERSION feeds LIBLANGTAG_INLINE_FIX.
+librestudio_pkgconfig(NAME LIBLANGTAG MODULES liblangtag VERSION 0.4.0 DRIVER liblangtag
+    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_LIBLANGTAG)
+if (LIBRESTUDIO_LIBLANGTAG_FOUND)
+    pkg_check_modules(_LIBLANGTAG_VER QUIET liblangtag)
+    set(LIBLANGTAG_VERSION "${_LIBLANGTAG_VER_VERSION}")
+else ()
+    set(LIBLANGTAG_VERSION "${LIBRESTUDIO_LIBLANGTAG_VERSION}")
+endif ()
 
 # tl parses XML with libxml2 directly (tools/source/xml/XmlWalker.cxx).
 find_package(LibXml2 REQUIRED)
@@ -842,8 +873,11 @@ pkg_check_modules(LIBXSLT REQUIRED IMPORTED_TARGET libxslt)
 # own FOUND-branch handling of the "contribs-lib" split). DRIVER given
 # explicitly: "libclucene-core" contains a hyphen, so it never qualifies
 # for this router's own single-module auto-detect candidate rule.
-librestudio_pkgconfig(NAME CLUCENE MODULES libclucene-core DRIVER clucene
-    FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_CLUCENE)
+# Only helpcompiler and xmlhelp use it, neither is part of Code.
+if (NOT LIBRESTUDIO_CODE_ONLY)
+    librestudio_pkgconfig(NAME CLUCENE MODULES libclucene-core DRIVER clucene
+        FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_CLUCENE)
+endif ()
 
 # slideshow's box2d-based physics transitions. box2d ships a CMake
 # package-config (no pkg-config .pc file), and exports an imported target
@@ -884,6 +918,73 @@ include(LibreStudioConfigHeaders)
 # target_precompile_headers(... REUSE_FROM precompiled_system) -- the
 # earliest such consumer is sax, so this has to sit above it. It only needs
 # Boost::boost, already resolved by this point.
+# LIBRESTUDIO_CODE_ONLY: build just "Code" and what it needs -- the modules
+# below belong to the office applications (Writer, Calc, Impress, the
+# installer, ...) and are not part of Code's dependency closure.  Their
+# add_subdirectory() calls go through this wrapper and are skipped.
+option(LIBRESTUDIO_CODE_ONLY
+    "Build only the Code IDE and its dependencies, skipping the office applications and packaging" OFF)
+set(LIBRESTUDIO_NON_CODE_MODULES
+    scripting
+    scaddins
+    jsuno
+    dbaccess
+    vbahelper
+    reportdesign
+    extensions
+    librelogo
+    starmath
+    hwpfilter
+    lotuswordpro
+    remotebridges
+    helpcompiler
+    lingucomponent
+    slideshow
+    writerperfect
+    xmlsecurity
+    sdext
+    pyuno
+    shell
+    sd
+    sc
+    sw
+    xmlhelp
+    desktop
+    libreofficekit
+    apple_remote
+    cli_ure
+    embedserv
+    winaccessibility
+    setup_native
+    swext
+    odk
+    extras
+    readlicense_oo
+    sysui
+    ure
+    postprocess
+    wizards
+    reportbuilder
+    scp2
+    solenv
+    soltools
+    instsetoo_native
+    cpputools
+    smoketest
+    l10ntools
+    testtools
+    unotest
+    test
+    qadevOOo
+    nlpsolver)
+function(librestudio_add_module dir)
+    if (LIBRESTUDIO_CODE_ONLY AND dir IN_LIST LIBRESTUDIO_NON_CODE_MODULES)
+        message(STATUS "LIBRESTUDIO_CODE_ONLY: skipping ${dir}")
+        return()
+    endif ()
+    add_subdirectory(${dir})
+endfunction()
+
 add_subdirectory(pch)
 
 add_subdirectory(sal)
@@ -1029,8 +1130,8 @@ endif ()
 # itself is defined by cmake/LibreStudioJavaJar.cmake, include()'d near the
 # top of this file, so no add_subdirectory() ordering constraint from it.
 # Placed here to stay with the rest of this port's Java/UNO bridge cluster.
-add_subdirectory(qadevOOo)
-add_subdirectory(nlpsolver)
+librestudio_add_module(qadevOOo)
+librestudio_add_module(nlpsolver)
 
 add_subdirectory(basegfx)
 add_subdirectory(tools)
@@ -1046,7 +1147,7 @@ add_subdirectory(idl)
 # consumers -- HelpTarget/Configuration/Dictionary/Extension l10n machinery
 # -- aren't ported), same standalone-until-needed posture idl itself had
 # before sfx2. Only needs sal, already available.
-add_subdirectory(l10ntools)
+librestudio_add_module(l10ntools)
 
 # testtools: the UNO bridge test harness (bridgetest client/server +
 # cppobj/constructors UNO services), gated in upstream on
@@ -1056,7 +1157,7 @@ add_subdirectory(l10ntools)
 # (bridgetest.idl/XPerformanceTest.idl are loose files, not directories) --
 # both added to cmake/LibreStudioComponent.cmake / cmake/LibreStudioUnoApi.cmake
 # this wave. Needs unoidl-write and udkapi's RDB, both already available.
-add_subdirectory(testtools)
+librestudio_add_module(testtools)
 
 add_subdirectory(sot)
 add_subdirectory(svl)
@@ -1079,14 +1180,14 @@ add_subdirectory(drawinglayer)
 
 # chart2 (chart2api only) -> xmloff (xo) -> unoxml: xo links chart2api, and
 # unoxml links xo, so the three have to be declared in that order.
-add_subdirectory(chart2)
+librestudio_add_module(chart2)
 add_subdirectory(xmloff)
 add_subdirectory(unoxml)
 
 # linguistic (lng) only needs xo (xmloff) beyond what's declared well above it
 # -- placed here, next to its one same-tier dependency, well ahead of editeng,
 # its first consumer.
-add_subdirectory(linguistic)
+librestudio_add_module(linguistic)
 
 # framework (fwk) sits on the same tier as toolkit/svtools/vcl, its heaviest
 # dependencies -- nothing here depends on chart2/xmloff/unoxml, it is simply
@@ -1166,17 +1267,17 @@ add_subdirectory(filter)
 # cppu, cppuhelper, sal (all declared above) plus the vendored quickjs
 # external it builds for itself, so it goes right before scripting, whose
 # jsprov script provider links it.
-add_subdirectory(scaddins)
-add_subdirectory(jsuno)
-add_subdirectory(scripting)
+librestudio_add_module(scaddins)
+librestudio_add_module(jsuno)
+librestudio_add_module(scripting)
 add_subdirectory(ucb)
 
-add_subdirectory(dbaccess)
+librestudio_add_module(dbaccess)
 
 # vbahelper (vbahelper/msforms) needs msfilter (filter), sb (basic), sfx2,
 # svxcore/svx, toolkit, svtools, vcl (all declared above) plus the oovbaapi
 # normal-variant headers, same pattern as scripting's vbaevents.
-add_subdirectory(vbahelper)
+librestudio_add_module(vbahelper)
 
 # embeddedobj (embobj/emboleobj) only needs comphelper, cppu, cppuhelper,
 # i18nlangtag, sal, svl, svt, tl, utl, vcl (all declared above); emboleobj's
@@ -1189,7 +1290,7 @@ add_subdirectory(embeddedobj)
 # utl, vcl, xmloff (xo), formula (for/forui), sot, basegfx, i18nlangtag,
 # salhelper (all declared above) -- unblocked now that dbaccess and formula
 # are ported. No private UNO API needed.
-add_subdirectory(reportdesign)
+librestudio_add_module(reportdesign)
 
 # extensions (pcr/abp/bib/dbp/log/updatefeed/updchk/updatecheckui -- a scoped
 # subset; scn/ldapbe2 need SANE/OpenLDAP dev headers not present in this
@@ -1198,13 +1299,13 @@ add_subdirectory(reportdesign)
 # vcl, svl, unotools, tools, connectivity (dbtools), i18nlangtag, comphelper,
 # cppuhelper/cppu/sal/salhelper, sot, officecfg (all declared above) plus
 # CURL::libcurl for updchk.
-add_subdirectory(extensions)
+librestudio_add_module(extensions)
 
 # librelogo is pure data (a Python macro + one .properties file, install()
 # rules gated on ENABLE_SCRIPTING) -- no target dependency on anything else in
 # the tree, placed here purely to stay near its fellow Basic/scripting-slice
 # modules.
-add_subdirectory(librelogo)
+librestudio_add_module(librelogo)
 
 # oox (OOXML import/export helper library used by writerfilter/sc/sd/sw and,
 # below, by starmath) needs basegfx, comphelper, cppu, cppuhelper, docmodel,
@@ -1218,7 +1319,7 @@ add_subdirectory(oox)
 # basegfx, comphelper, cppu, cppuhelper, editeng, framework (fwk), sal,
 # i18nlangtag, sb (basic), sfx2, sot, svl/svt/svxcore/svx, toolkit (tk), tl,
 # utl, ucbhelper, vcl, xmlscript (all declared above). No private UNO API.
-add_subdirectory(basctl)
+librestudio_add_module(basctl)
 
 # cui (the "common UI" dialog library: Tools > Options pages, customize
 # dialogs, character map, hyperlink, gallery, spell-check, thesaurus,
@@ -1233,7 +1334,7 @@ add_subdirectory(cui)
 # plus comphelper, cppu, cppuhelper, editeng, framework (fwk), i18nutil,
 # i18nlangtag, msfilter (filter), sal, salhelper, sax, sfx2, sot, svl/svt/
 # svxcore/svx, toolkit (tk), tl, utl, vcl, xmloff (xo) (all declared above).
-add_subdirectory(starmath)
+librestudio_add_module(starmath)
 
 # unotest and test are the CppunitTest fixture-helper libraries (bootstrap a
 # UNO context, VCL/office bootstrap, XML/HTML diffing, ...) that later
@@ -1243,8 +1344,8 @@ add_subdirectory(starmath)
 # (sfx), svtools (svt), drawinglayer/drawinglayercore (all declared above),
 # and pulls in cppunit as an external dependency for the first time in this
 # port.
-add_subdirectory(unotest)
-add_subdirectory(test)
+librestudio_add_module(unotest)
+librestudio_add_module(test)
 
 # --- group 2, wave 1 (2026-09-26): small/independent modules -----------------
 #
@@ -1253,9 +1354,9 @@ add_subdirectory(test)
 # svx/svxcore, tk (toolkit), tl, ucbhelper, utl, vcl, xmloff (xo) plus ICU and
 # Boost (all declared above). All fully ported this wave, no deferred targets.
 add_subdirectory(fpicker)
-add_subdirectory(hwpfilter)
-add_subdirectory(lotuswordpro)
-add_subdirectory(remotebridges)
+librestudio_add_module(hwpfilter)
+librestudio_add_module(lotuswordpro)
+librestudio_add_module(remotebridges)
 add_subdirectory(uui)
 
 # Deferred CppunitTest registrations (2026-09-27, superseding the old "find
@@ -1283,27 +1384,27 @@ add_subdirectory(uui)
 # libnumbertext/hyphen, box2d, librevenge/libwpd/libwps/libodfgen plus the
 # wider writerperfect format-library set, libxmlsec1(-nss)) -- all installed
 # this session, all five now fully ported.
-add_subdirectory(helpcompiler)
-add_subdirectory(lingucomponent)
-add_subdirectory(slideshow)
-add_subdirectory(writerperfect)
-add_subdirectory(xmlsecurity)
+librestudio_add_module(helpcompiler)
+librestudio_add_module(lingucomponent)
+librestudio_add_module(slideshow)
+librestudio_add_module(writerperfect)
+librestudio_add_module(xmlsecurity)
 
 # sdext: only PresentationMinimizer and pdfimport are ported. xpdfimport (the
 # separate poppler-based helper executable pdfimport pipes to) is deferred —
 # this machine has no poppler pkg-config/headers, only poppler-data.
-add_subdirectory(sdext)
+librestudio_add_module(sdext)
 
 # pyuno needs python3-embed (present); fully ported (pyuno, pythonloader,
 # pyuno_wrapper).
-add_subdirectory(pyuno)
+librestudio_add_module(pyuno)
 
 # shell: desktopbe1, localebe1, losessioninstall (behind ENABLE_GIO, which is
 # genuinely tracked in LibreStudioConfigHeaders.cmake), shell_xmlparser,
 # syssh, uri-encode, cmdmail are ported. kf5be1 is deferred — no ENABLE_KF5
 # switch exists in this port's config surface and no Qt5/KF5 pkg-config is
 # present on this machine.
-add_subdirectory(shell)
+librestudio_add_module(shell)
 
 # sd: sd, sdui and sdd are all ported (textconversiondlgs/icg blockers
 # resolved, then Library_sd/Library_sdui written in full).
@@ -1317,18 +1418,18 @@ add_subdirectory(shell)
 add_subdirectory(external/clew)
 add_subdirectory(opencl)
 
-add_subdirectory(sd)
+librestudio_add_module(sd)
 
 # sc: sc, scfilt, scui, solver, vbaobj and scd are all ported
 # (textconversiondlgs/md4c/orcus blockers resolved, then Library_sc and its
 # satellites written in full).
-add_subdirectory(sc)
+librestudio_add_module(sc)
 
 # sw: sw, swui, msword, vbaswobj and swd are all ported (textconversiondlgs/
 # md4c blockers resolved, then Library_sw and its satellites written in
 # full). sw_writerfilter remains separately deferred — its CustomTarget_source
 # (OOXML factory generator) needs its own CMake design.
-add_subdirectory(sw)
+librestudio_add_module(sw)
 
 # code: "LibreStudio Code", a new VCL-native IDE app -- not a port of any
 # upstream gbuild module (original code, no Module_code.mk to transcribe, so
@@ -1347,8 +1448,8 @@ add_subdirectory(code)
 # treating the whole dependency graph as closed). Both fully ported. desktop
 # must be added before librestudio_finalize_components(services) below --
 # its 7 .component files need to make it into services.rdb.
-add_subdirectory(xmlhelp)
-add_subdirectory(desktop)
+librestudio_add_module(xmlhelp)
+librestudio_add_module(desktop)
 
 # libreofficekit: the GTK tiled-rendering demo (libreofficekitgtk,
 # gtktiledviewer) and a benchmark tool (tilebench). The LOK C API itself is
@@ -1356,7 +1457,7 @@ add_subdirectory(desktop)
 # runtime (LibreOfficeKitInit.h), not a CMake link dependency -- placed
 # after desktop only because LOK_PATH is meant to point at the directory
 # sofficeapp installs to, not because anything here links it.
-add_subdirectory(libreofficekit)
+librestudio_add_module(libreofficekit)
 
 # apple_remote/cli_ure/embedserv/winaccessibility/setup_native are all
 # platform-gated to a toolchain this Linux dev machine doesn't have (macOS,
@@ -1367,11 +1468,11 @@ add_subdirectory(libreofficekit)
 # cross-compiled Windows build, not just this Linux one -- they are placed
 # before librestudio_finalize_components(services) below, same as every
 # other component-registering module.
-add_subdirectory(apple_remote)
-add_subdirectory(cli_ure)
-add_subdirectory(embedserv)
-add_subdirectory(winaccessibility)
-add_subdirectory(setup_native)
+librestudio_add_module(apple_remote)
+librestudio_add_module(cli_ure)
+librestudio_add_module(embedserv)
+librestudio_add_module(winaccessibility)
+librestudio_add_module(setup_native)
 
 # --- service registry and bootstrap configuration ----------------------------
 
@@ -1478,21 +1579,21 @@ librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/unorc")
 # none of them are linked against by, or link against, anything else in this
 # tree, so they are grouped here rather than threaded individually through
 # the dependency-ordered graph above.
-add_subdirectory(swext)
-add_subdirectory(odk)
-add_subdirectory(extras)
-add_subdirectory(readlicense_oo)
-add_subdirectory(sysui)
-add_subdirectory(ure)
-add_subdirectory(postprocess)
-add_subdirectory(wizards)
-add_subdirectory(reportbuilder)
-add_subdirectory(scp2)
-add_subdirectory(solenv)
-add_subdirectory(soltools)
-add_subdirectory(instsetoo_native)
+librestudio_add_module(swext)
+librestudio_add_module(odk)
+librestudio_add_module(extras)
+librestudio_add_module(readlicense_oo)
+librestudio_add_module(sysui)
+librestudio_add_module(ure)
+librestudio_add_module(postprocess)
+librestudio_add_module(wizards)
+librestudio_add_module(reportbuilder)
+librestudio_add_module(scp2)
+librestudio_add_module(solenv)
+librestudio_add_module(soltools)
+librestudio_add_module(instsetoo_native)
 
 # --- smoke test --------------------------------------------------------------
 
-add_subdirectory(cpputools)
-add_subdirectory(smoketest)
+librestudio_add_module(cpputools)
+librestudio_add_module(smoketest)

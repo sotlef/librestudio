@@ -24,7 +24,7 @@
 # as sfx2/source/view/frmload.cxx) -- the yrs external is therefore not linked.
 
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 # Cached CACHE INTERNAL (not a plain set()) so editeng/CppunitTest_deferred.cmake
 # -- which include()'s into the root CMakeLists.txt's own directory scope, not
@@ -292,5 +292,4 @@ librestudio_add_cppunit_test(editeng_lookuptree
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/editeng/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/editeng/CppunitTest_deferred.cmake")

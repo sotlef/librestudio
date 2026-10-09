@@ -1938,5 +1938,4 @@ unset(_scalc_uiconfig_outputs)
 # real structure (4 shared gbuild macros covering most of the 189, ported
 # incrementally wave by wave rather than 189 independent hand transcriptions)
 # and current progress.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/sc/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/sc/CppunitTest_deferred.cmake")

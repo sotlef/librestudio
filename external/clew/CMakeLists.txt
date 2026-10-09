@@ -49,7 +49,7 @@ target_compile_definitions(clew PRIVATE CLEW_BUILD)
 # in Library_clew.mk (a separate MACOSX block adds "-framework OpenCL"
 # instead); this is a Linux-only port, so the LINUX branch applies
 # unconditionally and the MACOSX branch is dropped.
-target_link_libraries(clew PRIVATE ${CMAKE_DL_LIBS} rt)
+target_link_libraries(clew PRIVATE ${CMAKE_DL_LIBS} rt) # rt: an empty target on Windows
 
 # Repository.mk registers clew under
 # gb_Helper_register_libraries_for_install,OOOLIBS,ooo (line 403:
