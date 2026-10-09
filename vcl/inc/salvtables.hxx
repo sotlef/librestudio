@@ -1193,6 +1193,8 @@ public:
 
     virtual void set_show_tabs(bool bShow) override;
 
+    virtual void set_tab_image(const OUString& rIdent, const OUString& rIconName) override;
+
     virtual void set_tabs_at_bottom(bool bBottom) override;
 
     virtual void set_tabs_closable(bool bClosable) override;

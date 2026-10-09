@@ -30,7 +30,10 @@
 #include <com/sun/star/code/debug/DebugThread.hpp>
 #include <com/sun/star/code/debug/Variable.hpp>
 #include <com/sun/star/code/debug/XDebugAdapter.hpp>
+#include <com/sun/star/code/debug/ExceptionFilter.hpp>
 #include <com/sun/star/code/debug/XDebugConsole.hpp>
+#include <com/sun/star/code/debug/XExceptionCatalog.hpp>
+#include <com/sun/star/code/debug/XExceptionSettings.hpp>
 #include <com/sun/star/code/debug/XDebugSession.hpp>
 #include <com/sun/star/code/debug/XDebugSessionListener.hpp>
 #include <com/sun/star/code/debug/XNativeDebugSession.hpp>
@@ -458,7 +461,8 @@ void ReadMiLines(oslFileHandle hPipe, const std::function<void(const OString&)>&
 // ---- the session -----------------------------------------------------------
 
 class GdbSession final
-    : public comphelper::WeakComponentImplHelper<XDebugSession, XNativeDebugSession, XDebugConsole>
+    : public comphelper::WeakComponentImplHelper<XDebugSession, XNativeDebugSession, XDebugConsole,
+                                                 XExceptionSettings>
 {
 public:
     GdbSession() = default;
@@ -500,6 +504,9 @@ public:
 
     // XDebugConsole
     OUString SAL_CALL executeCommand(const OUString& rCommand) override;
+
+    // XExceptionSettings
+    void SAL_CALL setExceptionFilters(const uno::Sequence<ExceptionFilter>& rFilters) override;
 
     // called from the reader threads
     void HandleLine(const OString& rLine);
@@ -561,6 +568,8 @@ private:
 
     // under m_aMutex
     std::map<sal_Int32, Breakpoint> m_aBreakpoints;
+    // exception filter id -> the number of the gdb catchpoint that implements it
+    std::map<OUString, sal_Int32> m_aCatchpoints;
     std::map<sal_Int32, FramePlace> m_aFrames;
     sal_Int32 m_nNextFrameId = 0;
     std::map<sal_Int32, OUString> m_aVarObjects; // Variable::Reference -> varobj
@@ -891,7 +900,9 @@ void GdbSession::OnNotify(const MiRecord& rRecord)
     if (rRecord.aClass == "breakpoint-created" || rRecord.aClass == "breakpoint-modified")
     {
         const MiValue* pBkpt = rRecord.aResults.Find("bkpt");
-        if (!pBkpt)
+        // exception catchpoints are the exception settings' business, not
+        // breakpoints with a place
+        if (!pBkpt || pBkpt->Str("type") == "catchpoint")
             return;
         {
             std::unique_lock aGuard(m_aMutex);
@@ -1366,6 +1377,94 @@ OUString GdbSession::executeCommand(const OUString& rCommand)
     return aConsole;
 }
 
+// ---- XExceptionSettings ----------------------------------------------------
+
+namespace
+{
+// what gdb can break on, by filter id; the adapter offers the same table
+struct GdbExceptionKind
+{
+    const char16_t* pId;
+    const char16_t* pLabel;
+    bool bDefault;
+};
+constexpr GdbExceptionKind GdbExceptionKinds[] = {
+    { u"cpp-throw", u"C++ exception thrown", false },
+    { u"cpp-rethrow", u"C++ exception rethrown", false },
+    { u"cpp-catch", u"C++ exception caught", false },
+    { u"signal-fatal", u"Fatal signal (SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS)", true },
+};
+
+uno::Sequence<ExceptionFilter> GdbExceptionFilters()
+{
+    std::vector<ExceptionFilter> aFilters;
+    for (const GdbExceptionKind& rKind : GdbExceptionKinds)
+        aFilters.push_back({ OUString(rKind.pId), OUString(rKind.pLabel), rKind.bDefault });
+    return comphelper::containerToSequence(aFilters);
+}
+}
+
+void GdbSession::setExceptionFilters(const uno::Sequence<ExceptionFilter>& rFilters)
+{
+    OUStringBuffer aTrouble;
+    for (const ExceptionFilter& rFilter : rFilters)
+    {
+        sal_Int32 nCatchpoint = 0;
+        {
+            std::unique_lock aGuard(m_aMutex);
+            auto it = m_aCatchpoints.find(rFilter.Id);
+            if (it != m_aCatchpoints.end())
+                nCatchpoint = it->second;
+        }
+        try
+        {
+            if (rFilter.Id == "signal-fatal")
+            {
+                // not a catchpoint: gdb stops on these by default, and
+                // "handle" says whether it keeps doing so
+                Command("-interpreter-exec console \"handle SIGSEGV SIGABRT SIGFPE SIGILL SIGBUS "
+                        + OString(rFilter.Break ? "stop print pass" : "nostop noprint pass")
+                        + "\"",
+                        u"cannot set the signal handling"_ustr);
+                continue;
+            }
+            OString aCatch;
+            if (rFilter.Id == "cpp-throw")
+                aCatch = "-catch-throw"_ostr;
+            else if (rFilter.Id == "cpp-rethrow")
+                aCatch = "-catch-rethrow"_ostr;
+            else if (rFilter.Id == "cpp-catch")
+                aCatch = "-catch-catch"_ostr;
+            else
+                continue; // not one of ours
+            if (rFilter.Break && nCatchpoint == 0)
+            {
+                const MiValue aResults
+                    = Command(aCatch, u"cannot catch " + rFilter.Label);
+                const MiValue* pBkpt = aResults.Find("bkpt");
+                if (pBkpt)
+                {
+                    std::unique_lock aGuard(m_aMutex);
+                    m_aCatchpoints[rFilter.Id] = pBkpt->Int("number");
+                }
+            }
+            else if (!rFilter.Break && nCatchpoint != 0)
+            {
+                Command("-break-delete " + OString::number(nCatchpoint),
+                        u"cannot stop catching " + rFilter.Label);
+                std::unique_lock aGuard(m_aMutex);
+                m_aCatchpoints.erase(rFilter.Id);
+            }
+        }
+        catch (const DebugException& rException)
+        {
+            aTrouble.append(rException.Message + "\n");
+        }
+    }
+    if (!aTrouble.isEmpty())
+        Fail(u"cannot set the exception settings"_ustr, aTrouble.makeStringAndClear().trim());
+}
+
 // ---- listeners and the end -------------------------------------------------
 
 void GdbSession::addListener(const uno::Reference<XDebugSessionListener>& xListener)
@@ -1386,6 +1485,7 @@ void GdbSession::disposing(std::unique_lock<std::mutex>& rGuard)
     m_aListeners.disposeAndClear(rGuard, aSource);
     std::shared_ptr<PipedProcess> pProcess = std::move(m_pProcess);
     m_aBreakpoints.clear();
+    m_aCatchpoints.clear();
     m_aFrames.clear();
     m_aVarObjects.clear();
     m_aVarRoots.clear();
@@ -1404,9 +1504,14 @@ void GdbSession::disposing(std::unique_lock<std::mutex>& rGuard)
 
 // ---- the adapter -----------------------------------------------------------
 
-class GdbAdapter final : public cppu::WeakImplHelper<XDebugAdapter>
+class GdbAdapter final : public cppu::WeakImplHelper<XDebugAdapter, XExceptionCatalog>
 {
 public:
+    uno::Sequence<ExceptionFilter> SAL_CALL getExceptionFilters() override
+    {
+        return GdbExceptionFilters();
+    }
+
     OUString SAL_CALL getName() override { return u"gdb"_ustr; }
 
     uno::Sequence<OUString> SAL_CALL getLanguages() override

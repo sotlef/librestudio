@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Capability of a session (found with queryInterface on it): which
+    exception events stop the program.  Filters is the whole state, by Id;
+    ones the session does not know are ignored, ones left out keep what they
+    had.  Like breakpoints, this may be set while the session is STARTING. */
+interface XExceptionSettings
+{
+    void setExceptionFilters(
+            [in] sequence< ::com::sun::star::code::debug::ExceptionFilter > Filters )
+        raises( ::com::sun::star::code::debug::DebugException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

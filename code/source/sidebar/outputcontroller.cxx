@@ -54,6 +54,10 @@ OutputController::OutputController(DockingWindow* pParentWindow, SfxBindings& rB
     aFindResultsDeck.msId = u"FindResultsDeck"_ustr;
     aFindResultsDeck.mbIsEnabled = true;
     aDecks.push_back(aFindResultsDeck);
+    sfx2::sidebar::ResourceManager::DeckContextDescriptor aDebugDeck;
+    aDebugDeck.msId = u"DebugDeck"_ustr;
+    aDebugDeck.mbIsEnabled = true;
+    aDecks.push_back(aDebugDeck);
     mxTabBar->SetDecks(aDecks);
 
     SwitchToDeck(u"OutputDeck");

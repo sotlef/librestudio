@@ -34,6 +34,16 @@ QtInstanceNotebook::QtInstanceNotebook(QTabWidget* pTabWidget)
             &QtInstanceNotebook::currentTabChanged);
 }
 
+void QtInstanceNotebook::set_tab_image(const OUString& rIdent, const OUString& rIconName)
+{
+    SolarMutexGuard g;
+    GetQtInstance().RunInMainThread([&] {
+        const int nIndex = get_page_index(rIdent);
+        if (nIndex >= 0)
+            m_pTabWidget->setTabIcon(nIndex, loadQPixmapIcon(rIconName));
+    });
+}
+
 void QtInstanceNotebook::set_tabs_at_bottom(bool bBottom)
 {
     SolarMutexGuard g;

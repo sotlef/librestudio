@@ -15,12 +15,15 @@
 #include <com/sun/star/code/core/Position.hpp>
 #include <com/sun/star/code/core/theCode.hpp>
 #include <com/sun/star/code/debug/DebugEventKind.hpp>
+#include <comphelper/sequence.hxx>
 #include <com/sun/star/code/debug/DebugException.hpp>
 #include <com/sun/star/code/debug/LaunchDescriptor.hpp>
 #include <com/sun/star/code/debug/Variable.hpp>
 #include <com/sun/star/code/debug/XDebugAdapter.hpp>
 #include <com/sun/star/code/debug/XDebugConsole.hpp>
 #include <com/sun/star/code/debug/XDebugManager.hpp>
+#include <com/sun/star/code/debug/XExceptionCatalog.hpp>
+#include <com/sun/star/code/debug/XExceptionSettings.hpp>
 #include <com/sun/star/code/debug/XDebugManagerListener.hpp>
 #include <com/sun/star/code/debug/XLaunchable.hpp>
 #include <com/sun/star/code/debug/XDebugSessionListener.hpp>
@@ -223,7 +226,19 @@ DebugPanel::DebugPanel(weld::Widget* pParent)
     , mxConsole(m_xBuilder->weld_text_view(u"console"_ustr))
     , mxConsoleEntry(m_xBuilder->weld_entry(u"consoleentry"_ustr))
     , mxStatus(m_xBuilder->weld_label(u"status"_ustr))
+    , mxTabs(m_xBuilder->weld_notebook(u"tabs"_ustr))
+    , mxExceptions(m_xBuilder->weld_tree_view(u"exceptions"_ustr))
 {
+    mxTabs->set_tab_image(u"exceptionstab"_ustr, u"cmd/sc_warningcellstyles.png"_ustr);
+    mxExceptions->enable_toggle_buttons();
+    mxExceptions->set_toggle_button_type(weld::ColumnToggleType::Check);
+    mxExceptions->connect_toggled(LINK(this, DebugPanel, ExceptionToggledHdl));
+    LoadExceptionFilters();
+    mxStatus->set_visible(false);
+    mxTabs->set_tab_image(u"breakpointstab"_ustr, u"cmd/lc_insertbookmark.png"_ustr);
+    mxTabs->set_tab_image(u"variablestab"_ustr, u"cmd/lc_viewdatasourcebrowser.png"_ustr);
+    mxTabs->set_tab_image(u"consoletab"_ustr, u"cmd/lc_macrorecorder.png"_ustr);
+
     // the toggle in front of every breakpoint row: enabled or not
     mxBreakpoints->enable_toggle_buttons();
     mxBreakpoints->set_toggle_button_type(weld::ColumnToggleType::Check);
@@ -397,10 +412,18 @@ void DebugPanel::OnExited()
 
 // ---- running things off the main thread ------------------------------------
 
+// an empty status line would still take a text row off the bottom dock's
+// small height, so it only shows while it has something to say
+void DebugPanel::SetStatusText(const OUString& rText)
+{
+    mxStatus->set_label(rText);
+    mxStatus->set_visible(!rText.isEmpty());
+}
+
 void DebugPanel::SetBusy(bool bBusy, const OUString& rMessage)
 {
     mbBusy = bBusy;
-    mxStatus->set_label(rMessage);
+    SetStatusText(rMessage);
     UpdateControls();
 }
 
@@ -581,7 +604,7 @@ void DebugPanel::StartDebugging(const LaunchDescriptor& rDescriptor)
     }
     if (mbBusy)
     {
-        mxStatus->set_label(u"Busy; start again in a moment."_ustr);
+        SetStatusText(u"Busy; start again in a moment."_ustr);
         return;
     }
 
@@ -607,6 +630,8 @@ void DebugPanel::StartDebugging(const LaunchDescriptor& rDescriptor)
     // breakpoints set before the launch are applied right after it, while
     // the session is still STARTING -- the backend keeps them per session
     const std::vector<PanelBreakpoint> aRequests = maBreakpoints;
+    LoadExceptionFilters();
+    const std::vector<ExceptionFilter> aExceptionFilters = maExceptionFilters;
     auto xListener = mxListener;
     auto xContext = Context();
     auto pEvents = mpEvents;
@@ -614,7 +639,8 @@ void DebugPanel::StartDebugging(const LaunchDescriptor& rDescriptor)
 
     RunAsync(
         u"Start Debugging"_ustr,
-        [xContext, xListener, aDescriptor, aRequests, xOld, pEvents](Outcome& rOutcome)
+        [xContext, xListener, aDescriptor, aRequests, aExceptionFilters, xOld,
+         pEvents](Outcome& rOutcome)
         {
             if (xOld.is())
             {
@@ -657,6 +683,20 @@ void DebugPanel::StartDebugging(const LaunchDescriptor& rDescriptor)
                 {
                     aTrouble.append("cannot set " + DisplayPlace(rRequest.aUrl, rRequest.nLine)
                                     + ": " + rException.Message + "\n");
+                }
+            }
+            // what to break on besides breakpoints: set before the program runs
+            uno::Reference<XExceptionSettings> xSettings(xSession, uno::UNO_QUERY);
+            if (xSettings.is() && !aExceptionFilters.empty())
+            {
+                try
+                {
+                    xSettings->setExceptionFilters(
+                        comphelper::containerToSequence(aExceptionFilters));
+                }
+                catch (const uno::Exception& rException)
+                {
+                    aTrouble.append(rException.Message + "\n");
                 }
             }
             // the first resume starts the program
@@ -967,7 +1007,7 @@ void DebugPanel::AddBreakpointFromEntry()
     sal_Int32 nLine = 0; // one-based, as typed
     if (!ParseBreakpointEntry(mxBkpEntry->get_text(), aFile, nLine, aCondition))
     {
-        mxStatus->set_label(u"Give a place as file:line, or a line in the open file."_ustr);
+        SetStatusText(u"Give a place as file:line, or a line in the open file."_ustr);
         return;
     }
     if (aFile.isEmpty())
@@ -984,7 +1024,7 @@ void DebugPanel::AddBreakpointFromEntry()
         }
         if (aFile.isEmpty())
         {
-            mxStatus->set_label(u"No file is open; name one as file:line."_ustr);
+            SetStatusText(u"No file is open; name one as file:line."_ustr);
             return;
         }
     }
@@ -1004,7 +1044,7 @@ void DebugPanel::AddBreakpointFromEntry()
     aBreakpoint.aCondition = aCondition;
     maBreakpoints.push_back(aBreakpoint);
     mxBkpEntry->set_text(OUString());
-    mxStatus->set_label(OUString());
+    SetStatusText(OUString());
     FillBreakpoints();
 
     if (!HasSession())
@@ -1175,6 +1215,83 @@ void DebugPanel::RefreshBreakpoints()
         });
 }
 
+// ---- exception settings ----------------------------------------------------
+
+// What can be broken on is the adapter's to say, and it can be asked before
+// any session exists.
+void DebugPanel::LoadExceptionFilters()
+{
+    if (!maExceptionFilters.empty())
+        return;
+    try
+    {
+        for (const uno::Reference<XDebugAdapter>& xAdapter :
+             theDebugManager::get(Context())->getAdapters())
+        {
+            uno::Reference<XExceptionCatalog> xCatalog(xAdapter, uno::UNO_QUERY);
+            if (!xCatalog.is())
+                continue;
+            for (const ExceptionFilter& rFilter : xCatalog->getExceptionFilters())
+                maExceptionFilters.push_back(rFilter);
+            break;
+        }
+    }
+    catch (const uno::Exception&)
+    {
+        // no list, no page content: the debugging itself does not need it
+    }
+    FillExceptionFilters();
+}
+
+void DebugPanel::FillExceptionFilters()
+{
+    mbFilling = true;
+    mxExceptions->freeze();
+    mxExceptions->clear();
+    for (const ExceptionFilter& rFilter : maExceptionFilters)
+    {
+        const OUString aId = "e:" + rFilter.Id;
+        OUString aLabel = rFilter.Label;
+        std::unique_ptr<weld::TreeIter> xRow = mxExceptions->make_iterator();
+        mxExceptions->insert(nullptr, -1, &aLabel, &aId, nullptr, nullptr, false, xRow.get());
+        mxExceptions->set_toggle(*xRow, rFilter.Break ? TRISTATE_TRUE : TRISTATE_FALSE);
+    }
+    mxExceptions->thaw();
+    mbFilling = false;
+}
+
+IMPL_LINK(DebugPanel, ExceptionToggledHdl, const weld::TreeView::iter_col&, rIterCol, void)
+{
+    if (mbFilling)
+        return;
+    const OUString aId = mxExceptions->get_id(rIterCol.first);
+    if (!aId.startsWith("e:"))
+        return;
+    const OUString aFilterId = aId.copy(2);
+    auto it = std::find_if(maExceptionFilters.begin(), maExceptionFilters.end(),
+                           [&](const ExceptionFilter& r) { return r.Id == aFilterId; });
+    if (it == maExceptionFilters.end())
+        return;
+    it->Break = !it->Break;
+    if (!HasSession())
+        return; // the next session gets it when it starts
+    if (mbBusy)
+    {
+        // the session is not told now; show what it really has
+        it->Break = !it->Break;
+        FillExceptionFilters();
+        SetStatusText(u"Busy; change the setting again in a moment."_ustr);
+        return;
+    }
+    uno::Reference<XExceptionSettings> xSettings(mxSession, uno::UNO_QUERY);
+    if (!xSettings.is())
+        return;
+    const ExceptionFilter aChanged = *it;
+    RunAsync(u"Exception Settings"_ustr,
+             [xSettings, aChanged](Outcome&)
+             { xSettings->setExceptionFilters({ aChanged }); });
+}
+
 IMPL_LINK_NOARG(DebugPanel, BkpAddHdl, weld::Button&, void) { AddBreakpointFromEntry(); }
 
 IMPL_LINK_NOARG(DebugPanel, BkpEntryActivateHdl, weld::Entry&, bool)
@@ -1263,7 +1380,7 @@ void DebugPanel::SendConsoleInput()
         const sal_Int32 nFrame = mnCurrentFrame;
         if (meState != DebugSessionState_STOPPED || nFrame == 0 || aExpression.isEmpty())
         {
-            mxStatus->set_label(u"Stop the program first to evaluate an expression."_ustr);
+            SetStatusText(u"Stop the program first to evaluate an expression."_ustr);
             return;
         }
         mxConsoleEntry->set_text(OUString());
@@ -1282,7 +1399,7 @@ void DebugPanel::SendConsoleInput()
     uno::Reference<XDebugConsole> xConsole(xSession, uno::UNO_QUERY);
     if (!xConsole.is())
     {
-        mxStatus->set_label(u"This debugger has no command line of its own."_ustr);
+        SetStatusText(u"This debugger has no command line of its own."_ustr);
         return;
     }
     mxConsoleEntry->set_text(OUString());

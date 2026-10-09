@@ -13,6 +13,7 @@
 #include <com/sun/star/code/debug/DebugEvent.hpp>
 #include <com/sun/star/code/debug/DebugSessionState.hpp>
 #include <com/sun/star/code/debug/DebugThread.hpp>
+#include <com/sun/star/code/debug/ExceptionFilter.hpp>
 #include <com/sun/star/code/debug/LaunchDescriptor.hpp>
 #include <com/sun/star/code/debug/XDebugManager.hpp>
 #include <com/sun/star/code/debug/XDebugManagerListener.hpp>
@@ -22,6 +23,7 @@
 #include <com/sun/star/code/debug/XDebugSessionListener.hpp>
 #include <sfx2/sidebar/PanelLayout.hxx>
 #include <vcl/weld/TreeView.hxx>
+#include <vcl/weld/Notebook.hxx>
 
 #include <deque>
 #include <functional>
@@ -99,6 +101,7 @@ private:
     void HandleEvent(const css::code::debug::DebugEvent& rEvent);
     void OnExited();
     void UpdateControls();
+    void SetStatusText(const OUString& rText);
     void SetBusy(bool bBusy, const OUString& rMessage);
     // aOperation runs on a thread of its own; what it put into the outcome's
     // apply-function runs on the main thread when it went well
@@ -128,6 +131,8 @@ private:
     void InsertVariableRows(const weld::TreeIter* pParent,
                             const std::vector<css::code::debug::Variable>& rVariables);
     void FillBreakpoints();
+    void LoadExceptionFilters();
+    void FillExceptionFilters();
     void AddBreakpointFromEntry();
     void RemoveBreakpoint(sal_Int32 nSerial);
     void RemoveAllBreakpoints();
@@ -142,6 +147,7 @@ private:
     DECL_LINK(BkpAddHdl, weld::Button&, void);
     DECL_LINK(BkpEntryActivateHdl, weld::Entry&, bool);
     DECL_LINK(BkpToggledHdl, const weld::TreeView::iter_col&, void);
+    DECL_LINK(ExceptionToggledHdl, const weld::TreeView::iter_col&, void);
     DECL_LINK(BkpActivatedHdl, const weld::TreeIter&, bool);
     DECL_LINK(BkpCommandHdl, const CommandEvent&, bool);
     DECL_LINK(ThreadChangedHdl, weld::ComboBox&, void);
@@ -161,6 +167,8 @@ private:
     std::unique_ptr<weld::TextView> mxConsole;
     std::unique_ptr<weld::Entry> mxConsoleEntry;
     std::unique_ptr<weld::Label> mxStatus;
+    std::unique_ptr<weld::Notebook> mxTabs;
+    std::unique_ptr<weld::TreeView> mxExceptions;
 
     css::uno::Reference<css::code::debug::XDebugSession> mxSession;
     css::uno::Reference<css::code::debug::XDebugSessionListener> mxListener;
@@ -171,6 +179,9 @@ private:
         = css::code::debug::DebugSessionState_EXITED; // meaningful only with a session
 
     std::vector<PanelBreakpoint> maBreakpoints;
+    // the exception filters the adapter offers, with what the user chose;
+    // applied to every session when it starts
+    std::vector<css::code::debug::ExceptionFilter> maExceptionFilters;
     sal_Int32 mnNextBreakpointSerial = 0;
     std::vector<css::code::debug::DebugThread> maThreads;
     std::vector<css::code::debug::StackFrame> maFrames;

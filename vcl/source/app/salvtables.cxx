@@ -2554,6 +2554,11 @@ void SalInstanceNotebook::set_show_tabs(bool bShow)
     m_xNotebook->set_property(u"show-tabs"_ustr, OUString::boolean(bShow));
 }
 
+void SalInstanceNotebook::set_tab_image(const OUString& rIdent, const OUString& rIconName)
+{
+    m_xNotebook->SetPageImage(m_xNotebook->GetPageId(rIdent), createImage(rIconName));
+}
+
 void SalInstanceNotebook::set_tabs_at_bottom(bool bBottom)
 {
     m_xNotebook->SetTabsAtBottom(bBottom);

@@ -9506,6 +9506,48 @@ public:
         pThis->m_aTabCloseHdl.Call(OUString::fromUtf8(pId));
     }
 
+    virtual void set_tab_image(const OUString& rIdent, const OUString& rIconName) override
+    {
+        GtkNotebook* pNotebook = m_pNotebook;
+        gint nPageNum = get_page_number(pNotebook, rIdent);
+        if (nPageNum == -1)
+        {
+            pNotebook = m_pOverFlowNotebook;
+            nPageNum = get_page_number(pNotebook, rIdent);
+        }
+        if (nPageNum == -1)
+            return;
+
+        GtkWidget* pPage = gtk_notebook_get_nth_page(pNotebook, nPageNum);
+        GtkWidget* pTabWidget = gtk_notebook_get_tab_label(pNotebook, pPage);
+        if (!pTabWidget)
+            return;
+
+        // the tab widget is either the bare label or a box around it (closable
+        // tabs); either way the image goes in front of the label
+        GtkWidget* pImage = image_new_from_icon_name(rIconName);
+        if (GTK_IS_LABEL(pTabWidget))
+        {
+            // wrap the existing label in a box, keeping the buildable id on the box
+            g_object_ref(pTabWidget);
+            GtkWidget* pBox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+            ::set_buildable_id(GTK_BUILDABLE(pBox), rIdent);
+            gtk_notebook_set_tab_label(pNotebook, pPage, pBox);
+            gtk_box_pack_start(GTK_BOX(pBox), pImage, false, false, 0);
+            gtk_box_pack_start(GTK_BOX(pBox), pTabWidget, true, true, 0);
+            g_object_unref(pTabWidget);
+            gtk_widget_show_all(pBox);
+        }
+        else if (GTK_IS_BOX(pTabWidget))
+        {
+            gtk_box_pack_start(GTK_BOX(pTabWidget), pImage, false, false, 0);
+            gtk_box_reorder_child(GTK_BOX(pTabWidget), pImage, 0);
+            gtk_widget_show(pImage);
+        }
+        else
+            gtk_widget_destroy(pImage);
+    }
+
     virtual void set_tabs_at_bottom(bool bBottom) override
     {
         gtk_notebook_set_tab_pos(m_pNotebook, bBottom ? GTK_POS_BOTTOM : GTK_POS_TOP);

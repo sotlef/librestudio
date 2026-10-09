@@ -26,6 +26,24 @@
       <column type="gint"/>
     </columns>
   </object>
+  <object class="GtkTreeStore" id="excstore">
+    <columns>
+      <!-- the toggle: enabled or not -->
+      <column type="gboolean"/>
+      <!-- the place, "file:line" as people count lines -->
+      <column type="gchararray"/>
+      <!-- the condition, empty when it always stops -->
+      <column type="gchararray"/>
+      <!-- the weld::TreeView's own id column -->
+      <column type="gchararray"/>
+      <!-- toggle visible, toggle inconsistent, text weight of each text column:
+           the columns weld::TreeView keeps for set_toggle and set_text_emphasis -->
+      <column type="gboolean"/>
+      <column type="gboolean"/>
+      <column type="gint"/>
+      <column type="gint"/>
+    </columns>
+  </object>
   <object class="GtkTreeStore" id="stackstore">
     <columns>
       <!-- the function -->
@@ -209,345 +227,552 @@
           </packing>
         </child>
         <child>
-          <object class="GtkLabel" id="breakpointslabel">
+          <object class="GtkPaned" id="columns">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="halign">start</property>
-            <property name="label" translatable="yes" context="debugpanel|breakpointslabel">Breakpoints</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkScrolledWindow" id="breakpointswindow">
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
-            <property name="hexpand">True</property>
-            <property name="height-request">70</property>
-            <property name="vscrollbar-policy">automatic</property>
-            <property name="shadow-type">in</property>
-            <!-- see solutionpanel.ui: without these the gtk3 sidebar opens the
-                 deck as wide as the scrolled window alone -->
-            <property name="propagate-natural-width">True</property>
-            <child>
-              <object class="GtkTreeView" id="breakpoints">
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="hexpand">True</property>
-                <property name="model">bkpstore</property>
-                <property name="headers-visible">False</property>
-                <property name="headers-clickable">False</property>
-                <property name="search-column">1</property>
-                <property name="show-expanders">False</property>
-                <child internal-child="selection">
-                  <object class="GtkTreeSelection"/>
-                </child>
-                <child>
-                  <object class="GtkTreeViewColumn" id="bkpcolumnplace">
-                    <property name="expand">True</property>
-                    <child>
-                      <object class="GtkCellRendererToggle" id="rendererenabled"/>
-                      <attributes>
-                        <attribute name="active">0</attribute>
-                        <attribute name="visible">4</attribute>
-                        <attribute name="inconsistent">5</attribute>
-                      </attributes>
-                    </child>
-                    <child>
-                      <object class="GtkCellRendererText" id="rendererplace"/>
-                      <attributes>
-                        <attribute name="text">1</attribute>
-                        <attribute name="weight">6</attribute>
-                      </attributes>
-                    </child>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkTreeViewColumn" id="bkpcolumncondition">
-                    <child>
-                      <object class="GtkCellRendererText" id="renderercondition"/>
-                      <attributes>
-                        <attribute name="text">2</attribute>
-                        <attribute name="weight">7</attribute>
-                      </attributes>
-                    </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">2</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkBox" id="bkpaddrow">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="spacing">4</property>
-            <child>
-              <object class="GtkEntry" id="bkpentry">
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="hexpand">True</property>
-                <property name="placeholder-text" translatable="yes" context="debugpanel|bkpentry|placeholder_text">file:line, or line in the open file</property>
-                <property name="tooltip-text" translatable="yes" context="debugpanel|bkpentry|tooltip_text">Where to stop: "main.cxx:42", "/path/to/file.cxx:42", or "42" in the open file; add "if expression" for a condition, e.g. "main.cxx:42 if x &gt; 0"</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="bkpadd">
-                <property name="label" translatable="yes" context="debugpanel|bkpadd">_Add</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="use-underline">True</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">3</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkBox" id="stackheader">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="spacing">6</property>
-            <child>
-              <object class="GtkLabel" id="stacklabel">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <property name="halign">start</property>
-                <property name="hexpand">True</property>
-                <property name="label" translatable="yes" context="debugpanel|stacklabel">Call Stack</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkComboBoxText" id="threads">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <!-- see outputpanel.ui's source combobox: an explicit hexpand
-                     stops gtk3 weld's replacement widget from swallowing the
-                     row's free width -->
-                <property name="hexpand">False</property>
-                <property name="width-request">120</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">False</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">4</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkScrolledWindow" id="stackwindow">
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
-            <property name="hexpand">True</property>
-            <property name="height-request">90</property>
-            <property name="vscrollbar-policy">automatic</property>
-            <property name="shadow-type">in</property>
-            <property name="propagate-natural-width">True</property>
-            <child>
-              <object class="GtkTreeView" id="stack">
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="hexpand">True</property>
-                <property name="model">stackstore</property>
-                <property name="headers-visible">False</property>
-                <property name="headers-clickable">False</property>
-                <property name="search-column">0</property>
-                <property name="show-expanders">False</property>
-                <child internal-child="selection">
-                  <object class="GtkTreeSelection"/>
-                </child>
-                <child>
-                  <object class="GtkTreeViewColumn" id="stackcolumnfunction">
-                    <property name="expand">True</property>
-                    <child>
-                      <object class="GtkCellRendererText" id="rendererfunction"/>
-                      <attributes>
-                        <attribute name="text">0</attribute>
-                      </attributes>
-                    </child>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkTreeViewColumn" id="stackcolumnplace">
-                    <child>
-                      <object class="GtkCellRendererText" id="rendererframeplace"/>
-                      <attributes>
-                        <attribute name="text">1</attribute>
-                      </attributes>
-                    </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">5</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="variableslabel">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="halign">start</property>
-            <property name="label" translatable="yes" context="debugpanel|variableslabel">Variables</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">6</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkScrolledWindow" id="variableswindow">
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
             <property name="hexpand">True</property>
             <property name="vexpand">True</property>
-            <property name="height-request">100</property>
-            <property name="vscrollbar-policy">automatic</property>
-            <property name="shadow-type">in</property>
-            <property name="propagate-natural-width">True</property>
+            <property name="orientation">horizontal</property>
+            <property name="wide-handle">True</property>
             <child>
-              <object class="GtkTreeView" id="variables">
+              <object class="GtkBox" id="stackcolumn">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <property name="width-request">240</property>
+
+                <child>
+                  <object class="GtkBox" id="stackheader">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="spacing">6</property>
+                    <child>
+                      <object class="GtkLabel" id="stacklabel">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">start</property>
+                        <property name="hexpand">True</property>
+                        <property name="label" translatable="yes" context="debugpanel|stacklabel">Call Stack</property>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkComboBoxText" id="threads">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <!-- see outputpanel.ui's source combobox: an explicit hexpand
+                             stops gtk3 weld's replacement widget from swallowing the
+                             row's free width -->
+                        <property name="hexpand">False</property>
+                        <property name="width-request">120</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="stackwindow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="height-request">90</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="shadow-type">in</property>
+                    <property name="propagate-natural-width">True</property>
+                    <child>
+                      <object class="GtkTreeView" id="stack">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="model">stackstore</property>
+                        <property name="headers-visible">False</property>
+                        <property name="headers-clickable">False</property>
+                        <property name="search-column">0</property>
+                        <property name="show-expanders">False</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="stackcolumnfunction">
+                            <property name="expand">True</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="rendererfunction"/>
+                              <attributes>
+                                <attribute name="text">0</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="stackcolumnplace">
+                            <child>
+                              <object class="GtkCellRendererText" id="rendererframeplace"/>
+                              <attributes>
+                                <attribute name="text">1</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="resize">False</property>
+                <property name="shrink">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkNotebook" id="tabs">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
                 <property name="hexpand">True</property>
                 <property name="vexpand">True</property>
-                <property name="model">varstore</property>
-                <property name="headers-visible">False</property>
-                <property name="headers-clickable">False</property>
-                <property name="search-column">0</property>
-                <property name="show-expanders">True</property>
-                <child internal-child="selection">
-                  <object class="GtkTreeSelection"/>
+                <property name="tab-pos">bottom</property>
+            <child>
+              <object class="GtkBox" id="breakpointscolumn">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <property name="width-request">200</property>
+
+                <child>
+                  <object class="GtkLabel" id="breakpointslabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes" context="debugpanel|breakpointslabel">Breakpoints</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
                 </child>
                 <child>
-                  <object class="GtkTreeViewColumn" id="varcolumnname">
+                  <object class="GtkScrolledWindow" id="breakpointswindow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="height-request">70</property>
+            <property name="vexpand">True</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="shadow-type">in</property>
+                    <!-- see solutionpanel.ui: without these the gtk3 sidebar opens the
+                         deck as wide as the scrolled window alone -->
+                    <property name="propagate-natural-width">True</property>
+                    <child>
+                      <object class="GtkTreeView" id="breakpoints">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="model">bkpstore</property>
+                        <property name="headers-visible">False</property>
+                        <property name="headers-clickable">False</property>
+                        <property name="search-column">1</property>
+                        <property name="show-expanders">False</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="bkpcolumnplace">
+                            <property name="expand">True</property>
+                            <child>
+                              <object class="GtkCellRendererToggle" id="rendererenabled"/>
+                              <attributes>
+                                <attribute name="active">0</attribute>
+                                <attribute name="visible">4</attribute>
+                                <attribute name="inconsistent">5</attribute>
+                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText" id="rendererplace"/>
+                              <attributes>
+                                <attribute name="text">1</attribute>
+                                <attribute name="weight">6</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="bkpcolumncondition">
+                            <child>
+                              <object class="GtkCellRendererText" id="renderercondition"/>
+                              <attributes>
+                                <attribute name="text">2</attribute>
+                                <attribute name="weight">7</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
                     <property name="expand">True</property>
-                    <child>
-                      <object class="GtkCellRendererText" id="renderername"/>
-                      <attributes>
-                        <attribute name="text">0</attribute>
-                      </attributes>
-                    </child>
-                  </object>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
                 </child>
                 <child>
-                  <object class="GtkTreeViewColumn" id="varcolumnvalue">
-                    <property name="expand">True</property>
+                  <object class="GtkBox" id="bkpaddrow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="spacing">4</property>
                     <child>
-                      <object class="GtkCellRendererText" id="renderervalue"/>
-                      <attributes>
-                        <attribute name="text">1</attribute>
-                      </attributes>
+                      <object class="GtkEntry" id="bkpentry">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="placeholder-text" translatable="yes" context="debugpanel|bkpentry|placeholder_text">file:line, or line in the open file</property>
+                        <property name="tooltip-text" translatable="yes" context="debugpanel|bkpentry|tooltip_text">Where to stop: "main.cxx:42", "/path/to/file.cxx:42", or "42" in the open file; add "if expression" for a condition, e.g. "main.cxx:42 if x &gt; 0"</property>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                        <property name="position">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="bkpadd">
+                        <property name="label" translatable="yes" context="debugpanel|bkpadd">_Add</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="use-underline">True</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">2</property>
+                      </packing>
                     </child>
                   </object>
-                </child>
-                <child>
-                  <object class="GtkTreeViewColumn" id="varcolumntype">
-                    <child>
-                      <object class="GtkCellRendererText" id="renderertype"/>
-                      <attributes>
-                        <attribute name="text">2</attribute>
-                      </attributes>
-                    </child>
-                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
                 </child>
               </object>
             </child>
-          </object>
-          <packing>
-            <property name="expand">True</property>
-            <property name="fill">True</property>
-            <property name="position">7</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="consolelabel">
+        <child type="tab">
+          <object class="GtkLabel" id="breakpointstab">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="halign">start</property>
-            <property name="label" translatable="yes" context="debugpanel|consolelabel">Console</property>
+            <property name="label" translatable="yes" context="debugpanel|breakpointstab">Breakpoints</property>
           </object>
           <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">8</property>
+            <property name="tab-fill">False</property>
           </packing>
         </child>
-        <child>
-          <object class="GtkScrolledWindow" id="consolewindow">
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
-            <property name="hexpand">True</property>
-            <property name="vexpand">True</property>
-            <property name="height-request">80</property>
-            <property name="vscrollbar-policy">automatic</property>
-            <property name="shadow-type">in</property>
             <child>
-              <object class="GtkTextView" id="console">
+              <object class="GtkBox" id="variablescolumn">
                 <property name="visible">True</property>
-                <property name="can-focus">True</property>
+                <property name="can-focus">False</property>
                 <property name="hexpand">True</property>
-                <property name="editable">False</property>
-                <property name="monospace">True</property>
-                <property name="wrap-mode">word-char</property>
-                <property name="buffer">consolebuffer</property>
+                <property name="vexpand">True</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <property name="width-request">240</property>
+
+                <child>
+                  <object class="GtkLabel" id="variableslabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes" context="debugpanel|variableslabel">Variables</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="variableswindow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="height-request">100</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="shadow-type">in</property>
+                    <property name="propagate-natural-width">True</property>
+                    <child>
+                      <object class="GtkTreeView" id="variables">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="vexpand">True</property>
+                        <property name="model">varstore</property>
+                        <property name="headers-visible">False</property>
+                        <property name="headers-clickable">False</property>
+                        <property name="search-column">0</property>
+                        <property name="show-expanders">True</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="varcolumnname">
+                            <property name="expand">True</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="renderername"/>
+                              <attributes>
+                                <attribute name="text">0</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="varcolumnvalue">
+                            <property name="expand">True</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="renderervalue"/>
+                              <attributes>
+                                <attribute name="text">1</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="varcolumntype">
+                            <child>
+                              <object class="GtkCellRendererText" id="renderertype"/>
+                              <attributes>
+                                <attribute name="text">2</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
               </object>
+            </child>
+        <child type="tab">
+          <object class="GtkLabel" id="variablestab">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="debugpanel|variablestab">Variables</property>
+          </object>
+          <packing>
+            <property name="tab-fill">False</property>
+          </packing>
+        </child>
+            <child>
+              <object class="GtkBox" id="exceptionscolumn">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <child>
+                  <object class="GtkLabel" id="exceptionslabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes" context="debugpanel|exceptionslabel">Break when the program</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="exceptionswindow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="height-request">70</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="shadow-type">in</property>
+                    <property name="propagate-natural-width">True</property>
+                    <child>
+                      <object class="GtkTreeView" id="exceptions">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="model">excstore</property>
+                        <property name="headers-visible">False</property>
+                        <property name="headers-clickable">False</property>
+                        <property name="search-column">1</property>
+                        <property name="show-expanders">False</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="exccolumnlabel">
+                            <property name="expand">True</property>
+                            <child>
+                              <object class="GtkCellRendererToggle" id="rendererexcbreak"/>
+                              <attributes>
+                                <attribute name="active">0</attribute>
+                                <attribute name="visible">4</attribute>
+                                <attribute name="inconsistent">5</attribute>
+                              </attributes>
+                            </child>
+                            <child>
+                              <object class="GtkCellRendererText" id="rendererexclabel"/>
+                              <attributes>
+                                <attribute name="text">1</attribute>
+                                <attribute name="weight">6</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="exccolumnunused">
+                            <child>
+                              <object class="GtkCellRendererText" id="rendererexcunused"/>
+                              <attributes>
+                                <attribute name="text">2</attribute>
+                                <attribute name="weight">7</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+              </object>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="exceptionstab">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|exceptionstab">Exception Settings</property>
+              </object>
+              <packing>
+                <property name="tab-fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkBox" id="consolecolumn">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <property name="width-request">240</property>
+
+                <child>
+                  <object class="GtkLabel" id="consolelabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes" context="debugpanel|consolelabel">Console</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="consolewindow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="vexpand">True</property>
+                    <property name="height-request">80</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <property name="shadow-type">in</property>
+                    <child>
+                      <object class="GtkTextView" id="console">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="hexpand">True</property>
+                        <property name="editable">False</property>
+                        <property name="monospace">True</property>
+                        <property name="wrap-mode">word-char</property>
+                        <property name="buffer">consolebuffer</property>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="consoleentry">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hexpand">True</property>
+                    <property name="placeholder-text" translatable="yes" context="debugpanel|consoleentry|placeholder_text">debugger command, or =expression to evaluate</property>
+                    <property name="tooltip-text" translatable="yes" context="debugpanel|consoleentry|tooltip_text">Plain text goes to the debugger's own command line (gdb); start with = to evaluate an expression in the selected frame</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+              </object>
+            </child>
+        <child type="tab">
+          <object class="GtkLabel" id="consoletab">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label" translatable="yes" context="debugpanel|consoletab">Console</property>
+          </object>
+          <packing>
+            <property name="tab-fill">False</property>
+          </packing>
+        </child>
+              </object>
+              <packing>
+                <property name="resize">True</property>
+                <property name="shrink">False</property>
+              </packing>
             </child>
           </object>
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>
-            <property name="position">9</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkEntry" id="consoleentry">
-            <property name="visible">True</property>
-            <property name="can-focus">True</property>
-            <property name="hexpand">True</property>
-            <property name="placeholder-text" translatable="yes" context="debugpanel|consoleentry|placeholder_text">debugger command, or =expression to evaluate</property>
-            <property name="tooltip-text" translatable="yes" context="debugpanel|consoleentry|tooltip_text">Plain text goes to the debugger's own command line (gdb); start with = to evaluate an expression in the selected frame</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">10</property>
+            <property name="position">1</property>
           </packing>
         </child>
         <child>
@@ -561,7 +786,7 @@
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
-            <property name="position">11</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>

@@ -1,0 +1,23 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Capability of an adapter (found with queryInterface on it): the exception
+    filters its sessions know, with their defaults.  Asked of the adapter,
+    not of a session, so that a UI can show -- and the user can set -- the
+    filters before any session exists. */
+interface XExceptionCatalog
+{
+    sequence< ::com::sun::star::code::debug::ExceptionFilter > getExceptionFilters();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

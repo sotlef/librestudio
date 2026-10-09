@@ -432,6 +432,10 @@ int CodeApplication::Main()
         sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
             u"com.sun.star.code.CodeDocument", u"FindResultsDeck");
 
+        // ... and for DebugDeck, the Output dock's fourth tab.
+        sfx2::sidebar::SidebarController::RegisterHiddenDeckForApplication(
+            u"com.sun.star.code.CodeDocument", u"DebugDeck");
+
         // SidebarController (sfx2/source/sidebar/SidebarController.cxx)
         // registers itself as a css::ui::XContextChangeEventListener on our
         // controller in its own constructor, then just waits: the first,

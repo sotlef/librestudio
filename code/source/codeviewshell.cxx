@@ -109,13 +109,15 @@ void StartNow(const uno::Reference<uno::XComponentContext>& xContext,
             ShowStartMessage(u"Cannot start debugging: "_ustr + rException.Message);
             return;
         }
-        SfxViewFrame* pFrame = SfxViewFrame::Current();
-        sfx2::sidebar::SidebarController* pController
-            = pFrame ? sfx2::sidebar::SidebarController::GetSidebarControllerForView(
-                           pFrame->GetViewShell())
-                     : nullptr;
-        if (pController)
-            pController->OpenThenSwitchToDeck(u"DebugDeck");
+        // the Debug tab of the bottom dock
+        if (SfxViewFrame* pFrame = SfxViewFrame::Current())
+        {
+            pFrame->ShowChildWindow(sidebar::OutputChildWindow::GetChildWindowId());
+            if (SfxChildWindow* pChild
+                = pFrame->GetChildWindow(sidebar::OutputChildWindow::GetChildWindowId()))
+                if (auto* pDock = dynamic_cast<sidebar::OutputDockingWindow*>(pChild->GetWindow()))
+                    pDock->ShowDeck(u"DebugDeck");
+        }
     }
     else if (!run::Start(xContext, rDescriptor))
         ShowStartMessage(u"A program is already running."_ustr);

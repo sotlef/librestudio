@@ -45,6 +45,7 @@ public:
     virtual void set_tab_label_text(const OUString& rIdent, const OUString& rLabel) override;
     virtual OUString get_tab_label_text(const OUString& rIdent) const override;
     virtual void set_show_tabs(bool bShow) override;
+    virtual void set_tab_image(const OUString& rIdent, const OUString& rIconName) override;
     virtual void set_tabs_at_bottom(bool bBottom) override;
     virtual void set_tabs_closable(bool bClosable) override;
     virtual int get_n_pages() const override;

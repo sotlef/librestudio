@@ -43,6 +43,9 @@ public:
     virtual int get_n_pages() const = 0;
     virtual weld::Container* get_page(const OUString& rIdent) const = 0;
 
+    /// an icon (by theme icon name, "cmd/..." style) in front of the tab's label;
+    /// where the backend has no tab icons this does nothing
+    virtual void set_tab_image(const OUString& /*rIdent*/, const OUString& /*rIconName*/) {}
     /// tabs at the bottom edge instead of the top; only where the backend can
     virtual void set_tabs_at_bottom(bool /*bBottom*/) {}
     /// a close button on each tab; clicking it calls the handler with the page ident
