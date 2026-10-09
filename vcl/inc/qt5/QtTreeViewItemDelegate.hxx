@@ -27,6 +27,10 @@ class QtTreeViewItemDelegate : public QStyledItemDelegate
     mutable QPointer<QWidget> m_pEditor;
 
 public:
+    /** Item data role of the values of a cell that is a drop-down list (a QStringList);
+     *  a cell without it is edited as text. */
+    static constexpr int ROLE_CHOICES = Qt::UserRole + 3000;
+
     QtTreeViewItemDelegate(QObject* pParent,
                            std::function<bool(const QModelIndex& rIndex)> aStartEditingFunction,
                            std::function<bool(const QModelIndex& rIndex, const QString& rNewText)>
@@ -34,6 +38,7 @@ public:
 
     virtual QWidget* createEditor(QWidget* pParent, const QStyleOptionViewItem& rOption,
                                   const QModelIndex& rIndex) const override;
+    virtual void setEditorData(QWidget* pEditor, const QModelIndex& rIndex) const override;
     virtual void setModelData(QWidget* pEditor, QAbstractItemModel* pModel,
                               const QModelIndex& rIndex) const override;
 

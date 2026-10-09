@@ -1558,6 +1558,17 @@ protected:
     o3tl::sorted_vector<SvTreeListEntry*> m_aExpandingPlaceHolderParents;
     // which columns should be custom rendered
     o3tl::sorted_vector<int> m_aCustomRenders;
+    // the drop-down lists of cells (set_cell_choices): by row id and external
+    // column, the values and the one the cell has
+    struct CellChoices
+    {
+        std::vector<OUString> aChoices;
+        int nSelected;
+    };
+    std::map<std::pair<OUString, int>, CellChoices> m_aCellChoices;
+    // a list cell is edited by choosing from a popup menu under it
+    bool ShowCellChoices(SvTreeListEntry* pEntry);
+
     bool m_bTogglesAsRadio;
     int m_nSortColumn;
 
@@ -1631,6 +1642,11 @@ public:
     virtual void set_column_fixed_widths(const std::vector<int>& rWidths) override;
 
     virtual void set_column_editables(const std::vector<bool>& rEditables) override;
+
+    virtual bool supports_cell_choices() const override { return true; }
+    virtual void set_cell_choices(const weld::TreeIter& rIter, int nCol,
+                                  const std::vector<OUString>& rChoices, int nSelected) override;
+    virtual void do_clear() override;
 
     virtual void set_centered_column(int nCol) override;
 

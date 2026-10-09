@@ -135,6 +135,9 @@ public:
     virtual void columns_autosize() override;
     virtual void set_column_fixed_widths(const std::vector<int>& rWidths) override;
     virtual void set_column_editables(const std::vector<bool>& rEditables) override;
+    virtual bool supports_cell_choices() const override { return true; }
+    virtual void set_cell_choices(const weld::TreeIter& rIter, int nCol,
+                                  const std::vector<OUString>& rChoices, int nSelected) override;
     virtual int get_column_width(int nCol) const override;
     virtual void set_centered_column(int nCol) override;
     virtual OUString get_column_title(int nColumn) const override;

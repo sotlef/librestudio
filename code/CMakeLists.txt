@@ -135,6 +135,7 @@ add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/recentprojects.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/recentprojectsmenucontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/folderviewpanel.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/projectpropertiesdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/projecttreepanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/solutionpanel.cxx"
     # The panels listen to the services through the same UI bridge the exe
@@ -193,6 +194,13 @@ target_include_directories(codecommon PUBLIC
 add_dependencies(codecommon udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
 target_link_libraries(codecommon PUBLIC comphelper cppu cppuhelper sal)
 
+# The descriptions that come with Code, and the schema of their format.
+set(CODE_TOOL_DESCRIPTIONS
+    "${CMAKE_CURRENT_SOURCE_DIR}/tooldescriptions/clang.xml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tooldescriptions/code.tool-1.xsd"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tooldescriptions/gcc.xml")
+install(FILES ${CODE_TOOL_DESCRIPTIONS} DESTINATION share/code/tooldescriptions)
+
 add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/buildcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
@@ -211,6 +219,8 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolindex.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolstore.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/tooldescription.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/tooldescriptions.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/vcsmanager.cxx")
 
 target_include_directories(codeservices PRIVATE
@@ -381,6 +391,7 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorfont.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/optionspage_editorgeneral.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/outputpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/projectpropertiesdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/pushdialog.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/solutionpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/taskspopover.ui"
@@ -398,6 +409,20 @@ foreach (_code_ui_src IN LISTS CODE_UI_FILES)
         COMMENT "Copying ${_code_ui_name} into build-tree soffice.cfg/code/ui"
         VERBATIM)
     list(APPEND _code_uiconfig_outputs "${_code_ui_dest}")
+endforeach ()
+
+# the tool descriptions, where the services look for them: share/code/tooldescriptions
+foreach (_code_tool_src IN LISTS CODE_TOOL_DESCRIPTIONS)
+    get_filename_component(_code_tool_name "${_code_tool_src}" NAME)
+    set(_code_tool_dest "${LIBRESTUDIO_SHARE_DIR}/code/tooldescriptions/${_code_tool_name}")
+    add_custom_command(
+        OUTPUT "${_code_tool_dest}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LIBRESTUDIO_SHARE_DIR}/code/tooldescriptions"
+        COMMAND ${CMAKE_COMMAND} -E copy "${_code_tool_src}" "${_code_tool_dest}"
+        DEPENDS "${_code_tool_src}"
+        COMMENT "Copying ${_code_tool_name} into build-tree share/code/tooldescriptions"
+        VERBATIM)
+    list(APPEND _code_uiconfig_outputs "${_code_tool_dest}")
 endforeach ()
 
 add_custom_target(code_uiconfig ALL DEPENDS ${_code_uiconfig_outputs})

@@ -113,11 +113,9 @@ public:
     {
     }
 
-    virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override
-    {
-        weld::CustomWidgetController::SetDrawingArea(pDrawingArea);
-        pDrawingArea->set_cursor(m_ePointer);
-    }
+    // Not when the area is handed over: the popup is not on the screen yet,
+    // and gtk can neither realize a widget that is not in a window nor give it a cursor.
+    void ApplyCursor() { GetDrawingArea()->set_cursor(m_ePointer); }
 
     // nothing to see: the border is only where the cursor changes
     virtual void Paint(vcl::RenderContext&, const tools::Rectangle&) override {}
@@ -253,6 +251,9 @@ void GitBranchesPopover::Show()
     // the generic-vcl popover does not size itself without this
     m_xPopover->resize_to_request();
     m_bShown = true;
+    // the grips are in a window now, and can be given their cursors
+    for (auto& rController : m_aGripControllers)
+        static_cast<Grip&>(*rController).ApplyCursor();
     m_xSearch->grab_focus();
 }
 

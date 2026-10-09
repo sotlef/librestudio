@@ -4992,8 +4992,85 @@ bool SalInstanceTreeView::ExpandRow(const SalInstanceTreeIter& rIter)
     return bRet;
 }
 
+void SalInstanceTreeView::set_cell_choices(const weld::TreeIter& rIter, int nCol,
+                                           const std::vector<OUString>& rChoices, int nSelected)
+{
+    const std::pair<OUString, int> aKey(get_id(rIter), nCol);
+    if (rChoices.empty())
+        m_aCellChoices.erase(aKey);
+    else
+        m_aCellChoices[aKey] = { rChoices, nSelected };
+
+    // the cell shows the arrow of a drop-down list when it has values
+    SvTreeListEntry* pEntry = static_cast<const SalInstanceTreeIter&>(rIter).iter;
+    const int nItem = to_internal_model(nCol);
+    if (nItem >= 0 && o3tl::make_unsigned(nItem) < pEntry->ItemCount())
+        if (auto* pString = dynamic_cast<SvLBoxString*>(&pEntry->GetItem(nItem)))
+        {
+            pString->SetDropDown(!rChoices.empty());
+            InvalidateModelEntry(pEntry);
+        }
+}
+
+void SalInstanceTreeView::do_clear()
+{
+    m_aCellChoices.clear();
+    SalInstanceItemView::do_clear();
+}
+
+// A cell that is a list is not edited as text: its values come up in a menu
+// under it, and the one chosen is the edit, passed to the same handler.
+// Returns false, so that no text editor is made.
+bool SalInstanceTreeView::ShowCellChoices(SvTreeListEntry* pEntry)
+{
+    const SalInstanceTreeIter aIter(*this, pEntry);
+    const OUString aId = get_id(aIter);
+    for (const auto& rCell : m_aCellChoices)
+    {
+        if (rCell.first.first != aId)
+            continue;
+        if (!signal_editing_started(aIter))
+            return false;
+
+        VclPtr<PopupMenu> xMenu = VclPtr<PopupMenu>::Create();
+        const std::vector<OUString>& rChoices = rCell.second.aChoices;
+        for (size_t i = 0; i < rChoices.size(); ++i)
+        {
+            const sal_uInt16 nItemId = static_cast<sal_uInt16>(i + 1);
+            xMenu->InsertItem(nItemId, rChoices[i], MenuItemBits::RADIOCHECK);
+            if (static_cast<int>(i) == rCell.second.nSelected)
+                xMenu->CheckItem(nItemId);
+        }
+        // under the row, from the cell's left edge on
+        // the row's top, and the left edge of the column the cell is in, taken
+        // from the tab of the cell's own item (not the row's start, which is the first column)
+        const Point aPos = m_xTreeView->GetEntryPosition(pEntry);
+        tools::Long nLeft = 0;
+        const size_t nItem = to_internal_model(rCell.first.second);
+        if (nItem < pEntry->ItemCount())
+            if (SvLBoxTab* pTab = m_xTreeView->GetTab(*pEntry, pEntry->GetItem(nItem)))
+                nLeft = m_xTreeView->GetTabPos(pEntry, pTab);
+        // positions are in the tree's scrolled coordinates; the menu wants the window's
+        const Point aOrigin = m_xTreeView->GetMapMode().GetOrigin();
+        const tools::Rectangle aRect(Point(nLeft + aOrigin.X(), aPos.Y() + aOrigin.Y()),
+                                     Size(m_xTreeView->GetOutputSizePixel().Width() - nLeft,
+                                          m_xTreeView->GetEntryHeight()));
+        const sal_uInt16 nChosen = xMenu->Execute(m_xTreeView, aRect, PopupMenuFlags::ExecuteDown);
+        if (nChosen > 0 && nChosen <= rChoices.size())
+        {
+            const OUString& rChosen = rChoices[nChosen - 1];
+            if (signal_editing_done(IterColText(aIter, rCell.first.second, rChosen)))
+                set_text(aIter, rChosen, rCell.first.second);
+        }
+        return false;
+    }
+    return true; // not a list cell: edited as text, as before
+}
+
 IMPL_LINK(SalInstanceTreeView, EditingEntryHdl, SvTreeListEntry*, pEntry, bool)
 {
+    if (!m_aCellChoices.empty())
+        return ShowCellChoices(pEntry) && signal_editing_started(SalInstanceTreeIter(*this, pEntry));
     return signal_editing_started(SalInstanceTreeIter(*this, pEntry));
 }
 

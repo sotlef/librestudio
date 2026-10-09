@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+ The schema of code.tool/1.  Names of elements, attributes and Ids are
+ PascalCase.  What starts with X and a capital letter is an extension: a
+ reader skips it.  The schema allows such attributes (xs:anyAttribute); an
+ extension element is checked by the reader only, XSD 1.0 cannot say "any
+ element whose name starts with X" in a choice.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:simpleType name="Id">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Za-z][A-Za-z0-9_]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Format">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="code\.tool/[1-9][0-9]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Version">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]+(\.[0-9]+)*"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Ids">
+    <xs:list itemType="Id"/>
+  </xs:simpleType>
+  <xs:simpleType name="Joiner">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Attached"/>
+      <xs:enumeration value="Separate"/>
+      <xs:enumeration value="Equals"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="ToolDescription">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Mode" type="Mode"/>
+        <xs:element name="Category" type="Category"/>
+      </xs:choice>
+      <xs:attribute name="Format" type="Format" use="required"/>
+      <xs:attribute name="Id" type="Id" use="required"/>
+      <xs:attribute name="Name" type="xs:string" use="required"/>
+      <xs:attribute name="Revision" type="xs:nonNegativeInteger"/>
+      <xs:attribute name="Match" type="xs:string"/>
+      <xs:attribute name="Extends" type="Id"/>
+      <xs:attribute name="Since" type="Version"/>
+      <xs:attribute name="Until" type="Version"/>
+      <xs:anyAttribute processContents="skip"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- what the one program does when the arguments say so: gcc -c compiles, gcc links.
+       Switches: the arguments that put it in this mode (blank separated);
+       Default: the mode when no other one is asked for.  Modes are tried in order. -->
+  <xs:complexType name="Mode">
+    <xs:attribute name="Id" type="Id" use="required"/>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Switches" type="xs:string"/>
+    <xs:attribute name="Default" type="xs:boolean"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <!-- the versions of the tool that have it: [Since, Until); Deprecated: discouraged from.
+       None of it changes how a command is read, only what is said of what it holds. -->
+  <xs:attributeGroup name="Lifetime">
+    <xs:attribute name="Since" type="Version"/>
+    <xs:attribute name="Until" type="Version"/>
+    <xs:attribute name="Deprecated" type="Version"/>
+  </xs:attributeGroup>
+
+  <xs:complexType name="Category">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="StringProperty" type="ValueProperty"/>
+      <xs:element name="StringListProperty" type="ValueProperty"/>
+      <xs:element name="IntProperty" type="ValueProperty"/>
+      <xs:element name="BoolProperty" type="BoolProperty"/>
+      <xs:element name="EnumProperty" type="EnumProperty"/>
+    </xs:choice>
+    <xs:attribute name="Id" type="Id" use="required"/>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Modes" type="Ids"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <!-- A default that depends on another property: when that one has one of the Is
+       values (Bool: true or false; Enum: a switch; else the text) and the tool's
+       version is in [Since, Until), the property is Value without being told.  The
+       first rule that holds wins; none: the property's Default. -->
+  <xs:complexType name="DefaultIf">
+    <xs:attribute name="Property" type="Id" use="required"/>
+    <xs:attribute name="Is" type="xs:string" use="required"/>
+    <xs:attribute name="Value" type="xs:string" use="required"/>
+    <xs:attribute name="Since" type="Version"/>
+    <xs:attribute name="Until" type="Version"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <!-- an option with a value: Prefix is its text without the value -->
+  <xs:complexType name="ValueProperty">
+    <xs:sequence>
+      <xs:element name="DefaultIf" type="DefaultIf" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="Id" type="Id" use="required"/>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Description" type="xs:string"/>
+    <xs:attribute name="Default" type="xs:string"/>
+    <xs:attribute name="Prefix" type="xs:string" use="required"/>
+    <xs:attribute name="Joiner" type="Joiner"/>
+    <xs:attribute name="Modes" type="Ids"/>
+    <xs:attributeGroup ref="Lifetime"/>
+    <xs:attribute name="Kind">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Path"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <!-- a switch: at least one of On and Off -->
+  <xs:complexType name="BoolProperty">
+    <xs:sequence>
+      <xs:element name="DefaultIf" type="DefaultIf" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="Id" type="Id" use="required"/>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Description" type="xs:string"/>
+    <xs:attribute name="Default">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="true"/>
+          <xs:enumeration value="false"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="On" type="xs:string"/>
+    <xs:attribute name="Off" type="xs:string"/>
+    <xs:attribute name="Modes" type="Ids"/>
+    <xs:attributeGroup ref="Lifetime"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+
+  <xs:complexType name="EnumProperty">
+    <xs:sequence>
+      <xs:element name="EnumValue" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="Switch" type="xs:string" use="required"/>
+          <xs:attribute name="Name" type="xs:string"/>
+          <xs:attribute name="Description" type="xs:string"/>
+          <xs:attributeGroup ref="Lifetime"/>
+          <xs:anyAttribute processContents="skip"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="DefaultIf" type="DefaultIf" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="Id" type="Id" use="required"/>
+    <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Description" type="xs:string"/>
+    <xs:attribute name="Default" type="xs:string"/>
+    <xs:attribute name="Modes" type="Ids"/>
+    <xs:attributeGroup ref="Lifetime"/>
+    <xs:anyAttribute processContents="skip"/>
+  </xs:complexType>
+</xs:schema>

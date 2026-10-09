@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module tool {
+
+/** One argument, or one option with its value, of a command: the form in
+    which a command is edited.  A list of them gives the command back. */
+struct CommandItem
+{
+    /** the property it belongs to; empty for an argument the description does
+        not know */
+    string PropertyId;
+    /** boolean property: "true" or "false"; enumeration: the switch;
+        unknown argument: the argument itself; otherwise the option's value */
+    string Value;
+    /** how the value was written: "Attached" (-Ipath), "Separate" (-I path),
+        "Equals" (--x=path); empty to take the property's own way */
+    string Joiner;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

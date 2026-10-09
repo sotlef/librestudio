@@ -378,7 +378,10 @@ QObject* QtBuilder::insertObject(QObject* pParent, const OUString& rClass, std::
     {
         return enableTreeViewColumnDataRole(pParentWidget, Qt::DecorationRole);
     }
-    else if (rClass == u"GtkCellRendererText")
+    else if (rClass == u"GtkCellRendererText"
+             // text that is a drop-down list in the cells given values
+             // (weld::TreeView::set_cell_choices): the same column data
+             || rClass == u"GtkCellRendererCombo")
     {
         return enableTreeViewColumnDataRole(pParentWidget, Qt::DisplayRole);
     }

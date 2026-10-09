@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<ToolDescription Format="code.tool/1" Id="clang" Name="Clang / Clang++" Revision="1"
+                 Extends="gcc" Match="(^|/)([a-z0-9_]+-)*clang(\+\+)?(-[0-9.]+)?$">
+  <Category Id="General" Name="General">
+    <StringProperty Id="TargetTriple" Name="Target Triple" Prefix="--target" Joiner="Equals"
+                    Description="Specifies the platform the code is made for, as arch-vendor-os; makes Clang a cross compiler."/>
+  </Category>
+  <Category Id="Language" Name="Language">
+    <EnumProperty Id="Stdlib" Name="C++ Standard Library"
+                  Description="Specifies the C++ standard library the program is compiled and linked with.">
+      <EnumValue Switch="-stdlib=libstdc++" Name="libstdc++"/>
+      <EnumValue Switch="-stdlib=libc++" Name="libc++"/>
+    </EnumProperty>
+  </Category>
+  <Category Id="Warnings" Name="Warnings">
+    <BoolProperty Id="Weverything" Name="Every Warning" On="-Weverything"
+                  Description="Enables every warning Clang has, including those that are of little use. Meant for finding what to switch off."/>
+  </Category>
+</ToolDescription>

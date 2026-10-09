@@ -1,0 +1,45 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module tool {
+
+/** One property of a command, as the description knows it. */
+struct CommandProperty
+{
+    string Id;
+    string Name;
+    string Description;
+    /** what the command sets it to, to be read by a person: "Yes", "No",
+        "Maximize speed (-O2)", a path.  A property given more than once
+        (include directories) has several. */
+    sequence< string > Values;
+    ::com::sun::star::code::tool::CommandPropertyState State;
+    /** what State refers to: the mode (NOT_IN_MODE) or the version
+        (NOT_YET: the first that has it; REMOVED: the first without it;
+        DEPRECATED: from which it is discouraged) */
+    string Detail;
+    /** The command does not give the property: Values are what the tool does
+        without being told (the description's Default), empty if the
+        description does not say.  Only the properties that apply in the
+        command's mode and exist in the tool's version are listed this way. */
+    boolean IsDefault;
+    /** Only when the command was compared with defaults (describeOverrides):
+        the command sets this differently from the defaults, or not at all. */
+    boolean Overridden;
+    /** What the defaults have for an overridden property: empty if they do
+        not set it. */
+    sequence< string > InheritedValues;
+    /** For an enumeration or a yes/no property: all the values it can have,
+        written as Values are. */
+    sequence< string > Choices;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

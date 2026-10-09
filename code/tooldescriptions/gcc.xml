@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+ Description is what a properties dialog shows under the list when a property is
+ chosen, as Visual Studio does; the dialog adds the way to write the option
+ (-fno-rtti, -I[path]) itself, so a description does not repeat it.
+-->
+<ToolDescription Format="code.tool/1" Id="gcc" Name="GCC / G++" Revision="2"
+                 Match="(^|/)([a-z0-9_]+-)*(g\+\+|gcc|c\+\+|cc)(-[0-9.]+)?$">
+  <!-- the modes are tried in this order; gcc without any of the switches links -->
+  <Mode Id="Preprocess" Name="Preprocess" Switches="-E"/>
+  <Mode Id="Assemble" Name="Compile to Assembly" Switches="-S"/>
+  <Mode Id="Compile" Name="Compile" Switches="-c"/>
+  <Mode Id="Link" Name="Link" Default="true"/>
+  <Category Id="General" Name="General">
+    <EnumProperty Id="Standard" Name="Language Standard"
+                  Description="Specifies the language standard the source is compiled as. The gnu variants add the GNU extensions to the standard.">
+      <EnumValue Switch="-std=c++11" Name="C++11"/>
+      <EnumValue Switch="-std=c++14" Name="C++14"/>
+      <EnumValue Switch="-std=c++17" Name="C++17"/>
+      <EnumValue Switch="-std=c++20" Name="C++20"/>
+      <EnumValue Switch="-std=c++23" Name="C++23" Since="11"/>
+      <EnumValue Switch="-std=c++0x" Name="C++0x (old name of C++11)" Until="11" Deprecated="4.7"/>
+      <EnumValue Switch="-std=gnu++17" Name="GNU C++17"/>
+      <EnumValue Switch="-std=gnu++20" Name="GNU C++20"/>
+      <EnumValue Switch="-std=c99" Name="C99"/>
+      <EnumValue Switch="-std=c11" Name="C11"/>
+      <EnumValue Switch="-std=c17" Name="C17"/>
+      <EnumValue Switch="-std=gnu11" Name="GNU C11"/>
+      <EnumValue Switch="-std=gnu17" Name="GNU C17"/>
+    </EnumProperty>
+    <StringProperty Id="Sysroot" Name="Sysroot" Prefix="--sysroot" Joiner="Equals" Kind="Path"
+                    Description="Uses the directory as the root for the system headers and libraries, instead of the compiler's own."/>
+    <StringProperty Id="Target" Name="Target Architecture" Prefix="-march" Joiner="Equals"
+                    Description="Specifies the processor architecture the code is generated for. The code may not run on older processors."/>
+  </Category>
+  <Category Id="Optimization" Name="Optimization">
+    <EnumProperty Id="OptimizationLevel" Name="Optimization Level" Default="-O0"
+                  Description="Specifies how hard the compiler works on the code: more optimization makes a smaller or faster program and a slower build.">
+      <EnumValue Switch="-O0" Name="Disabled"/>
+      <EnumValue Switch="-O1" Name="Basic"/>
+      <EnumValue Switch="-O2" Name="Maximize speed"/>
+      <EnumValue Switch="-O3" Name="Full optimization"/>
+      <EnumValue Switch="-Os" Name="Minimize size"/>
+      <EnumValue Switch="-Og" Name="Optimize for debugging"/>
+      <EnumValue Switch="-Ofast" Name="Fastest, not standard compliant"/>
+    </EnumProperty>
+    <BoolProperty Id="Lto" Name="Link-Time Optimization" Default="false" On="-flto" Off="-fno-lto"
+                  Description="Keeps the intermediate representation in the object files, so that the linker can optimize across source files."/>
+    <BoolProperty Id="FramePointer" Name="Omit Frame Pointer" Default="false" On="-fomit-frame-pointer" Off="-fno-omit-frame-pointer"
+                  Description="Does not keep the frame pointer in a register for functions that do not need one. Frees a register, makes debugging and profiling harder.">
+      <DefaultIf Property="OptimizationLevel" Is="-O1 -O2 -O3 -Os -Ofast -Og" Value="true"/>
+    </BoolProperty>
+  </Category>
+  <Category Id="Debugging" Name="Debugging">
+    <EnumProperty Id="DebugInfo" Name="Debug Information" Default="-g0"
+                  Description="Specifies how much debugging information is put into the object files.">
+      <EnumValue Switch="-g0" Name="None"/>
+      <EnumValue Switch="-g1" Name="Minimal"/>
+      <EnumValue Switch="-g" Name="Standard"/>
+      <EnumValue Switch="-g2" Name="Standard (level 2)"/>
+      <EnumValue Switch="-g3" Name="With macro definitions"/>
+      <EnumValue Switch="-ggdb" Name="For GDB"/>
+    </EnumProperty>
+  </Category>
+  <Category Id="Preprocessor" Name="Preprocessor" Modes="Preprocess Assemble Compile">
+    <StringListProperty Id="Defines" Name="Preprocessor Definitions" Prefix="-D"
+                        Description="Defines one or more preprocessor macros before the source is read: NAME, or NAME=VALUE."/>
+    <StringListProperty Id="Undefines" Name="Undefine Preprocessor Definitions" Prefix="-U"
+                        Description="Specifies one or more preprocessor undefines."/>
+    <StringListProperty Id="SystemIncludes" Name="System Include Directories" Prefix="-isystem" Joiner="Separate" Kind="Path"
+                        Description="Specifies directories searched for headers like the system's: warnings in them are not reported."/>
+    <StringListProperty Id="Includes" Name="Include Directories" Prefix="-I" Kind="Path"
+                        Description="Specifies one or more directories to add to the include path, where the compiler looks for the headers a source includes."/>
+    <StringListProperty Id="ForcedIncludes" Name="Forced Include Files" Prefix="-include" Joiner="Separate" Kind="Path"
+                        Description="Specifies one or more files that are processed as if each started with an #include of it, before the source."/>
+  </Category>
+  <Category Id="Language" Name="Language">
+    <BoolProperty Id="Rtti" Name="Run-Time Type Information" Default="true" On="-frtti" Off="-fno-rtti"
+                  Description="Generates the information that dynamic_cast and typeid need. Turning it off makes the code smaller, and they stop working."/>
+    <BoolProperty Id="Exceptions" Name="Exceptions" Default="true" On="-fexceptions" Off="-fno-exceptions"
+                  Description="Enables C++ exception handling. Without it throw and try cannot be used."/>
+    <BoolProperty Id="Pic" Name="Position Independent Code" Default="false" On="-fPIC" Off="-fno-PIC"
+                  Description="Generates code that works at any address in memory, as a shared library needs."/>
+    <BoolProperty Id="Pie" Name="Position Independent Executable" Default="false" On="-fPIE" Off="-fno-PIE"
+                  Description="Generates code for an executable that can be loaded at a random address."/>
+    <BoolProperty Id="Threads" Name="Use Pthreads" Default="false" On="-pthread"
+                  Description="Defines the macros for POSIX threads when compiling, and links the thread library when linking."/>
+    <BoolProperty Id="VisibilityInlines" Name="Hide Inline Functions" Default="false" On="-fvisibility-inlines-hidden"
+                  Description="Gives inline member functions hidden visibility, which makes the dynamic symbol table smaller."/>
+    <EnumProperty Id="Visibility" Name="Default Symbol Visibility" Default="-fvisibility=default"
+                  Description="Specifies whether the symbols of a shared library are visible outside it unless marked otherwise.">
+      <EnumValue Switch="-fvisibility=default" Name="Default"/>
+      <EnumValue Switch="-fvisibility=hidden" Name="Hidden"/>
+    </EnumProperty>
+  </Category>
+  <Category Id="Warnings" Name="Warnings" Modes="Preprocess Assemble Compile">
+    <BoolProperty Id="WarnAll" Name="All Common Warnings" Default="false" On="-Wall"
+                  Description="Enables the warnings about constructions that are questionable and easy to avoid."/>
+    <BoolProperty Id="WarnExtra" Name="Extra Warnings" Default="false" On="-Wextra"
+                  Description="Enables more warnings that -Wall does not."/>
+    <BoolProperty Id="Pedantic" Name="Pedantic" Default="false" On="-pedantic"
+                  Description="Issues all the warnings the standard demands, and rejects the extensions that it does not allow."/>
+    <BoolProperty Id="WarningsAsErrors" Name="Treat Warnings As Errors" Default="false" On="-Werror"
+                  Description="Makes every warning an error: the build fails when there is one."/>
+    <BoolProperty Id="NoWarnings" Name="Disable All Warnings" Default="false" On="-w"
+                  Description="Suppresses all warnings."/>
+  </Category>
+  <Category Id="CodeGeneration" Name="Code Generation">
+    <BoolProperty Id="Sanitize" Name="Address Sanitizer" Default="false" On="-fsanitize=address"
+                  Description="Instruments the code to find memory errors at run time: overflows, use after free."/>
+    <BoolProperty Id="AutoInit" Name="Initialize Automatic Variables" Default="false" On="-ftrivial-auto-var-init=zero" Since="12"
+                  Description="Initializes local variables that have no initializer to zero, so that they never hold stale data."/>
+  </Category>
+  <Category Id="Linker" Name="Linker" Modes="Link">
+    <StringListProperty Id="LibraryPaths" Name="Library Directories" Prefix="-L" Kind="Path"
+                        Description="Specifies one or more directories where the linker looks for libraries."/>
+    <StringListProperty Id="Libraries" Name="Libraries" Prefix="-l"
+                        Description="Specifies libraries to link with, by name: -lm links libm."/>
+    <BoolProperty Id="Shared" Name="Build a Shared Library" Default="false" On="-shared"
+                  Description="Produces a shared library instead of an executable."/>
+    <BoolProperty Id="Static" Name="Link Statically" Default="false" On="-static"
+                  Description="Links against the static versions of the libraries: the executable does not need them at run time."/>
+    <BoolProperty Id="LinkPie" Name="Link as a Position Independent Executable" On="-pie" Off="-no-pie"
+                  Description="Produces an executable that can be loaded at a random address."/>
+    <BoolProperty Id="GcSections" Name="Remove Unused Sections" Default="false" On="-Wl,--gc-sections"
+                  Description="Lets the linker drop the functions and data nothing refers to. Works best with function and data sections."/>
+    <BoolProperty Id="StripAll" Name="Strip Symbols" Default="false" On="-s"
+                  Description="Removes the symbol table and relocation information from the output."/>
+  </Category>
+
+  <Category Id="OptimizationFlags" Name="Optimization (Detailed)">
+    <BoolProperty Id="InlineFunctions" Name="Inline Functions" Default="false" On="-finline-functions" Off="-fno-inline-functions"
+                  Description="Considers all functions for inlining, even those not declared inline.">
+      <DefaultIf Property="OptimizationLevel" Is="-O2 -O3 -Os -Ofast" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="NoInline" Name="Never Inline" Default="false" On="-fno-inline"
+                  Description="Does not expand any functions inline apart from those marked always_inline."/>
+    <BoolProperty Id="UnrollLoops" Name="Unroll Loops" Default="false" On="-funroll-loops" Off="-fno-unroll-loops"
+                  Description="Unrolls loops whose number of iterations is known when compiling. Makes the code larger and often faster."/>
+    <BoolProperty Id="Vectorize" Name="Vectorize Loops" Default="false" On="-ftree-vectorize" Off="-fno-tree-vectorize"
+                  Description="Performs loop vectorization: the loops use the vector instructions of the processor.">
+      <DefaultIf Property="OptimizationLevel" Is="-O3 -Ofast" Value="true"/>
+      <DefaultIf Property="OptimizationLevel" Is="-O2" Since="12" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="FastMath" Name="Fast Math" Default="false" On="-ffast-math" Off="-fno-fast-math"
+                  Description="Makes floating point calculations faster by breaking the rules of IEEE and ISO: results can differ in the last digits.">
+      <DefaultIf Property="OptimizationLevel" Is="-Ofast" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="StrictAliasing" Name="Strict Aliasing" Default="false" On="-fstrict-aliasing" Off="-fno-strict-aliasing"
+                  Description="Assumes that pointers of different types do not point to the same object, as the language demands. Code that breaks this rule can misbehave.">
+      <DefaultIf Property="OptimizationLevel" Is="-O2 -O3 -Os -Ofast" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="Gcse" Name="Global Common Subexpression Elimination" Default="false" On="-fgcse" Off="-fno-gcse"
+                  Description="Performs global common subexpression elimination and constant propagation.">
+      <DefaultIf Property="OptimizationLevel" Is="-O2 -O3 -Os -Ofast" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="Peel" Name="Peel Loops" Default="false" On="-fpeel-loops" Off="-fno-peel-loops"
+                  Description="Peels loops: copies the first iterations of a loop out of it, when that is known to help.">
+      <DefaultIf Property="OptimizationLevel" Is="-O3 -Ofast" Value="true"/>
+    </BoolProperty>
+    <BoolProperty Id="SemanticInterposition" Name="Semantic Interposition" Default="true" On="-fsemantic-interposition" Off="-fno-semantic-interposition"
+                  Description="Lets a function of a shared library be replaced at run time by another with the same name. Turning it off allows more inlining."/>
+    <BoolProperty Id="Plt" Name="Use PLT for Calls" Default="true" On="-fplt" Off="-fno-plt"
+                  Description="Calls external functions through the procedure linkage table. Turning it off calls through the global offset table directly."/>
+    <BoolProperty Id="DataSections" Name="Data In Separate Sections" Default="false" On="-fdata-sections"
+                  Description="Puts each variable in a section of its own, so that the linker can remove the unused ones."/>
+    <BoolProperty Id="FunctionSections" Name="Functions In Separate Sections" Default="false" On="-ffunction-sections"
+                  Description="Puts each function in a section of its own, so that the linker can remove the unused ones."/>
+    <BoolProperty Id="Profile" Name="Profile Generate" Default="false" On="-fprofile-generate"
+                  Description="Instruments the program to write profile data when it runs, for the next build to optimize by."/>
+    <BoolProperty Id="ProfileUse" Name="Profile Use" Default="false" On="-fprofile-use"
+                  Description="Optimizes with the profile data that an instrumented run has written."/>
+    <StringProperty Id="Tune" Name="Tune For" Prefix="-mtune" Joiner="Equals"
+                    Description="Tunes the code for a processor, without using instructions that other processors lack."/>
+    <StringProperty Id="Cpu" Name="CPU" Prefix="-mcpu" Joiner="Equals"
+                    Description="Specifies the processor the code is made for (on the architectures where this is how it is chosen)."/>
+    <BoolProperty Id="Sse42" Name="SSE 4.2" Default="false" On="-msse4.2" Off="-mno-sse4.2"
+                  Description="Allows the use of the SSE 4.2 instructions."/>
+    <BoolProperty Id="Avx" Name="AVX" Default="false" On="-mavx" Off="-mno-avx"
+                  Description="Allows the use of the AVX instructions."/>
+    <BoolProperty Id="Avx2" Name="AVX2" Default="false" On="-mavx2" Off="-mno-avx2"
+                  Description="Allows the use of the AVX2 instructions."/>
+    <BoolProperty Id="Bit32" Name="Generate 32-bit Code" Default="false" On="-m32"
+                  Description="Generates code for a 32-bit environment: int, long and pointers are 32 bits."/>
+    <BoolProperty Id="Bit64" Name="Generate 64-bit Code" Default="false" On="-m64"
+                  Description="Generates code for a 64-bit environment: int is 32 bits, long and pointers are 64."/>
+  </Category>
+  <Category Id="CodeGenerationDetailed" Name="Code Generation (Detailed)">
+    <BoolProperty Id="StackProtector" Name="Stack Protector" Default="false" On="-fstack-protector" Off="-fno-stack-protector"
+                  Description="Adds a guard value to functions with vulnerable objects such as character arrays, and checks it on return."/>
+    <BoolProperty Id="StackProtectorStrong" Name="Stack Protector (Strong)" Default="false" On="-fstack-protector-strong"
+                  Description="Like the stack protector, and also guards functions with local arrays or references to local variables."/>
+    <BoolProperty Id="StackProtectorAll" Name="Stack Protector (All Functions)" Default="false" On="-fstack-protector-all"
+                  Description="Guards every function, whether it has vulnerable objects or not."/>
+    <BoolProperty Id="StackClashProtection" Name="Stack Clash Protection" Default="false" On="-fstack-clash-protection" Off="-fno-stack-clash-protection"
+                  Description="Probes the stack as it grows, so that a large allocation cannot jump over the guard page."/>
+    <BoolProperty Id="CfProtection" Name="Control Flow Protection" Default="false" On="-fcf-protection"
+                  Description="Adds instructions that check where indirect jumps and returns land."/>
+    <BoolProperty Id="AsyncUnwind" Name="Asynchronous Unwind Tables" Default="true" On="-fasynchronous-unwind-tables" Off="-fno-asynchronous-unwind-tables"
+                  Description="Generates unwind tables that are exact at every instruction, which debuggers and profilers use."/>
+    <BoolProperty Id="Common" Name="Common Symbols" Default="false" On="-fcommon" Off="-fno-common"
+                  Description="Puts uninitialized global variables in a common block, so that several definitions are merged. Off: they are an error."/>
+    <BoolProperty Id="WrapV" Name="Signed Overflow Wraps" Default="false" On="-fwrapv"
+                  Description="Defines signed integer overflow as wrapping around, as two's complement does, instead of undefined."/>
+    <BoolProperty Id="TrappingMath" Name="Trapping Math" Default="true" On="-ftrapping-math" Off="-fno-trapping-math"
+                  Description="Assumes that floating point operations can raise exceptions, and does not optimize them away."/>
+    <BoolProperty Id="ShortWchar" Name="Short wchar_t" Default="false" On="-fshort-wchar"
+                  Description="Makes wchar_t two bytes long, whatever the target's default is."/>
+    <BoolProperty Id="SignedChar" Name="char Is Signed" On="-fsigned-char" Off="-funsigned-char"
+                  Description="Makes the type char signed (or unsigned), whatever the target's default is."/>
+    <BoolProperty Id="SanitizeUb" Name="Undefined Behavior Sanitizer" Default="false" On="-fsanitize=undefined"
+                  Description="Instruments the code to report undefined behavior when it happens: overflows, bad shifts, null dereferences."/>
+    <BoolProperty Id="SanitizeThread" Name="Thread Sanitizer" Default="false" On="-fsanitize=thread"
+                  Description="Instruments the code to find data races between threads at run time."/>
+    <BoolProperty Id="SanitizeLeak" Name="Leak Sanitizer" Default="false" On="-fsanitize=leak"
+                  Description="Reports memory that is still allocated, and unreachable, when the program ends."/>
+    <BoolProperty Id="Coverage" Name="Instrument For Coverage" Default="false" On="--coverage"
+                  Description="Instruments the program to record which lines run, for a coverage report."/>
+    <BoolProperty Id="Profiling" Name="Instrument For gprof" Default="false" On="-pg"
+                  Description="Generates the extra code that gprof needs to write profiling information."/>
+    <IntProperty Id="Alignment" Name="Function Alignment" Prefix="-falign-functions" Joiner="Equals"
+                 Description="Aligns the start of functions to the next power of two greater than the number."/>
+    <IntProperty Id="Inline" Name="Inline Limit" Prefix="-finline-limit" Joiner="Equals"
+                 Description="Limits the size of the functions that are considered for inlining, in pseudo-instructions."/>
+  </Category>
+  <Category Id="LanguageFlags" Name="Language (Detailed)">
+    <BoolProperty Id="CoroutinesFlag" Name="C++ Coroutines" Default="false" On="-fcoroutines"
+                  Description="Enables the C++ coroutines (co_await, co_yield, co_return) in the standards before C++20."/>
+    <BoolProperty Id="ModulesTs" Name="C++ Modules" Default="false" On="-fmodules-ts"
+                  Description="Enables the C++ modules (import, export), in the standards before C++20."/>
+    <BoolProperty Id="Permissive" Name="Permissive" Default="false" On="-fpermissive"
+                  Description="Downgrades some diagnostics about nonconformant code from errors to warnings."/>
+    <BoolProperty Id="ThreadsafeStatics" Name="Thread-Safe Statics" Default="true" On="-fthreadsafe-statics" Off="-fno-threadsafe-statics"
+                  Description="Guards the initialization of local static variables, so that several threads can reach it safely."/>
+    <BoolProperty Id="ImplicitTemplates" Name="Implicit Templates" Default="true" On="-fimplicit-templates" Off="-fno-implicit-templates"
+                  Description="Instantiates templates where they are used. Off: only the templates instantiated explicitly are made."/>
+    <BoolProperty Id="OpenMp" Name="OpenMP" Default="false" On="-fopenmp"
+                  Description="Enables the OpenMP directives (#pragma omp), for parallel code."/>
+    <BoolProperty Id="Modules" Name="Clang Modules" Default="false" On="-fmodules"
+                  Description="Enables the Clang module system, which replaces the textual inclusion of headers."/>
+    <BoolProperty Id="NoBuiltin" Name="No Built-in Functions" Default="false" On="-fno-builtin"
+                  Description="Does not recognize the functions of the C library (memcpy, printf) as built in, so it does not optimize their calls."/>
+    <BoolProperty Id="Freestanding" Name="Freestanding Environment" Default="false" On="-ffreestanding"
+                  Description="Compiles for an environment where the standard library may not exist and main is not the start, as an operating system kernel."/>
+    <BoolProperty Id="NoStdInc" Name="No Standard Include Directories" Default="false" On="-nostdinc"
+                  Description="Does not search the standard system directories for headers: only those named with the include options."/>
+    <BoolProperty Id="NoStdIncCxx" Name="No Standard C++ Includes" Default="false" On="-nostdinc++"
+                  Description="Does not search the directories of the C++ standard library for headers."/>
+    <BoolProperty Id="Trigraphs" Name="Trigraphs" Default="false" On="-trigraphs"
+                  Description="Supports the ISO C trigraphs: sequences of three characters that stand for one."/>
+    <IntProperty Id="TemplateDepth" Name="Template Depth" Prefix="-ftemplate-depth" Joiner="Equals"
+                 Description="Sets the maximum depth of template instantiation."/>
+    <IntProperty Id="ConstexprDepth" Name="Constexpr Depth" Prefix="-fconstexpr-depth" Joiner="Equals"
+                 Description="Sets the maximum nested evaluation depth of constexpr functions."/>
+    <IntProperty Id="ConstexprOps" Name="Constexpr Loop Limit" Prefix="-fconstexpr-loop-limit" Joiner="Equals"
+                 Description="Sets the maximum number of iterations of a loop in a constexpr function."/>
+    <StringProperty Id="InputCharset" Name="Input Character Set" Prefix="-finput-charset" Joiner="Equals"
+                    Description="Sets the character set of the source files, which is converted to UTF-8 on reading."/>
+    <StringProperty Id="ExecCharset" Name="Execution Character Set" Prefix="-fexec-charset" Joiner="Equals"
+                    Description="Sets the character set of narrow string and character constants in the program."/>
+    <StringProperty Id="Language" Name="Treat Input As Language" Prefix="-x" Joiner="Separate"
+                    Description="Specifies the language of the input files that follow, whatever their extension says: c, c++, assembler."/>
+    <StringProperty Id="Abi" Name="ABI Version" Prefix="-fabi-version" Joiner="Equals"
+                    Description="Uses the given version of the C++ ABI."/>
+    <StringProperty Id="MacroPrefix" Name="Macro Prefix Map" Prefix="-fmacro-prefix-map" Joiner="Equals"
+                    Description="Replaces a prefix of the file names in __FILE__ with another, as old=new. Makes builds reproducible."/>
+    <StringProperty Id="DebugPrefix" Name="Debug Prefix Map" Prefix="-fdebug-prefix-map" Joiner="Equals"
+                    Description="Replaces a prefix of the file names in the debug information with another, as old=new."/>
+    <StringProperty Id="Plugin" Name="Plugin" Prefix="-fplugin" Joiner="Equals" Kind="Path"
+                    Description="Loads a plugin of the compiler from a shared object."/>
+  </Category>
+  <Category Id="WarningsDetailed" Name="Warnings (Detailed)" Modes="Preprocess Assemble Compile">
+    <BoolProperty Id="WarnShadow" Name="Shadowed Declarations" Default="false" On="-Wshadow" Off="-Wno-shadow"
+                  Description="Warns when a local variable or member shadows another variable, parameter or member."/>
+    <BoolProperty Id="WarnConversion" Name="Implicit Conversions" Default="false" On="-Wconversion" Off="-Wno-conversion"
+                  Description="Warns about implicit conversions that may change a value."/>
+    <BoolProperty Id="WarnSignConversion" Name="Sign Conversions" Default="false" On="-Wsign-conversion" Off="-Wno-sign-conversion"
+                  Description="Warns about implicit conversions that may change the sign of an integer."/>
+    <BoolProperty Id="WarnUnused" Name="Unused Entities" Default="false" On="-Wunused" Off="-Wno-unused"
+                  Description="Enables all the warnings about unused functions, variables, labels and values."/>
+    <BoolProperty Id="WarnUnusedParameter" Name="Unused Parameters" Default="false" On="-Wunused-parameter" Off="-Wno-unused-parameter"
+                  Description="Warns when a function parameter is not used."/>
+    <BoolProperty Id="WarnUnusedVariable" Name="Unused Variables" Default="false" On="-Wunused-variable" Off="-Wno-unused-variable"
+                  Description="Warns when a local or static variable is not used."/>
+    <BoolProperty Id="WarnUninitialized" Name="Uninitialized Variables" Default="false" On="-Wuninitialized" Off="-Wno-uninitialized"
+                  Description="Warns when a variable is used before it has a value."/>
+    <BoolProperty Id="WarnMaybeUninitialized" Name="Maybe Uninitialized" Default="false" On="-Wmaybe-uninitialized" Off="-Wno-maybe-uninitialized"
+                  Description="Warns when a variable may be used before it has a value, on some path."/>
+    <BoolProperty Id="WarnFormat" Name="Format Strings" Default="false" On="-Wformat" Off="-Wno-format"
+                  Description="Checks the calls to printf and scanf: whether the arguments match the format string."/>
+    <BoolProperty Id="WarnFormatSecurity" Name="Format Security" Default="false" On="-Wformat-security" Off="-Wno-format-security"
+                  Description="Warns about calls to the printf family that can be a security problem, as a format string that is not a literal."/>
+    <BoolProperty Id="WarnNullDeref" Name="Null Dereference" Default="false" On="-Wnull-dereference"
+                  Description="Warns when the compiler finds that the program dereferences a null pointer on some path."/>
+    <BoolProperty Id="WarnOldStyleCast" Name="Old-Style Casts" Default="false" On="-Wold-style-cast" Off="-Wno-old-style-cast"
+                  Description="Warns about casts of the C style in C++ code."/>
+    <BoolProperty Id="WarnOverloadedVirtual" Name="Hidden Virtual Overloads" Default="false" On="-Woverloaded-virtual" Off="-Wno-overloaded-virtual"
+                  Description="Warns when a function declaration hides virtual functions of a base class."/>
+    <BoolProperty Id="WarnNonVirtualDtor" Name="Non-Virtual Destructors" Default="false" On="-Wnon-virtual-dtor" Off="-Wno-non-virtual-dtor"
+                  Description="Warns when a class has virtual functions and an accessible destructor that is not virtual."/>
+    <BoolProperty Id="WarnCast" Name="Cast Alignment" Default="false" On="-Wcast-align" Off="-Wno-cast-align"
+                  Description="Warns when a cast increases the alignment a pointer is required to have."/>
+    <BoolProperty Id="WarnCastQual" Name="Cast Qualifiers" Default="false" On="-Wcast-qual" Off="-Wno-cast-qual"
+                  Description="Warns when a cast removes a qualifier, as const, from the type a pointer points to."/>
+    <BoolProperty Id="WarnDeprecated" Name="Deprecated Declarations" Default="true" On="-Wdeprecated" Off="-Wno-deprecated"
+                  Description="Warns about the use of the features that the language has deprecated."/>
+    <BoolProperty Id="WarnDeprecatedDecl" Name="Use Of Deprecated Declarations" Default="true" On="-Wdeprecated-declarations" Off="-Wno-deprecated-declarations"
+                  Description="Warns about the use of functions, variables and types marked as deprecated."/>
+    <BoolProperty Id="WarnDouble" Name="Float Promotion" Default="false" On="-Wdouble-promotion"
+                  Description="Warns when a float is implicitly promoted to double."/>
+    <BoolProperty Id="WarnFloatEqual" Name="Float Equality" Default="false" On="-Wfloat-equal"
+                  Description="Warns when floating point values are compared for equality."/>
+    <BoolProperty Id="WarnMissingDecl" Name="Missing Declarations" Default="false" On="-Wmissing-declarations"
+                  Description="Warns when a global function is defined without a previous declaration."/>
+    <BoolProperty Id="WarnRedundant" Name="Redundant Declarations" Default="false" On="-Wredundant-decls"
+                  Description="Warns when something is declared more than once in the same scope."/>
+    <BoolProperty Id="WarnSwitch" Name="Switch Coverage" Default="false" On="-Wswitch" Off="-Wno-switch"
+                  Description="Warns when a switch on an enumeration has no case for one of its values and no default."/>
+    <BoolProperty Id="WarnSwitchEnum" Name="Switch Without Every Enum" Default="false" On="-Wswitch-enum"
+                  Description="Warns when a switch on an enumeration has no case for one of its values, even with a default."/>
+    <BoolProperty Id="WarnReorder" Name="Initializer Order" Default="false" On="-Wreorder" Off="-Wno-reorder"
+                  Description="Warns when the member initializers of a constructor are not in the order the members are declared."/>
+    <BoolProperty Id="WarnReturnType" Name="Missing Return" Default="false" On="-Wreturn-type" Off="-Wno-return-type"
+                  Description="Warns when a function that returns a value can end without returning one."/>
+    <BoolProperty Id="WarnSignCompare" Name="Signed/Unsigned Comparison" Default="false" On="-Wsign-compare" Off="-Wno-sign-compare"
+                  Description="Warns when a comparison between signed and unsigned values can give a wrong result."/>
+    <BoolProperty Id="WarnStrictAliasing" Name="Strict Aliasing Violations" Default="false" On="-Wstrict-aliasing"
+                  Description="Warns about code that may break the strict aliasing rules the optimizer relies on."/>
+    <BoolProperty Id="WarnPadded" Name="Padding" Default="false" On="-Wpadded"
+                  Description="Warns when padding is added to a structure, to align a member or the whole structure."/>
+    <BoolProperty Id="WarnUseless" Name="Useless Casts" Default="false" On="-Wuseless-cast"
+                  Description="Warns when an expression is cast to its own type."/>
+    <BoolProperty Id="WarnLogical" Name="Logical Operations" Default="false" On="-Wlogical-op"
+                  Description="Warns about suspicious uses of logical operators in expressions, as the same operand twice."/>
+    <BoolProperty Id="WarnDuplicated" Name="Duplicated Conditions" Default="false" On="-Wduplicated-cond"
+                  Description="Warns about the same condition in an if-else-if chain."/>
+    <BoolProperty Id="WarnMisleading" Name="Misleading Indentation" Default="false" On="-Wmisleading-indentation" Off="-Wno-misleading-indentation"
+                  Description="Warns when the indentation of the code suggests a block that the braces do not make."/>
+    <BoolProperty Id="WarnPointerArith" Name="Pointer Arithmetic" Default="false" On="-Wpointer-arith"
+                  Description="Warns about anything that depends on the size of a function type or of void."/>
+    <BoolProperty Id="WarnUndef" Name="Undefined Macros In #if" Default="false" On="-Wundef"
+                  Description="Warns when an identifier that is not a macro is evaluated in an #if directive."/>
+    <BoolProperty Id="WarnVla" Name="Variable Length Arrays" Default="false" On="-Wvla"
+                  Description="Warns when a variable length array is used."/>
+    <BoolProperty Id="WarnNrvo" Name="Pessimizing Moves" Default="false" On="-Wpessimizing-move" Off="-Wno-pessimizing-move"
+                  Description="Warns when a call to std::move prevents the copy from being elided."/>
+    <BoolProperty Id="WarnComma" Name="Comments" Default="false" On="-Wcomment" Off="-Wno-comment"
+                  Description="Warns when a comment starts inside a comment, or a line comment ends with a backslash."/>
+    <BoolProperty Id="WarnUnknownPragmas" Name="Unknown Pragmas" Default="false" On="-Wunknown-pragmas" Off="-Wno-unknown-pragmas"
+                  Description="Warns when a #pragma is not understood by the compiler."/>
+    <BoolProperty Id="WarnInvalidPch" Name="Invalid Precompiled Headers" Default="true" On="-Winvalid-pch"
+                  Description="Warns when a precompiled header is found in the search path but cannot be used."/>
+    <BoolProperty Id="WarnEffcxx" Name="Effective C++ Style" Default="false" On="-Weffc++"
+                  Description="Warns about violations of some of the style guidelines of the book Effective C++."/>
+    <BoolProperty Id="WarnErrorOnly" Name="Fatal Errors" Default="false" On="-Wfatal-errors"
+                  Description="Stops the compilation at the first error instead of going on."/>
+    <StringProperty Id="WarnErrorFor" Name="Warnings Treated As Errors" Prefix="-Werror" Joiner="Equals"
+                    Description="Makes the named warning an error: -Werror=format."/>
+    <IntProperty Id="WarnStackUsage" Name="Stack Usage Limit" Prefix="-Wstack-usage" Joiner="Equals"
+                 Description="Warns when the stack usage of a function may exceed this many bytes."/>
+    <IntProperty Id="WarnLarger" Name="Larger Than Limit" Prefix="-Wlarger-than" Joiner="Equals"
+                 Description="Warns when an object is larger than this many bytes."/>
+    <IntProperty Id="WarnFrame" Name="Frame Larger Than" Prefix="-Wframe-larger-than" Joiner="Equals"
+                 Description="Warns when the size of a function's stack frame is larger than this many bytes."/>
+  </Category>
+  <Category Id="Output" Name="Output">
+    <StringProperty Id="OutputFile" Name="Output File" Prefix="-o" Joiner="Separate" Kind="Path"
+                    Description="Specifies the name of the file the output is written to."/>
+    <BoolProperty Id="Dependencies" Name="Generate Dependencies" Default="false" On="-MD"
+                  Description="Writes a file with the headers each source depends on, in the format of make, while compiling."/>
+    <BoolProperty Id="DependenciesUser" Name="Dependencies (User Headers Only)" Default="false" On="-MMD"
+                  Description="Like generating dependencies, without the system headers."/>
+    <BoolProperty Id="DependenciesPhony" Name="Phony Dependency Targets" Default="false" On="-MP"
+                  Description="Adds an empty target for each header, so that make does not fail when one is deleted."/>
+    <StringProperty Id="DependencyFile" Name="Dependency File" Prefix="-MF" Joiner="Separate" Kind="Path"
+                    Description="Specifies the file the dependencies are written to."/>
+    <StringProperty Id="DependencyTarget" Name="Dependency Target" Prefix="-MT" Joiner="Separate"
+                    Description="Changes the name of the target in the dependency rule."/>
+    <StringProperty Id="DependencyQuotedTarget" Name="Quoted Dependency Target" Prefix="-MQ" Joiner="Separate"
+                    Description="Like the dependency target, with the characters special to make quoted."/>
+    <BoolProperty Id="Pipe" Name="Use Pipes Between Stages" Default="false" On="-pipe"
+                  Description="Uses pipes instead of temporary files between the stages of the compilation."/>
+    <BoolProperty Id="Verbose" Name="Verbose" Default="false" On="-v"
+                  Description="Prints the commands that are run for the stages of the compilation, and the version of the compiler."/>
+    <BoolProperty Id="SaveTemps" Name="Keep Intermediate Files" Default="false" On="-save-temps"
+                  Description="Keeps the intermediate files (preprocessed source, assembly) instead of deleting them."/>
+    <BoolProperty Id="ColorDiagnostics" Name="Colored Diagnostics" On="-fdiagnostics-color=always" Off="-fdiagnostics-color=never"
+                  Description="Colors the messages of the compiler, even when the output is not a terminal."/>
+    <BoolProperty Id="ShowColumn" Name="Show Column Numbers" Default="true" On="-fshow-column" Off="-fno-show-column"
+                  Description="Prints the column number in the diagnostics, after the line number."/>
+    <IntProperty Id="ErrorLimit" Name="Error Limit" Prefix="-fmax-errors" Joiner="Equals"
+                 Description="Stops the compilation after this many errors."/>
+    <BoolProperty Id="Time" Name="Report Time Per Stage" Default="false" On="-time"
+                  Description="Reports the time each stage of the compilation took."/>
+    <BoolProperty Id="PrintStats" Name="Report Memory Statistics" Default="false" On="-fmem-report"
+                  Description="Prints the memory the compiler allocated, at the end of the compilation."/>
+  </Category>
+  <Category Id="Debugging2" Name="Debugging (Detailed)">
+    <EnumProperty Id="DebugFormat" Name="Debug Format"
+                  Description="Specifies the format of the debugging information.">
+      <EnumValue Switch="-gdwarf" Name="DWARF (default version)"/>
+      <EnumValue Switch="-gdwarf-4" Name="DWARF 4"/>
+      <EnumValue Switch="-gdwarf-5" Name="DWARF 5" Since="11"/>
+      <EnumValue Switch="-gstabs" Name="stabs"/>
+    </EnumProperty>
+    <BoolProperty Id="SplitDwarf" Name="Split DWARF" Default="false" On="-gsplit-dwarf"
+                  Description="Puts the debugging information in a separate file, which the linker does not have to read."/>
+    <BoolProperty Id="DebugTypes" Name="Separate Debug Types" Default="false" On="-fdebug-types-section"
+                  Description="Puts the debug information of each type in a section of its own, so that duplicates can be merged."/>
+    <BoolProperty Id="Gz" Name="Compress Debug Sections" Default="false" On="-gz"
+                  Description="Compresses the debug sections of the output."/>
+    <BoolProperty Id="VarTracking" Name="Variable Tracking" Default="false" On="-fvar-tracking"
+                  Description="Tracks where the variables are during the program, for better debug information of optimized code."/>
+    <BoolProperty Id="Eliminate" Name="Eliminate Unused Debug Types" Default="true" On="-feliminate-unused-debug-types" Off="-fno-eliminate-unused-debug-types"
+                  Description="Leaves out the debug information of the types that the program does not use."/>
+  </Category>
+  <Category Id="PreprocessorFlags" Name="Preprocessor (Detailed)" Modes="Preprocess Assemble Compile">
+    <BoolProperty Id="DefinesOnly" Name="Output Macro Definitions Only" Default="false" On="-dM"
+                  Description="Writes the list of all the macros that are defined at the end of the preprocessing."/>
+    <BoolProperty Id="KeepComments" Name="Keep Comments" Default="false" On="-C"
+                  Description="Does not remove the comments from the preprocessed output."/>
+    <BoolProperty Id="NoLineMarkers" Name="Omit Line Markers" Default="false" On="-P"
+                  Description="Does not write the line markers that say where the lines came from, in the preprocessed output."/>
+    <StringListProperty Id="QuoteIncludes" Name="Quote Include Directories" Prefix="-iquote" Joiner="Separate" Kind="Path"
+                        Description="Specifies directories searched only for the headers included with quotes, before the other directories."/>
+    <StringListProperty Id="AfterIncludes" Name="Include Directories After System" Prefix="-idirafter" Joiner="Separate" Kind="Path"
+                        Description="Specifies directories searched after the system directories."/>
+    <StringListProperty Id="MacroFiles" Name="Macro Files" Prefix="-imacros" Joiner="Separate" Kind="Path"
+                        Description="Processes a file for the macros it defines only, before the source; its output is discarded."/>
+    <StringProperty Id="IPrefix" Name="Include Prefix" Prefix="-iprefix" Joiner="Separate" Kind="Path"
+                    Description="Specifies the prefix that -iwithprefix adds to its argument."/>
+    <StringProperty Id="IWithPrefix" Name="Include With Prefix" Prefix="-iwithprefix" Joiner="Separate"
+                    Description="Appends a directory, made of the include prefix and this, to the second part of the include path."/>
+    <StringProperty Id="IsysrootDir" Name="System Root For Includes" Prefix="-isysroot" Joiner="Separate" Kind="Path"
+                    Description="Uses the directory as the root for the system header directories only."/>
+    <StringProperty Id="PreprocessorOption" Name="Option Passed To Preprocessor" Prefix="-Wp," Joiner="Attached"
+                    Description="Passes the option on to the preprocessor, as it is."/>
+  </Category>
+  <Category Id="LinkerFlags" Name="Linker (Detailed)" Modes="Link">
+    <BoolProperty Id="NoDefaultLibs" Name="No Default Libraries" Default="false" On="-nodefaultlibs"
+                  Description="Does not link the standard system libraries, but does use the start files."/>
+    <BoolProperty Id="NoStartFiles" Name="No Start Files" Default="false" On="-nostartfiles"
+                  Description="Does not use the standard system start files when linking."/>
+    <BoolProperty Id="NoStdLib2" Name="No Standard Libraries" Default="false" On="-nostdlib"
+                  Description="Uses neither the standard start files nor the standard libraries."/>
+    <BoolProperty Id="StaticLibgcc" Name="Link libgcc Statically" Default="false" On="-static-libgcc"
+                  Description="Links the support library of the compiler statically, even when the program is linked dynamically."/>
+    <BoolProperty Id="StaticLibstdcxx" Name="Link libstdc++ Statically" Default="false" On="-static-libstdc++"
+                  Description="Links the C++ standard library statically, so that the program does not depend on its version."/>
+    <BoolProperty Id="Rdynamic" Name="Export All Symbols" Default="false" On="-rdynamic"
+                  Description="Puts all the symbols of the executable in its dynamic symbol table, for the use of plugins and backtraces."/>
+    <BoolProperty Id="Relocatable" Name="Relocatable Output" Default="false" On="-r"
+                  Description="Produces an object file that can be linked again, instead of a program."/>
+    <BoolProperty Id="NoPie" Name="No PIE" Default="false" On="-no-pie"
+                  Description="Does not produce a position independent executable."/>
+    <BoolProperty Id="Symbolic" Name="Bind Symbols Locally" Default="false" On="-Wl,-Bsymbolic"
+                  Description="Binds the references to global symbols to the definitions within a shared library, when there is one."/>
+    <BoolProperty Id="AsNeeded" Name="Link Only Needed Libraries" Default="false" On="-Wl,--as-needed"
+                  Description="Records a library as needed only when the program uses a symbol of it."/>
+    <BoolProperty Id="NoUndefined" Name="Error On Undefined Symbols In Libraries" Default="false" On="-Wl,--no-undefined"
+                  Description="Reports an error for the unresolved symbols in object files when a shared library is built."/>
+    <BoolProperty Id="Relro" Name="Read-Only Relocations" Default="false" On="-Wl,-z,relro"
+                  Description="Makes the relocated sections read-only once the program has started."/>
+    <BoolProperty Id="Now" Name="Resolve Symbols At Startup" Default="false" On="-Wl,-z,now"
+                  Description="Resolves all the symbols when the program starts, not on the first use."/>
+    <BoolProperty Id="NoExecStack" Name="Non-Executable Stack" Default="false" On="-Wl,-z,noexecstack"
+                  Description="Marks the output as not needing an executable stack."/>
+    <BoolProperty Id="BuildId" Name="Embed Build ID" Default="false" On="-Wl,--build-id"
+                  Description="Adds a unique identifier to the output, which debuggers use to find its debug information."/>
+    <BoolProperty Id="StripDebug" Name="Strip Debug Information" Default="false" On="-Wl,--strip-debug"
+                  Description="Removes the debugging information from the output."/>
+    <BoolProperty Id="MapFile" Name="Map File" Default="false" On="-Wl,-Map"
+                  Description="Writes a link map: where each piece of the output came from."/>
+    <BoolProperty Id="Icf" Name="Merge Identical Code" Default="false" On="-Wl,--icf=all"
+                  Description="Merges functions that have identical code into one (supported by gold and lld)."/>
+    <BoolProperty Id="UseLld" Name="Use LLD" Default="false" On="-fuse-ld=lld"
+                  Description="Links with the LLVM linker."/>
+    <BoolProperty Id="UseGold" Name="Use Gold" Default="false" On="-fuse-ld=gold"
+                  Description="Links with the gold linker."/>
+    <BoolProperty Id="UseMold" Name="Use Mold" Default="false" On="-fuse-ld=mold"
+                  Description="Links with the mold linker."/>
+    <BoolProperty Id="UseBfd" Name="Use BFD" Default="false" On="-fuse-ld=bfd"
+                  Description="Links with the BFD linker."/>
+    <StringListProperty Id="LinkerOptions" Name="Options Passed To Linker" Prefix="-Wl," Joiner="Attached"
+                        Description="Passes the option on to the linker, as it is. Several, separated with commas, are passed as several."/>
+    <StringListProperty Id="RPath" Name="Run-Time Library Path" Prefix="-Wl,-rpath," Joiner="Attached" Kind="Path"
+                        Description="Adds a directory to the path where the program looks for shared libraries when it runs."/>
+    <StringProperty Id="SoName" Name="Shared Object Name" Prefix="-Wl,-soname," Joiner="Attached"
+                    Description="Sets the name that programs record for the shared library when they link with it."/>
+    <StringProperty Id="Entry" Name="Entry Point" Prefix="-Wl,-e," Joiner="Attached"
+                    Description="Sets the symbol at which the program starts."/>
+    <StringProperty Id="LinkerScript" Name="Linker Script" Prefix="-T" Joiner="Separate" Kind="Path"
+                    Description="Uses the file as the linker script, which says how the output is laid out."/>
+    <StringProperty Id="Specs" Name="Specs File" Prefix="-specs" Joiner="Equals" Kind="Path"
+                    Description="Processes the file after the compiler's own specs, to change what the driver does."/>
+    <StringListProperty Id="FrameworkPaths" Name="Framework Directories" Prefix="-F" Kind="Path"
+                        Description="Specifies directories searched for frameworks (macOS)."/>
+    <StringListProperty Id="LinkerLibrariesDirect" Name="Libraries By Path" Prefix="-l:" Joiner="Attached"
+                        Description="Links with a library by its file name, as it is: -l:libfoo.a."/>
+  </Category>
+</ToolDescription>

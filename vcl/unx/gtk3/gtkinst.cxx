@@ -14197,6 +14197,8 @@ private:
     std::map<int, int> m_aIndentMap;
     // map from text column to text align column
     std::map<int, int> m_aAlignMap;
+    // the drop-down lists of cells (set_cell_choices), by row id and external column
+    std::map<std::pair<OUString, int>, std::shared_ptr<GtkListStore>> m_aCellChoices;
     // currently expanding parent that logically, but not currently physically,
     // contain placeholders
     o3tl::sorted_vector<GtkTreePath*, CompareGtkTreePath> m_aExpandingPlaceHolderParents;
@@ -14516,11 +14518,48 @@ private:
 
     DECL_LINK(async_stop_cell_editing, void*, void);
 
-    static void signalCellEditingStarted(GtkCellRenderer*, GtkCellEditable*, const gchar *path, gpointer widget)
+    static void signalCellEditingStarted(GtkCellRenderer* pCell, GtkCellEditable*, const gchar *path, gpointer widget)
     {
         GtkInstanceTreeView* pThis = static_cast<GtkInstanceTreeView*>(widget);
+        // a combo cell with no list is not edited, however editable its column is
+        if (GTK_IS_CELL_RENDERER_COMBO(pCell) && !pThis->has_cell_choices(pCell, path))
+        {
+            Application::PostUserEvent(LINK(pThis, GtkInstanceTreeView, async_stop_cell_editing));
+            return;
+        }
         if (!pThis->signal_cell_editing_started(path))
             Application::PostUserEvent(LINK(pThis, GtkInstanceTreeView, async_stop_cell_editing));
+    }
+
+    bool has_cell_choices(GtkCellRenderer* pCell, const gchar* path)
+    {
+        GtkTreePath* tree_path = gtk_tree_path_new_from_string(path);
+        GtkTreeIter iter;
+        const bool bFound = gtk_tree_model_get_iter(m_pTreeModel, &iter, tree_path);
+        gtk_tree_path_free(tree_path);
+        if (!bFound)
+            return false;
+        const int nCol = reinterpret_cast<sal_IntPtr>(g_object_get_data(G_OBJECT(pCell), "g-lo-CellIndex"));
+        return m_aCellChoices.find({ get(iter, m_nIdCol), to_external_model(nCol) }) != m_aCellChoices.end();
+    }
+
+    // A combo renderer builds its list when editing starts, before the
+    // "editing-started" signal, so the model it is to use has to be set before:
+    // here, when the cell's data is prepared, which is for every cell that is
+    // drawn, and so for the one that is about to be edited.
+    static void cell_choices_data_func(GtkTreeViewColumn*, GtkCellRenderer* pCell, GtkTreeModel*, GtkTreeIter* pIter,
+                                       gpointer widget)
+    {
+        GtkInstanceTreeView* pThis = static_cast<GtkInstanceTreeView*>(widget);
+        const int nCol = reinterpret_cast<sal_IntPtr>(g_object_get_data(G_OBJECT(pCell), "g-lo-CellIndex"));
+        const auto it = pThis->m_aCellChoices.find({ pThis->get(*pIter, pThis->m_nIdCol), pThis->to_external_model(nCol) });
+        GtkTreeModel* pWanted = it == pThis->m_aCellChoices.end() ? nullptr : GTK_TREE_MODEL(it->second.get());
+        GtkTreeModel* pCurrent = nullptr;
+        g_object_get(G_OBJECT(pCell), "model", &pCurrent, nullptr);
+        if (pCurrent)
+            g_object_unref(pCurrent); // g_object_get gave a reference
+        if (pCurrent != pWanted)
+            g_object_set(G_OBJECT(pCell), "model", pWanted, "text-column", 0, "has-entry", false, nullptr);
     }
 
     bool signal_cell_editing_started(const gchar *path)
@@ -14964,6 +15003,8 @@ public:
                     g_signal_connect(G_OBJECT(pCellRenderer), "editing-started", G_CALLBACK(signalCellEditingStarted), this);
                     g_signal_connect(G_OBJECT(pCellRenderer), "editing-canceled", G_CALLBACK(signalCellEditingCanceled), this);
                     g_signal_connect(G_OBJECT(pCellRenderer), "edited", G_CALLBACK(signalCellEdited), this);
+                    if (GTK_IS_CELL_RENDERER_COMBO(pCellRenderer))
+                        gtk_tree_view_column_set_cell_data_func(pColumn, pCellRenderer, cell_choices_data_func, this, nullptr);
                 }
                 else if (GTK_IS_CELL_RENDERER_TOGGLE(pCellRenderer))
                 {
@@ -15043,6 +15084,28 @@ public:
         size_t nTabCount = rEditables.size();
         for (size_t i = 0 ; i < nTabCount; ++i)
             set_column_editable(i, rEditables[i]);
+    }
+
+    virtual bool supports_cell_choices() const override { return true; }
+
+    virtual void set_cell_choices(const weld::TreeIter& rIter, int nCol,
+                                  const std::vector<OUString>& rChoices, int /*nSelected*/) override
+    {
+        const std::pair<OUString, int> aKey(get_id(rIter), nCol);
+        if (rChoices.empty())
+        {
+            m_aCellChoices.erase(aKey);
+            return;
+        }
+        GtkListStore* pStore = gtk_list_store_new(1, G_TYPE_STRING);
+        for (const OUString& rChoice : rChoices)
+        {
+            GtkTreeIter aChoiceIter;
+            gtk_list_store_append(pStore, &aChoiceIter);
+            gtk_list_store_set(pStore, &aChoiceIter, 0,
+                               OUStringToOString(rChoice, RTL_TEXTENCODING_UTF8).getStr(), -1);
+        }
+        m_aCellChoices[aKey] = std::shared_ptr<GtkListStore>(pStore, g_object_unref);
     }
 
     virtual void set_centered_column(int nCol) override
@@ -15322,6 +15385,7 @@ public:
         disable_notify_events();
         gtk_tree_view_set_row_separator_func(m_pTreeView, nullptr, nullptr, nullptr);
         m_aSeparatorRows.clear();
+        m_aCellChoices.clear();
         m_Clear(m_pTreeModel);
         enable_notify_events();
     }

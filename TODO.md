@@ -159,6 +159,7 @@
 - **Один репозиторий.** Панель показывает репозиторий активного проекта, иначе первый открытый.
 - **Нет значков статуса в Solution Explorer и в редакторе.**
 - **Выбор нескольких строк** пока не поддержан: контекстное меню и чекбокс работают с одним файлом или целой группой.
+- **Gtk-CRITICAL при показе деки Git Changes (причина не найдена).** На gtk3 при открытии деки в консоль идут `gtk_widget_realize: assertion 'widget->priv->anchored || GTK_IS_INVISIBLE (widget)' failed` и `gdk_window_set_cursor: assertion 'GDK_IS_WINDOW (window)' failed`. Так отвечает `GtkInstanceDrawingArea::set_cursor` (vcl/unx/gtk3/gtkinst.cxx), когда его зовут до того, как виджет попал в окно. В панели drawing area нет; в коде Code это либо зоны растягивания popup веток (`gitbranchespopover.cxx`: курсоры теперь ставятся в `Show()`, правка не собрана и не проверена), либо `CodeEditView::SetDrawingArea`. Если сообщение останется, снять стек: запуск `code` под gdb с `G_DEBUG=fatal-criticals`.
 
 ## weld::MDI (новый виджет документных вкладок с крестиком/булавкой)
 

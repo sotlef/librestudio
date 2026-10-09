@@ -1,0 +1,30 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module tool {
+
+/** A command line, understood: what tool it is for, in what mode it runs it,
+    and its arguments sorted into the tool's categories. */
+struct CommandDescription
+{
+    string ToolId;
+    string ToolName;
+    /** the Id of the mode, empty if the tool has no modes */
+    string Mode;
+    /** only the categories in which the command sets something, in the
+        order of the description */
+    sequence< ::com::sun::star::code::tool::CommandCategory > Categories;
+    /** the arguments the description does not know, as they were given,
+        in their order */
+    sequence< string > OtherArguments;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

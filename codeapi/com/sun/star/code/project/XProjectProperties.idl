@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** Capability of a project or of an item of it (a target): it can say what is
+    known about it, for a properties dialog to show.  What the pages are is the
+    format's own business; the dialog knows only names and values.  The pages
+    are a snapshot, read-only: what a format lets the user change it changes
+    through its own configuration panel.
+ */
+interface XProjectProperties
+{
+    sequence< ::com::sun::star::code::project::ProjectPropertyPage > getPropertyPages();
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

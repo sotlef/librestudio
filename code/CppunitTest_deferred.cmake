@@ -40,3 +40,21 @@ if (TARGET codeclang)
         PROTECTORS ${_code_test_protectors}
         RDBS services)
 endif ()
+
+# The tool descriptions: code_tooldescription compiles the core (no UNO) into
+# the test and reads the shipped files; code_tooldescriptions asks the service.
+librestudio_add_cppunit_test(code_tooldescription
+    SOURCES code/qa/tooldesc/tooldescriptioncore
+            "${CMAKE_SOURCE_DIR}/code/source/services/tooldescription.cxx"
+    LIBRARIES sal
+    INCLUDE "${CMAKE_SOURCE_DIR}/code/source/services"
+    DEFINITIONS "TOOLDESC_DIR=\"${CMAKE_SOURCE_DIR}/code/tooldescriptions\"")
+
+librestudio_add_cppunit_test(code_tooldescriptions
+    SOURCES code/qa/tooldesc/tooldescriptionsservice
+    LIBRARIES comphelper cppu cppuhelper sal
+    INCLUDE ${_code_test_include}
+    DEPENDS ${_code_test_depends}
+    PROTECTORS ${_code_test_protectors}
+    RDBS services
+    EXTRA_ARGS "-env:CodeToolDescriptions=file://${CMAKE_SOURCE_DIR}/code/tooldescriptions")

@@ -17,6 +17,8 @@
 #include <comphelper/processfactory.hxx>
 #include <sal/log.hxx>
 #include <vcl/svapp.hxx>
+#include "projectpropertiesdialog.hxx"
+
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/Menu.hxx>
 #include <vcl/weld/Widget.hxx>
@@ -30,6 +32,7 @@
 #include <com/sun/star/code/frontend/XEditorHost.hpp>
 #include <com/sun/star/code/frontend/XWorkbench.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/XProjectProperties.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
 #include <vector>
 
@@ -106,7 +109,11 @@ bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, w
                                                                   uno::UNO_QUERY);
     const uno::Reference<css::code::build::XCompilable> xCompilable(xItem, uno::UNO_QUERY);
     const bool bFile = xItem->getKind() == ItemKind_FILE;
-    if (!xBuildable.is() && !xCompilable.is() && !bFile)
+    // the solution row stands for its project, whose properties it shows
+    const uno::Reference<XProjectProperties> xProperties(pSolution ? uno::Reference<uno::XInterface>(pSolution->GetProject())
+                                                                   : uno::Reference<uno::XInterface>(xItem),
+                                                         uno::UNO_QUERY);
+    if (!xBuildable.is() && !xCompilable.is() && !bFile && !xProperties.is())
         return false;
 
     std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(&rParent, u"code/ui/solutionpanel.ui"_ustr));
@@ -137,12 +144,23 @@ bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, w
             xMenu->set_sensitive(rIdent, false);
     if (xCompilable.is() && bBuilding)
         xMenu->set_sensitive(u"compile"_ustr, false);
+    if (!xProperties.is())
+    {
+        xMenu->remove(u"properties"_ustr);
+        xMenu->remove(u"propertiessep"_ustr);
+    }
 
     const OUString aCommand = xMenu->popup_at_rect(&rParent, rArea);
     if (aCommand.isEmpty())
         return true;
     try
     {
+        if (aCommand == "properties")
+        {
+            const OUString aName = pSolution ? pSolution->GetProject()->getName() : xItem->getName();
+            RunProjectPropertiesDialog(&rParent, aName + " Properties", xProperties);
+            return true;
+        }
         if (aCommand == "open")
         {
             uno::Reference<css::code::frontend::XWorkbench> xWorkbench

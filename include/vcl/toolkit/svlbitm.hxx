@@ -60,6 +60,7 @@ class UNLESS_MERGELIBS(VCL_DLLPUBLIC) SvLBoxString : public SvLBoxItem
 private:
     bool mbEmphasized;
     bool mbCustom;
+    bool mbDropDown = false;
     TxtAlign meAlign;
 
 protected:
@@ -82,6 +83,10 @@ public:
     bool IsEmphasized() const { return mbEmphasized; }
 
     void SetCustomRender() { mbCustom = true; }
+
+    // the cell is a drop-down list: an arrow is drawn at the right edge of the view
+    void SetDropDown(bool bDropDown) { mbDropDown = bDropDown; }
+    bool IsDropDown() const { return mbDropDown; }
 
     const OUString& GetText() const
     {

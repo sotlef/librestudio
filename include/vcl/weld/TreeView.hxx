@@ -493,6 +493,25 @@ public:
     virtual void columns_autosize() = 0;
     virtual void set_column_fixed_widths(const std::vector<int>& rWidths) = 0;
     virtual void set_column_editables(const std::vector<bool>& rEditables) = 0;
+
+    /**
+     * Makes a cell a drop-down list of fixed values, shown when the cell is
+     * edited: rChoices are the values, nSelected the one it has now (-1: none).
+     * The column must be editable (set_column_editables), and in the .ui file
+     * its renderer is the one a backend makes a list of (in gtk a
+     * GtkCellRendererCombo).  The choice made arrives like any edit does, at
+     * the handler of connect_editing, whose end handler returns whether to take
+     * it; a cell without choices is not edited at all.  An empty rChoices makes
+     * the cell plain again.
+     *
+     * A backend without lists ignores this (supports_cell_choices() is false),
+     * and the cell is edited as text, or not at all.
+     */
+    virtual void set_cell_choices(const TreeIter& /*rIter*/, int /*nCol*/,
+                                  const std::vector<OUString>& /*rChoices*/, int /*nSelected*/)
+    {
+    }
+    virtual bool supports_cell_choices() const { return false; }
     virtual int get_column_width(int nCol) const = 0;
     virtual void set_centered_column(int nCol) = 0;
     virtual OUString get_column_title(int nColumn) const = 0;

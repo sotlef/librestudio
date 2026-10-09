@@ -769,6 +769,22 @@ void QtInstanceTreeView::set_column_editables(const std::vector<bool>& rEditable
     m_pModel->setEditableColumns(aEditableColumns);
 }
 
+void QtInstanceTreeView::set_cell_choices(const weld::TreeIter& rIter, int nCol,
+                                          const std::vector<OUString>& rChoices, int /*nSelected*/)
+{
+    SolarMutexGuard g;
+
+    GetQtInstance().RunInMainThread([&] {
+        QStringList aChoices;
+        for (const OUString& rChoice : rChoices)
+            aChoices.append(toQString(rChoice));
+        // the delegate makes a drop-down list of a cell that has this; an empty list is no data
+        m_pModel->setData(modelIndex(rIter, nCol),
+                          aChoices.isEmpty() ? QVariant() : QVariant(aChoices),
+                          QtTreeViewItemDelegate::ROLE_CHOICES);
+    });
+}
+
 int QtInstanceTreeView::get_column_width(int nCol) const
 {
     SolarMutexGuard g;

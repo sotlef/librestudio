@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module tool {
+
+enum CommandPropertyState
+{
+    /** nothing to say */
+    AVAILABLE,
+    /** the property is for another mode of the tool than the command is in:
+        it is recognised, and has no effect here */
+    NOT_IN_MODE,
+    /** the version of the tool is older than the first that has it */
+    NOT_YET,
+    /** the version of the tool is newer than the last that has it */
+    REMOVED,
+    /** the version of the tool has it, but discourages it */
+    DEPRECATED
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

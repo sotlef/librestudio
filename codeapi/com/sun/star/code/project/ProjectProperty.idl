@@ -1,0 +1,36 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** One row of a property page: a name and what it is set to.  A value of
+    several parts (include directories, definitions) is one string with the
+    parts separated by "; ", as the property pages of Visual Studio show it.
+ */
+struct ProjectProperty
+{
+    string Name;
+    string Value;
+    /** What the property is, for the line under the list: shown with the
+        name above it, as Visual Studio does.  May be empty. */
+    string Description;
+    /** The value is set here, not inherited or left to the tool's default:
+        the dialog shows the row in bold. */
+    boolean Emphasized;
+    /** The values the property can have, when it is one of a set (an
+        enumeration, a yes/no): the dialog shows them in a drop-down list, to
+        look at only.  Empty for a property that is free text. */
+    sequence< string > Choices;
+    /** Which of Choices the property has now; -1 if none. */
+    long SelectedChoice;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

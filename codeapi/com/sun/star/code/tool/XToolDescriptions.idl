@@ -1,0 +1,62 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module tool {
+
+/** Knows what the options of tools are -- compilers, linkers, anything a build
+    runs -- from descriptions (format code.tool/N, see code/docs), and so can
+    read a command line as properties in categories, and write one from them.
+    What it does not know it does not lose: unknown arguments stay, in place. */
+interface XToolDescriptions
+{
+    /** the tools there is a description for */
+    sequence< ::com::sun::star::code::tool::ToolInfo > getTools();
+
+    /** The Id of the tool a command's executable (a path, or a bare name) is,
+        by the descriptions' Match; empty if there is none. */
+    string findTool( [in] string Executable );
+
+    /** The mode the arguments put the tool in; empty if it has no modes. */
+    string detectMode( [in] string ToolId, [in] sequence< string > Arguments )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** Sorts the arguments of a command (without the executable) into the
+        tool's categories.  Mode empty: detected from the arguments.  Version is
+        the tool's, if known ("12.2"), and only decides what each property is
+        said to be (CommandPropertyState): it never decides whether an argument
+        is understood, so a command of a newer or older tool does not fall apart. */
+    ::com::sun::star::code::tool::CommandDescription describeCommand( [in] string ToolId,
+        [in] string Mode, [in] string Version, [in] sequence< string > Arguments )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** Describes Arguments as a command that departs from Defaults, as a
+        source file does from the settings of its target.  The result is like
+        describeCommand's, with the properties either of them sets; those
+        the arguments set differently, or leave out, are Overridden and say
+        what the defaults had (InheritedValues). */
+    ::com::sun::star::code::tool::CommandDescription describeOverrides( [in] string ToolId,
+        [in] string Mode, [in] string Version, [in] sequence< string > Defaults,
+        [in] sequence< string > Arguments )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** The arguments as items, in their order, the form to edit a command in. */
+    sequence< ::com::sun::star::code::tool::CommandItem > parseCommand( [in] string ToolId,
+        [in] sequence< string > Arguments )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+
+    /** The arguments the items stand for; what parseCommand gave, unchanged,
+        gives the same arguments back. */
+    sequence< string > formatCommand( [in] string ToolId,
+        [in] sequence< ::com::sun::star::code::tool::CommandItem > Items )
+        raises( ::com::sun::star::lang::IllegalArgumentException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

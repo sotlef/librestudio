@@ -133,6 +133,24 @@ void SvLBoxString::Paint(
 
     if (mbEmphasized)
         rRenderContext.Pop();
+
+    if (mbDropDown)
+    {
+        // the arrow of a drop-down list, in a square at the right edge of the
+        // visible view (the cell is the last column), as high as the row; the
+        // positions are in the scrolled coordinates, the view's width is not
+        const tools::Long nSide = aSize.Height();
+        const tools::Long nRight
+            = rDev.GetOutputSizePixel().Width() - rDev.GetMapMode().GetOrigin().X();
+        const tools::Rectangle aArrow(Point(nRight - nSide, rPos.Y()), Size(nSide, nSide));
+        DecorationView aDecoView(&rRenderContext);
+        DrawSymbolFlags nSymbolStyle = DrawSymbolFlags::NONE;
+        if (!rDev.IsEnabled() || mbDisabled)
+            nSymbolStyle |= DrawSymbolFlags::Disable;
+        aDecoView.DrawSymbol(aArrow, SymbolType::SPIN_DOWN,
+                             rRenderContext.GetSettings().GetStyleSettings().GetButtonTextColor(),
+                             nSymbolStyle);
+    }
 }
 
 std::unique_ptr<SvLBoxItem> SvLBoxString::Clone(SvLBoxItem const * pSource) const
@@ -143,6 +161,7 @@ std::unique_ptr<SvLBoxItem> SvLBoxString::Clone(SvLBoxItem const * pSource) cons
     pNew->maText = pOther->maText;
     pNew->mbEmphasized = pOther->mbEmphasized;
     pNew->mbCustom = pOther->mbCustom;
+    pNew->mbDropDown = pOther->mbDropDown;
     pNew->meAlign = pOther->meAlign;
 
     return std::unique_ptr<SvLBoxItem>(pNew.release());

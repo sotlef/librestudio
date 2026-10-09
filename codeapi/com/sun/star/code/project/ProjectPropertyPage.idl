@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module project {
+
+/** One page of a properties dialog.  Path places it in the dialog's tree of
+    pages: "General", "C/C++", "C/C++/Preprocessor"; the parts are separated by
+    "/", and a page that has sub-pages without being listed itself is only a
+    heading.
+ */
+struct ProjectPropertyPage
+{
+    string Path;
+    sequence< ::com::sun::star::code::project::ProjectProperty > Properties;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

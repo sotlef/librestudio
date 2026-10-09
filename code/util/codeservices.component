@@ -69,6 +69,11 @@
       single-instance="true">
     <singleton name="com.sun.star.code.index.theCompileCommandProvider"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.ToolDescriptions"
+      constructor="com_sun_star_comp_code_ToolDescriptions_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.tool.theToolDescriptions"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.VcsManager"
       constructor="com_sun_star_comp_code_VcsManager_get_implementation"
       single-instance="true">
