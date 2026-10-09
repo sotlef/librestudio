@@ -40,7 +40,7 @@
 # (OUString paths under $BRAND_BASE_DIR) -- not compiled into the library --
 # so they are out of scope for building the oox target itself.
 
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
 
 set(OOX_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated" CACHE INTERNAL
@@ -532,5 +532,4 @@ librestudio_add_cppunit_test(oox_vba_encryption
     DEPENDS
         udkapi_normal_headers offapi_normal_headers)
 
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/oox/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/oox/CppunitTest_deferred.cmake")

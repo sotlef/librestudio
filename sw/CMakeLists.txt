@@ -97,7 +97,7 @@
 librestudio_pkgconfig(MODULES md4c)
 
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 find_program(XMLLINT_EXECUTABLE xmllint REQUIRED)
 
 # ---------------------------------------------------------------------------
@@ -2612,5 +2612,4 @@ unset(_swxform_uiconfig_outputs)
 # real structure (6 shared gbuild macros covering most of the 175, ported
 # incrementally wave by wave rather than 175 independent hand
 # transcriptions) and current progress.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/sw/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/sw/CppunitTest_deferred.cmake")

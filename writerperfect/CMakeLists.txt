@@ -271,7 +271,7 @@ target_link_libraries(wpftwriter PRIVATE
     Boost::boost
     ICU::uc ICU::i18n
     LibXml2::LibXml2
-    PkgConfig::LIBLANGTAG
+    ${LIBRESTUDIO_LIBLANGTAG_TARGET}
     ${LIBRESTUDIO_ABW_TARGET}
     ${LIBRESTUDIO_EBOOK_TARGET}
     ${LIBRESTUDIO_EPUBGEN_TARGET}
@@ -563,7 +563,6 @@ librestudio_add_cppunit_test(writerperfect_stream
         configmgr i18npool package2 ucb1 ucpfile1 utl
     CONFIGURATION)
 
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/writerperfect/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/writerperfect/CppunitTest_deferred.cmake")
 
 install(TARGETS wpftdraw LIBRARY DESTINATION program)

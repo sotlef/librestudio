@@ -267,41 +267,44 @@ install(TARGETS ucpdav1 LIBRARY DESTINATION program)
 # scoped to vcl/'s directory, so it is re-created here rather than reused.
 # ---------------------------------------------------------------------------
 
-pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+# Module_ucb.mk: ifeq ($(ENABLE_GIO),TRUE) Library_ucpgio1.
+if (ENABLE_GIO)
+    pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
-set(UCPGIO1_SOURCES
-    ucb/source/ucp/gio/gio_content
-    ucb/source/ucp/gio/gio_datasupplier
-    ucb/source/ucp/gio/gio_inputstream
-    ucb/source/ucp/gio/gio_mount
-    ucb/source/ucp/gio/gio_outputstream
-    ucb/source/ucp/gio/gio_provider
-    ucb/source/ucp/gio/gio_resultset
-    ucb/source/ucp/gio/gio_seekable
-)
+    set(UCPGIO1_SOURCES
+        ucb/source/ucp/gio/gio_content
+        ucb/source/ucp/gio/gio_datasupplier
+        ucb/source/ucp/gio/gio_inputstream
+        ucb/source/ucp/gio/gio_mount
+        ucb/source/ucp/gio/gio_outputstream
+        ucb/source/ucp/gio/gio_provider
+        ucb/source/ucp/gio/gio_resultset
+        ucb/source/ucp/gio/gio_seekable
+    )
 
-librestudio_expand_cxx(UCPGIO1_SOURCES)
-add_library(ucpgio1 SHARED ${UCPGIO1_SOURCES})
+    librestudio_expand_cxx(UCPGIO1_SOURCES)
+    add_library(ucpgio1 SHARED ${UCPGIO1_SOURCES})
 
-target_include_directories(ucpgio1 PRIVATE
-    "${OFFICECFG_INCLUDE_DIR}"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(ucpgio1 officecfg_headers udkapi_normal_headers offapi_normal_headers)
+    target_include_directories(ucpgio1 PRIVATE
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(ucpgio1 officecfg_headers udkapi_normal_headers offapi_normal_headers)
 
-target_link_libraries(ucpgio1 PRIVATE
-    comphelper cppu cppuhelper sal salhelper ucbhelper vcl
-    Boost::boost
-    PkgConfig::GIO)
+    target_link_libraries(ucpgio1 PRIVATE
+        comphelper cppu cppuhelper sal salhelper ucbhelper vcl
+        Boost::boost
+        PkgConfig::GIO)
 
-librestudio_add_component(ucpgio1
-    COMPONENT "${CMAKE_SOURCE_DIR}/ucb/source/ucp/gio/ucpgio.component"
-    LIBRARY   ucpgio1
-    LAYER     OOO)
+    librestudio_add_component(ucpgio1
+        COMPONENT "${CMAKE_SOURCE_DIR}/ucb/source/ucp/gio/ucpgio.component"
+        LIBRARY   ucpgio1
+        LAYER     OOO)
 
-librestudio_set_library_output_name(ucpgio1 ucpgio1 OOO)
+    librestudio_set_library_output_name(ucpgio1 ucpgio1 OOO)
 
-install(TARGETS ucpgio1 LIBRARY DESTINATION program)
+    install(TARGETS ucpgio1 LIBRARY DESTINATION program)
+endif ()
 
 # ---------------------------------------------------------------------------
 # ucptdoc1 -- the "vnd.sun.star.tdoc" transient-document content provider

@@ -283,7 +283,18 @@ endforeach ()
 # presence of an X11 backend, USE_HEADLESS_CODE from the build using freetype
 # and fontconfig — which a Linux desktop build does, hence the name being
 # misleading.  DISABLE_GUI is the one a person chooses, upstream's --disable-gui.
-set(USING_X11 TRUE CACHE BOOL "configure.ac's USING_X11: this build has an X11 backend")
+# Windows draws through its own back end (vclplug_win, GDI/DirectWrite), so
+# neither applies there: configure.ac only sets them for the X11/headless
+# builds.
+if (WIN32)
+    set(_librestudio_unix_vcl FALSE)
+else ()
+    set(_librestudio_unix_vcl TRUE)
+endif ()
+set(USING_X11 ${_librestudio_unix_vcl} CACHE BOOL "configure.ac's USING_X11: this build has an X11 backend")
+# Except that USE_HEADLESS_CODE is not unix-only: configure.ac sets it whenever
+# freetype and fontconfig are used, and the Windows build is one of those
+# (Library_vcl.mk: DO_USE_TTF_ON_WIN32, cairo and fontconfig linked in).
 set(USE_HEADLESS_CODE TRUE CACHE BOOL
     "configure.ac's USE_HEADLESS_CODE: the build uses freetype and fontconfig, which is what selects the generic font handling, the printer back ends and the code the X11 plug-in shares")
 option(DISABLE_GUI "configure.ac's --disable-gui: build without a toolkit" OFF)
@@ -294,10 +305,26 @@ option(DISABLE_GUI "configure.ac's --disable-gui: build without a toolkit" OFF)
 set(ENABLE_WASM_STRIP_SPLASH FALSE CACHE BOOL
     "configure.ac's --enable-wasm-strip: leave the splash window out")
 
+# ENABLE_SKIA: configure.ac's --enable-skia, on by default.  The Windows back end
+# cannot draw without it (vcl/win asserts SkiaHelper::isVCLSkiaEnabled()); the
+# Linux build stays on the Cairo path until Skia is wired up there too.  It also
+# decides SK_GANESH/SK_VULKAN in config_skia.h: configure.ac picks Vulkan on
+# every platform but macOS (Metal).
+set(ENABLE_SKIA ${WIN32} CACHE BOOL "configure.ac's ENABLE_SKIA: build Skia and let vcl draw with it")
+if (ENABLE_SKIA)
+    set(HAVE_FEATURE_SKIA 1)
+else ()
+    set(HAVE_FEATURE_SKIA 0)
+endif ()
+
 # ENABLE_GEN is what tells libvcl's plug-in loader that the X11 back end exists;
 # vcl/CMakeLists.txt builds it under the same switch.  Upstream enables it for a
 # Linux GUI build.
-set(ENABLE_GEN TRUE CACHE BOOL "configure.ac's ENABLE_GEN: build the X11 plug-in")
+set(ENABLE_GEN ${_librestudio_unix_vcl} CACHE BOOL "configure.ac's ENABLE_GEN: build the X11 plug-in")
+
+# ENABLE_WIN: the Windows back end (vclplug_win); what salplug.cxx lists and
+# vcl/CMakeLists.txt builds on Windows, in place of ENABLE_GEN/ENABLE_GTK3.
+set(ENABLE_WIN ${WIN32} CACHE BOOL "configure.ac's ENABLE_WIN: build the Windows plug-in")
 
 # ENABLE_GTK3 is the same kind of switch, and it carries more weight than the
 # name suggests: vcl/source/app/salplug.cxx puts gtk3 at the head of both the
@@ -483,7 +510,7 @@ option(ENABLE_EMBINDTEST_UNO
 # TRUE or FALSE: they go into a #define that the preprocessor compares with #if,
 # and `#if TRUE` is false — TRUE being an identifier it has never heard of.  The
 # same shape as HAVE_FEATURE_JAVA above.
-foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN
+foreach (_switch USING_X11 USE_HEADLESS_CODE ENABLE_WASM_STRIP_SPLASH ENABLE_GEN ENABLE_WIN
         ENABLE_GTK3 ENABLE_SCRIPTING ENABLE_DBCONNECTIVITY ENABLE_XMLHELP
         ENABLE_AVAHI ENABLE_AVMEDIA)
     if (${_switch})

@@ -17,7 +17,7 @@
 # script) and gperf. Neither tool has been needed by this CMake port before.
 
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 # CACHE INTERNAL (not a plain set()), same reason as oox/CMakeLists.txt's own
 # OOX_GENERATED_DIR: xmloff/CppunitTest_deferred.cmake's own
@@ -477,5 +477,4 @@ install(TARGETS xo LIBRARY DESTINATION program)
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/xmloff/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/xmloff/CppunitTest_deferred.cmake")

@@ -62,7 +62,6 @@ set(TL_SOURCES
     tools/source/ref/ref
     tools/source/stream/GenericTypeSerializer
     tools/source/stream/stream
-    tools/source/stream/strmunx
     tools/source/stream/vcompat
     tools/source/string/tenccvt
     tools/source/xml/XmlWalker
@@ -70,6 +69,13 @@ set(TL_SOURCES
     tools/source/xml/XPath
     tools/source/zcodec/zcodec
 )
+
+# Library_tl.mk: strmwnt on Windows (Win32 API), strmunx everywhere else.
+if (WIN32)
+    list(APPEND TL_SOURCES tools/source/stream/strmwnt)
+else ()
+    list(APPEND TL_SOURCES tools/source/stream/strmunx)
+endif ()
 
 librestudio_expand_cxx(TL_SOURCES)
 

@@ -37,6 +37,10 @@ class VCL_DLLPUBLIC GenericFont final : public LogicalFontInstance
     GenericFontFace::CreateFontInstance(const vcl::font::FontSelectPattern&) const;
 
 public:
+    // Out of line: FontConfigFontOptions is incomplete here, and MSVC
+    // instantiates the implicit destructor of a dllexported class eagerly.
+    ~GenericFont() override;
+
     const GenericFontFace* GetFontFace() const
     {
         return static_cast<const GenericFontFace*>(LogicalFontInstance::GetFontFace());

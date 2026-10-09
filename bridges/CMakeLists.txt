@@ -84,16 +84,25 @@
 # part of the UNO calling convention. HAVE_GCC_AVX is a real compiler-flag
 # check now (cmake/LibreStudioPlatform.cmake's own LIBRESTUDIO_HAVE_GCC_AVX),
 # not assumed off.
-set(BRIDGES_CXXFLAGS
-    -fno-omit-frame-pointer
-    -fno-strict-aliasing
-    -fno-lto)
-if (LIBRESTUDIO_HAVE_GCC_AVX)
-    list(APPEND BRIDGES_CXXFLAGS -mno-avx)
+if (MSVC)
+    # None of these exist for cl.exe (Library_cpp_uno.mk only adds them for COM=GCC).
+    set(BRIDGES_CXXFLAGS "")
+else ()
+    set(BRIDGES_CXXFLAGS
+        -fno-omit-frame-pointer
+        -fno-strict-aliasing
+        -fno-lto)
+    if (LIBRESTUDIO_HAVE_GCC_AVX)
+        list(APPEND BRIDGES_CXXFLAGS -mno-avx)
+    endif ()
 endif ()
 
 # gb_COMPILERNOOPTFLAGS from solenv/gbuild/platform/com_GCC_defs.mk.
-set(BRIDGES_NOOPT_FLAGS -O0 -Wp,-U_FORTIFY_SOURCE -fstrict-aliasing -fstrict-overflow)
+if (MSVC)
+    set(BRIDGES_NOOPT_FLAGS /Od)   # com_MSC_defs.mk: gb_COMPILERNOOPTFLAGS := -Od
+else ()
+    set(BRIDGES_NOOPT_FLAGS -O0 -Wp,-U_FORTIFY_SOURCE -fstrict-aliasing -fstrict-overflow)
+endif ()
 
 # bridges_NON_CALL_EXCEPTIONS_FLAGS: callvirtualmethod must be able to catch a
 # signal raised by the call it makes, which only works if the compiler is told
@@ -438,7 +447,9 @@ endif ()
 
 # Registered as a PLAINLIBS_URE plug-in upstream, hence libgcc3_uno.so with no
 # version suffix.
-librestudio_set_library_output_name(gcc3_uno gcc3_uno PLAIN)
+# cppu's loadEnv() asks for "<CPPU_ENV>_uno": gcc3_uno, or msci_uno/mscx_uno/
+# msca_uno for the MSVC ABI.
+librestudio_set_library_output_name(gcc3_uno ${LIBRESTUDIO_CPPU_ENV}_uno PLAIN)
 
 install(TARGETS gcc3_uno LIBRARY DESTINATION program)
 
@@ -534,6 +545,5 @@ if (LIBRESTUDIO_ENABLE_JAVA)
     # completed, in the root directory's own scope (see that file's own
     # header comment for why every path in it is CMAKE_SOURCE_DIR-relative,
     # not CMAKE_CURRENT_SOURCE_DIR-relative).
-    cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-        "${CMAKE_SOURCE_DIR}/bridges/Jar_java_uno_deferred.cmake")
+    librestudio_include_deferred("${CMAKE_SOURCE_DIR}/bridges/Jar_java_uno_deferred.cmake")
 endif ()

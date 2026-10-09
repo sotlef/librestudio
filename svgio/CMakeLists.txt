@@ -179,5 +179,4 @@ librestudio_add_cppunit_test(svgio_tools
 # full mechanism and its two gotchas -- CMAKE_SOURCE_DIR, never CMAKE_
 # CURRENT_SOURCE_DIR, in the path argument below, since DEFER's arguments are
 # evaluated lazily in the DEFER DIRECTORY's own scope, not this one's).
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/svgio/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/svgio/CppunitTest_deferred.cmake")

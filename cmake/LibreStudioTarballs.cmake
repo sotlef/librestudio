@@ -214,8 +214,23 @@ function(librestudio_apply_patches name source_dir patch_dir default_level)
             else ()
                 set(_patch_level "${default_level}")
             endif ()
+            # Line endings of patch and sources need not agree on Windows (an
+            # LF patch against CRLF sources needs --binary, a CRLF one must not
+            # get it): decide with a dry run, then apply for real.
+            set(_patch_binary "")
+            if (WIN32)
+                execute_process(
+                    COMMAND "${Patch_EXECUTABLE}" -f -s "-p${_patch_level}" --fuzz=0 --dry-run -i
+                            "${patch_dir}/${_patch}"
+                    WORKING_DIRECTORY "${source_dir}"
+                    RESULT_VARIABLE _dry_result OUTPUT_QUIET ERROR_QUIET)
+                if (NOT _dry_result EQUAL 0)
+                    set(_patch_binary --binary)
+                endif ()
+                unset(_dry_result)
+            endif ()
             execute_process(
-                COMMAND "${Patch_EXECUTABLE}" -f -s "-p${_patch_level}" --fuzz=0 -i
+                COMMAND "${Patch_EXECUTABLE}" -f -s "-p${_patch_level}" --fuzz=0 ${_patch_binary} -i
                         "${patch_dir}/${_patch}"
                 WORKING_DIRECTORY "${source_dir}"
                 RESULT_VARIABLE _patch_result)

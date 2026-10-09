@@ -431,9 +431,28 @@ option(LIBRESTUDIO_BUILD_TESTS
     "Build every CppunitTest target (its own MODULE library) as part of the default 'all' target. OFF (default) matches real gbuild's own behavior -- a bare build never compiles CppunitTest_*.mk targets, only an explicit 'make check' does -- and excludes them via EXCLUDE_FROM_ALL instead; ctest registration is unaffected either way, so ctest can still list/attempt them (failing with \"Unable to find executable\" if never built, same as this port's own unbuilt vendored ixion tests already do)."
     OFF)
 
+# Schedules <file> to be include()d once every add_subdirectory() has run
+# (cmake_language(DEFER) at the root).  A Code-only build skips the deferred
+# CppunitTest registrations: they name components and fixtures of modules that
+# are not there, and the tests are not part of "all".
+function(librestudio_include_deferred file)
+    if (LIBRESTUDIO_CODE_ONLY AND file MATCHES "CppunitTest_deferred[.]cmake$")
+        return()
+    endif ()
+    cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include "${file}")
+endfunction()
+
 function(librestudio_add_cppunit_test name)
     cmake_parse_arguments(_cut "CONFIGURATION;CONFIGURATION_INSTDIR_ONLY;NONHEADLESS" "" "SOURCES;LIBRARIES;INCLUDE;DEFINITIONS;DEPENDS;PROTECTORS;COMPONENTS;UICONFIG;PACKAGES;RDBS;EXTRA_ARGS" ${ARGN})
 
+    # A Code-only build leaves out most of the modules whose components and
+    # fixtures these tests name, and the tests are not part of "all" anyway:
+    # downgrade the cross-module lookups from errors to a note.
+    if (LIBRESTUDIO_CODE_ONLY)
+        set(_cut_missing_dep_severity VERBOSE)
+    else ()
+        set(_cut_missing_dep_severity FATAL_ERROR)
+    endif ()
     if (NOT _cut_SOURCES)
         message(FATAL_ERROR "librestudio_add_cppunit_test(${name}): SOURCES is required")
     endif ()
@@ -451,7 +470,7 @@ function(librestudio_add_cppunit_test name)
     list(LENGTH _cut_PROTECTORS _cut_protector_count)
     math(EXPR _cut_protector_remainder "${_cut_protector_count} % 2")
     if (NOT _cut_protector_remainder EQUAL 0)
-        message(FATAL_ERROR
+        message(${_cut_missing_dep_severity}
             "librestudio_add_cppunit_test(${name}): PROTECTORS must be pairs of <cmake-target> <symbol>")
     endif ()
 
@@ -517,7 +536,7 @@ function(librestudio_add_cppunit_test name)
     # install(FILES ...) packaging rule.
     foreach (_cut_uc IN LISTS _cut_UICONFIG)
         if (NOT TARGET "${_cut_uc}_uiconfig")
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): UICONFIG names "
                 "'${_cut_uc}', but no '${_cut_uc}_uiconfig' target exists -- "
                 "that module's own UIConfig_* build-time mirror (see e.g. vcl/CMakeLists.txt's "
@@ -535,7 +554,7 @@ function(librestudio_add_cppunit_test name)
     # target -- this port's own build-time mirror for that Package_*.mk.
     foreach (_cut_pkg IN LISTS _cut_PACKAGES)
         if (NOT TARGET "${_cut_pkg}")
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): PACKAGES names "
                 "'${_cut_pkg}', but no '${_cut_pkg}' target exists -- that package's own "
                 "build-time mirror for its Package_*.mk must be defined, and its "
@@ -553,7 +572,7 @@ function(librestudio_add_cppunit_test name)
     foreach (_cut_c IN LISTS _cut_COMPONENTS)
         get_property(_cut_component_file GLOBAL PROPERTY "LIBRESTUDIO_COMPONENT_FILE_${_cut_c}")
         if (NOT _cut_component_file)
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): COMPONENTS names "
                 "'${_cut_c}', but no librestudio_add_component(${_cut_c} ...) "
                 "has run yet -- that component's owning module's "
@@ -590,7 +609,7 @@ function(librestudio_add_cppunit_test name)
     # same build-tree .rdb file directly in this test's own UNO_SERVICES.
     foreach (_cut_r IN LISTS _cut_RDBS)
         if (NOT DEFINED ${_cut_r}_RDB OR NOT TARGET "${_cut_r}_rdb")
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): RDBS names '${_cut_r}', "
                 "but no librestudio_finalize_components(${_cut_r}) has run yet -- "
                 "that call must run, and the module(s) contributing components to "
@@ -650,13 +669,13 @@ function(librestudio_add_cppunit_test name)
     set(_cut_configuration_layers_arg "")
     if (_cut_CONFIGURATION)
         if (NOT TARGET officecfg_registry)
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): CONFIGURATION requires the "
                 "officecfg_registry target (officecfg/CMakeLists.txt's instdir registry) -- "
                 "add_subdirectory(officecfg) must run before this call")
         endif ()
         if (NOT LIBRESTUDIO_TEST_UNITTEST_DIR)
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): CONFIGURATION requires "
                 "LIBRESTUDIO_TEST_UNITTEST_DIR (test/CMakeLists.txt's staged copy of "
                 "test/user-template) -- add_subdirectory(test) must run before this call")
@@ -666,7 +685,7 @@ function(librestudio_add_cppunit_test name)
             "-env:CONFIGURATION_LAYERS=xcsxcu:file://${LIBRESTUDIO_REGISTRY_DIR} xcsxcu:file://${LIBRESTUDIO_TEST_UNITTEST_DIR}/registry-common xcsxcu:file://${LIBRESTUDIO_TEST_UNITTEST_DIR}/registry-user-ui")
     elseif (_cut_CONFIGURATION_INSTDIR_ONLY)
         if (NOT TARGET officecfg_registry)
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): CONFIGURATION_INSTDIR_ONLY requires the "
                 "officecfg_registry target (officecfg/CMakeLists.txt's instdir registry) -- "
                 "add_subdirectory(officecfg) must run before this call")
@@ -686,7 +705,7 @@ function(librestudio_add_cppunit_test name)
     set(_cut_nonheadless_arg "")
     if (_cut_NONHEADLESS)
         if (NOT TARGET vclplug_gen)
-            message(FATAL_ERROR
+            message(${_cut_missing_dep_severity}
                 "librestudio_add_cppunit_test(${name}): NONHEADLESS requires the vclplug_gen "
                 "target (vcl/CMakeLists.txt's ENABLE_GEN block, default ON) -- "
                 "add_subdirectory(vcl) must run, with ENABLE_GEN not turned off, before this call")
@@ -696,7 +715,7 @@ function(librestudio_add_cppunit_test name)
     endif ()
 
     if (NOT TARGET cppunittester)
-        message(FATAL_ERROR
+        message(${_cut_missing_dep_severity}
             "librestudio_add_cppunit_test(${name}): the cppunittester target does not exist yet "
             "-- add_subdirectory(sal) must run before this call (cppunittester is defined in "
             "sal/CMakeLists.txt, since Executable_cppunittester.mk belongs to sal upstream too)")
@@ -744,6 +763,11 @@ function(librestudio_add_cppunit_test name)
     set_tests_properties("${name}_user_installation" PROPERTIES
         FIXTURES_SETUP "${name}_user_installation")
 
+    # unotest's protectors are not built in a Code-only build, so the test
+    # could not be run anyway: keep the target, skip the ctest registration.
+    if (LIBRESTUDIO_CODE_ONLY AND _cut_protector_args)
+        return()
+    endif ()
     add_test(NAME ${name}
         COMMAND cppunittester "$<TARGET_FILE:${name}>" ${_cut_protector_args}
                 ${_cut_nonheadless_arg}

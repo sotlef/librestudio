@@ -63,6 +63,13 @@
 // See codedocshell.cxx for why this is needed.
 extern SFX2_DLLPUBLIC constinit const SfxType0 aSfxVoidItem_Impl;
 
+#ifdef _WIN32
+// Unlike the ELF build, where the process finds aSfxUnoAnyItem_Impl in one of
+// the shared libraries, a PE import has to be backed by an exported definition
+// and none of them exports this one; SFX_TYPEMAP makes the slot header define
+// it here, the way sc/sd/basctl do with their typemap.cxx.
+#define SFX_TYPEMAP
+#endif
 #define ShellClass_code_Shell
 #include <codeslots.hxx>
 

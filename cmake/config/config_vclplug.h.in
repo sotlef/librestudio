@@ -43,7 +43,7 @@ itself, under USE_HEADLESS_CODE above.
 #define ENABLE_KF6 0
 #define ENABLE_QT5 0
 #define ENABLE_QT6 0
-#define ENABLE_WIN 0
+#define ENABLE_WIN @ENABLE_WIN_CONFIG@
 
 #define ENABLE_GSTREAMER_1_0 0
 #define ENABLE_QT6_MULTIMEDIA 0
