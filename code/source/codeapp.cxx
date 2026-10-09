@@ -32,7 +32,9 @@
 #include <exception>
 #include <typeinfo>
 
+#ifndef _WIN32
 #include <execinfo.h>
+#endif
 
 #include <com/sun/star/awt/XWindow2.hpp>
 #include <com/sun/star/code/core/theCode.hpp>
@@ -124,11 +126,13 @@ void CodeTerminateHandler()
         fprintf(stderr, "(std::terminate called with no active exception)\n");
     }
 
+#ifndef _WIN32
     void* aFrames[64];
     int nFrames = backtrace(aFrames, sizeof(aFrames) / sizeof(aFrames[0]));
     fprintf(stderr, "--- backtrace (%d frames) ---\n", nFrames);
     backtrace_symbols_fd(aFrames, nFrames, fileno(stderr));
     fflush(stderr);
+#endif
 
     std::abort();
 }
@@ -192,7 +196,9 @@ void CodeApplication::Init()
     // OutputLogPanel, ...) keeps using the fallback exactly as before,
     // since their .ui files aren't on that list. 0 (don't overwrite): if
     // the user already set this themselves, their choice wins.
+#ifndef _WIN32
     setenv("SAL_VCL_QT_USE_WELDED_WIDGETS", "1", 0);
+#endif // Qt-only switch; there is no Qt backend on Windows
 
     // Unlike v1, this is no longer optional: SfxApplication and the whole
     // sfx2/framework machinery need a real UNO context to exist at all.

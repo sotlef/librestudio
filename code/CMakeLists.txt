@@ -100,14 +100,23 @@ add_dependencies(code code_sdi udkapi_normal_headers offapi_normal_headers codea
     #                   vcl/qt5/ or vcl/unx/gtk3/
     uui filterconfig i18nsearch vcl_uiconfig package2 cui)
 
+# What the generated unorc points UNO_TYPES/UNO_SERVICES at (cmake/
+# LibreStudioUnorc.cmake): without these registries the executable links but
+# stops in the bootstrap.
+add_dependencies(code program_types_rdb program_offapi_rdb program_oovbaapi_rdb
+    program_codeapi_rdb program_services_rdb)
+
 if (ENABLE_GTK3)
     add_dependencies(code vclplug_gtk3)
 endif()
 if (ENABLE_QT6)
     add_dependencies(code vclplug_qt6)
 endif()
+if (ENABLE_WIN)
+    add_dependencies(code vclplug_win)
+endif()
 
-target_link_libraries(code PRIVATE ICU::uc ICU::i18n
+target_link_libraries(code PRIVATE Boost::boost ICU::uc ICU::i18n
     comphelper cppu cppuhelper sal sfx fwk svxcore svx svl svt tk tl ucbhelper utl vcl vclmain)
 
 # Same reason every vcl workbench program above gets one: UNO/configmgr
@@ -150,7 +159,7 @@ target_include_directories(codesidebar PRIVATE
     "${codeapi_normal_HEADERS_INCLUDE_DIR}")
 add_dependencies(codesidebar udkapi_normal_headers offapi_normal_headers codeapi_normal_headers)
 
-target_link_libraries(codesidebar PRIVATE
+target_link_libraries(codesidebar PRIVATE Boost::boost
     comphelper cppu cppuhelper sal sfx svl svt tk tl ucbhelper vcl)
 
 librestudio_add_component(codesidebar
@@ -262,7 +271,7 @@ add_library(cmakeproj SHARED
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeproject.cxx")
 
 target_include_directories(cmakeproj PRIVATE "${CMAKE_SOURCE_DIR}/code/source/cmake")
-target_link_libraries(cmakeproj PRIVATE codecommon comphelper cppu cppuhelper sal tl vcl)
+target_link_libraries(cmakeproj PRIVATE Boost::boost codecommon comphelper cppu cppuhelper sal tl vcl)
 
 librestudio_add_component(cmakeproj
     COMPONENT "${CMAKE_SOURCE_DIR}/code/util/cmakeproj.component"
@@ -429,5 +438,4 @@ add_custom_target(code_uiconfig ALL DEPENDS ${_code_uiconfig_outputs})
 
 # The tests need program_services_rdb, which exists only after the whole tree
 # has been processed.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/code/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/code/CppunitTest_deferred.cmake")
