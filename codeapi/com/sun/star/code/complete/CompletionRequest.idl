@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module complete {
+
+/** What completion is asked for: a place in a document and the text as the
+    editor holds it.  One request, one answer; nothing is kept between calls. */
+struct CompletionRequest
+{
+    string Url;
+    /** where the caret is, right after what was already typed */
+    ::com::sun::star::code::core::Position Position;
+    /** the document text as it is in the editor; empty means the file on disk */
+    string Text;
+    /** the character whose typing fired the request (".", ">", ":"), empty
+        when the user invoked completion by hand */
+    string TriggerCharacter;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -126,6 +126,63 @@ SfxVoidItem CodeConfiguration SID_CODE_CONFIGURATION
     GroupId = SfxGroupId::Application;
 ]
 
+// The toolbar's startup item: the Start button with the combo box of the
+// project's launchable targets.  A custom item window, so the slot only keeps
+// the item enabled.
+SfxVoidItem CodeStartup SID_CODE_STARTUP
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Application;
+]
+
+// Runs the startup target under the debugger.
+SfxVoidItem CodeStartDebugging SID_CODE_START_DEBUGGING
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Application;
+]
+
+// Runs the startup target without the debugger; its output goes to the
+// Output dock's Run channel.
+SfxVoidItem CodeStartWithoutDebugging SID_CODE_START_WITHOUT_DEBUGGING
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Application;
+]
+
 // Build > Build Solution: builds the active project in its current configuration.
 SfxVoidItem CodeBuild SID_CODE_BUILD
 ()
@@ -480,6 +537,23 @@ shell code_Shell
 
     SID_CODE_STATUS_VCS
     [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_STARTUP
+    [
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_START_DEBUGGING
+    [
+        ExecMethod = Execute;
+        StateMethod = GetState;
+    ]
+
+    SID_CODE_START_WITHOUT_DEBUGGING
+    [
+        ExecMethod = Execute;
         StateMethod = GetState;
     ]
 }

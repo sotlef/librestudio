@@ -55,6 +55,20 @@ interface XProjectManager
         raises( ::com::sun::star::lang::IllegalArgumentException,
                 ::com::sun::star::io::IOException );
 
+    /** The name of the target of the project that runs on Start, as Visual
+        Studio's startup project.  Empty when nothing sensible is stored:
+        callers fall back to the first launchable target themselves.  The
+        stored name is checked against the project's targets, so a target
+        that is gone reads as empty. */
+    string getStartupTarget( [in] string Url );
+
+    /** Remembers TargetName as the project's startup target and tells the
+        listeners with a PROPERTIES_CHANGED event.  An empty name clears the
+        choice. */
+    void setStartupTarget( [in] string Url, [in] string TargetName )
+        raises( ::com::sun::star::lang::IllegalArgumentException,
+                ::com::sun::star::io::IOException );
+
     void addProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
     void removeProjectListener( [in] ::com::sun::star::code::project::XProjectListener Listener );
 };

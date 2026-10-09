@@ -1,0 +1,28 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+enum DebugEventKind
+{
+    /** the session went to another DebugSessionState */
+    STATE_CHANGED,
+    /** a breakpoint appeared, moved, resolved or went away; read them again
+        with XDebugSession::getBreakpoints() */
+    BREAKPOINT_CHANGED,
+    /** the program or the tool printed Text */
+    OUTPUT,
+    /** a thread appeared or ended; read them again with
+        XDebugSession::getThreads() */
+    THREADS_CHANGED
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

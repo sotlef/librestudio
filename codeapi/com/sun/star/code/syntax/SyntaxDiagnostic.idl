@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax {
+
+/** What a parser had to say about the code: an error, a warning, a note.  A
+    parse that fails entirely is one FATAL diagnostic and ParseResult::Succeeded
+    FALSE; a parser never throws for what is wrong with the code. */
+struct SyntaxDiagnostic
+{
+    ::com::sun::star::code::core::Severity Level;
+    string Message;
+    /** URL of the file concerned -- an include, not necessarily the file that
+        was parsed; empty if there is none */
+    string Url;
+    ::com::sun::star::code::core::Position Location;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

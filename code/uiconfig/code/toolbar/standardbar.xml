@@ -17,4 +17,5 @@
  <toolbar:toolbaritem xlink:href=".uno:Paste"/>
  <toolbar:toolbarseparator/>
  <toolbar:toolbaritem xlink:href=".uno:CodeConfiguration"/>
+ <toolbar:toolbaritem xlink:href=".uno:CodeStartup"/>
 </toolbar:toolbar>

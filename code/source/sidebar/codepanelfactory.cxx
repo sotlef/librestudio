@@ -9,6 +9,7 @@
 
 #include "codepanelfactory.hxx"
 
+#include "debugpanel.hxx"
 #include "errorlistpanel.hxx"
 #include "findresultspanel.hxx"
 #include "folderviewpanel.hxx"
@@ -76,6 +77,8 @@ uno::Reference<ui::XUIElement> SAL_CALL CodePanelFactory::createUIElement(
         xControl = std::make_unique<::code::sidebar::FindResultsPanel>(pParent);
     else if (rsResourceURL.endsWith("/GitChangesPanel"))
         xControl = std::make_unique<::code::sidebar::GitChangesPanel>(pParent);
+    else if (rsResourceURL.endsWith("/DebugPanel"))
+        xControl = std::make_unique<::code::sidebar::DebugPanel>(pParent);
 
     if (xControl)
         return sfx2::sidebar::SidebarPanelBase::Create(rsResourceURL, xFrame, std::move(xControl),

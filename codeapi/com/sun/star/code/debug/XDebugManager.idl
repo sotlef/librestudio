@@ -1,0 +1,37 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Keeps the debuggers.  Another debugger is another adapter registered
+    here, and no change to the clients. */
+interface XDebugManager
+{
+    void registerAdapter( [in] ::com::sun::star::code::debug::XDebugAdapter Adapter );
+    sequence< ::com::sun::star::code::debug::XDebugAdapter > getAdapters();
+    /** the first registered adapter that canDebug Descriptor, or void */
+    ::com::sun::star::code::debug::XDebugAdapter findAdapter(
+            [in] ::com::sun::star::code::debug::LaunchDescriptor Descriptor );
+
+    /** Asks whoever owns the debugging UI to start a session on Descriptor:
+        the listeners hear launchRequested.  With no listener yet the request
+        waits, and the next one to subscribe hears it on subscribing -- the
+        asker opens the debugging UI, which is created lazily, so it may well
+        subscribe only after the request. */
+    void requestLaunch( [in] ::com::sun::star::code::debug::LaunchDescriptor Descriptor );
+
+    void addDebugManagerListener(
+            [in] ::com::sun::star::code::debug::XDebugManagerListener Listener );
+    void removeDebugManagerListener(
+            [in] ::com::sun::star::code::debug::XDebugManagerListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

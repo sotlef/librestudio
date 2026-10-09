@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax {
+
+/** One parser, registered with theSyntaxAnalyzers.  It parses on the caller's
+    thread and may take its time, so a caller with a user waiting goes through
+    a background job.  What is wrong with the code is never an exception: it is
+    the Diagnostics of the result, and Succeeded tells whether there is a tree
+    at all.  What a language has beyond the common tree is a separate interface
+    of the analyzer, found by queryInterface (as the git interfaces are on a
+    repository): cxx::XCxxSyntaxInfo is the one for C and C++. */
+interface XSyntaxAnalyzer
+{
+    string getName();
+    /** the languages it parses, lower case: "c", "c++", ... */
+    sequence< string > getLanguages();
+    /** whether parse(Url) would stand a chance, by the name alone -- no I/O */
+    boolean supports( [in] string Url );
+    /** Parses the file as it is on disk. */
+    ::com::sun::star::code::syntax::ParseResult parse( [in] string Url );
+    /** Parses Text instead of what is on disk; Url still names the file, so
+        that the compile command and the includes are found. */
+    ::com::sun::star::code::syntax::ParseResult parseText( [in] string Url, [in] string Text );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

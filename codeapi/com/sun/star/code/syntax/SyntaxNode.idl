@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax {
+
+/** One node of a parse tree: a plain struct, cheap to marshal, with the whole
+    subtree in Children -- no per-node interface and no round trip per node. */
+struct SyntaxNode
+{
+    ::com::sun::star::code::syntax::SyntaxNodeKind Kind;
+    /** the name, where the node has one; empty for a statement, an expression */
+    string Spelling;
+    /** the parser's native kind name (for C and C++ the kind spelling
+        libclang gives), for consumers that know the language */
+    string DetailKind;
+    /** what the node covers of the file the tree was parsed from */
+    ::com::sun::star::code::core::Range Range;
+    sequence< ::com::sun::star::code::syntax::SyntaxNode > Children;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

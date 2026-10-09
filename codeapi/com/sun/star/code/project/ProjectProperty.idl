@@ -29,6 +29,11 @@ struct ProjectProperty
     sequence< string > Choices;
     /** Which of Choices the property has now; -1 if none. */
     long SelectedChoice;
+    /** The user may change the value in the dialog.  Writing goes through
+        XProjectPropertyEditor on the same object that gave the pages; a
+        page's properties are read-only where this is false (the default
+        for everything a build system dictates). */
+    boolean Editable;
 };
 
 }; }; }; }; };

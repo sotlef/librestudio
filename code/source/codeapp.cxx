@@ -52,6 +52,7 @@
 #include <rtl/ustring.hxx>
 #include <codeids.hxx>
 #include "configurationcontrol.hxx"
+#include "startupcontrol.hxx"
 #include "workbench.hxx"
 #include <sfx2/app.hxx>
 #include <sfx2/chalign.hxx>
@@ -292,6 +293,7 @@ int CodeApplication::Main()
         ::code::TasksStatusBarControl::RegisterControl(SID_CODE_STATUS_TASKS, nullptr);
         ::code::VcsStatusBarControl::RegisterControl(SID_CODE_STATUS_VCS, nullptr);
         ::code::ConfigurationControl::RegisterControl(SID_CODE_CONFIGURATION, nullptr);
+        ::code::StartupControl::RegisterControl(SID_CODE_STARTUP, nullptr);
 
         xMainWindow = VclPtr<WorkWindow>::Create(nullptr,
             WB_APP | WB_STDWORK | WB_SIZEABLE | WB_CLOSEABLE | WB_CLIPCHILDREN);

@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkTreeStore" id="bkpstore">
+    <columns>
+      <!-- the toggle: enabled or not -->
+      <column type="gboolean"/>
+      <!-- the place, "file:line" as people count lines -->
+      <column type="gchararray"/>
+      <!-- the condition, empty when it always stops -->
+      <column type="gchararray"/>
+      <!-- the weld::TreeView's own id column -->
+      <column type="gchararray"/>
+      <!-- toggle visible, toggle inconsistent, text weight of each text column:
+           the columns weld::TreeView keeps for set_toggle and set_text_emphasis -->
+      <column type="gboolean"/>
+      <column type="gboolean"/>
+      <column type="gint"/>
+      <column type="gint"/>
+    </columns>
+  </object>
+  <object class="GtkTreeStore" id="stackstore">
+    <columns>
+      <!-- the function -->
+      <column type="gchararray"/>
+      <!-- where it is, "file:line" -->
+      <column type="gchararray"/>
+      <!-- the weld::TreeView's own id column -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkTreeStore" id="varstore">
+    <columns>
+      <!-- name, value, type -->
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <column type="gchararray"/>
+      <!-- the weld::TreeView's own id column -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkTextBuffer" id="consolebuffer"/>
+  <object class="GtkMenu" id="breakpointmenu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="open">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="debugpanel|open">_Go to Source</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="bkpsep1">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="remove">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="debugpanel|remove">_Remove Breakpoint</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="removeall">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="debugpanel|removeall">Remove _All Breakpoints</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+  </object>
+  <!-- n-columns=1 n-rows=1 -->
+  <object class="GtkGrid" id="DebugPanel">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="vexpand">True</property>
+    <property name="row-homogeneous">True</property>
+    <property name="column-homogeneous">True</property>
+    <child>
+      <object class="GtkBox" id="content">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">True</property>
+        <property name="vexpand">True</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">4</property>
+        <child>
+          <object class="GtkToolbar" id="toolbar">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="toolbar-style">icons</property>
+            <property name="show-arrow">False</property>
+            <child>
+              <object class="GtkToolButton" id="start">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|start">Start Debugging</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|start|tooltip_text">Start Debugging</property>
+                <property name="icon-name">cmd/sc_runbasic.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="pause">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|pause">Pause</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|pause|tooltip_text">Pause the Program</property>
+                <property name="icon-name">cmd/sc_mediapause.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="toolsep1">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="stepover">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|stepover">Step Over</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|stepover|tooltip_text">Step Over</property>
+                <property name="icon-name">cmd/sc_basicstepover.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="stepinto">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|stepinto">Step Into</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|stepinto|tooltip_text">Step Into</property>
+                <property name="icon-name">cmd/sc_basicstepinto.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="stepout">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|stepout">Step Out</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|stepout|tooltip_text">Step Out</property>
+                <property name="icon-name">cmd/sc_basicstepout.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="toolsep2">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="stop">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label" translatable="yes" context="debugpanel|stop">Stop Debugging</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|stop|tooltip_text">Stop Debugging</property>
+                <property name="icon-name">cmd/sc_basicstop.png</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="breakpointslabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes" context="debugpanel|breakpointslabel">Breakpoints</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="breakpointswindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="height-request">70</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <!-- see solutionpanel.ui: without these the gtk3 sidebar opens the
+                 deck as wide as the scrolled window alone -->
+            <property name="propagate-natural-width">True</property>
+            <child>
+              <object class="GtkTreeView" id="breakpoints">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="model">bkpstore</property>
+                <property name="headers-visible">False</property>
+                <property name="headers-clickable">False</property>
+                <property name="search-column">1</property>
+                <property name="show-expanders">False</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection"/>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="bkpcolumnplace">
+                    <property name="expand">True</property>
+                    <child>
+                      <object class="GtkCellRendererToggle" id="rendererenabled"/>
+                      <attributes>
+                        <attribute name="active">0</attribute>
+                        <attribute name="visible">4</attribute>
+                        <attribute name="inconsistent">5</attribute>
+                      </attributes>
+                    </child>
+                    <child>
+                      <object class="GtkCellRendererText" id="rendererplace"/>
+                      <attributes>
+                        <attribute name="text">1</attribute>
+                        <attribute name="weight">6</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="bkpcolumncondition">
+                    <child>
+                      <object class="GtkCellRendererText" id="renderercondition"/>
+                      <attributes>
+                        <attribute name="text">2</attribute>
+                        <attribute name="weight">7</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="bkpaddrow">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="spacing">4</property>
+            <child>
+              <object class="GtkEntry" id="bkpentry">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="placeholder-text" translatable="yes" context="debugpanel|bkpentry|placeholder_text">file:line, or line in the open file</property>
+                <property name="tooltip-text" translatable="yes" context="debugpanel|bkpentry|tooltip_text">Where to stop: "main.cxx:42", "/path/to/file.cxx:42", or "42" in the open file; add "if expression" for a condition, e.g. "main.cxx:42 if x &gt; 0"</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="bkpadd">
+                <property name="label" translatable="yes" context="debugpanel|bkpadd">_Add</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="use-underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="stackheader">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkLabel" id="stacklabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="halign">start</property>
+                <property name="hexpand">True</property>
+                <property name="label" translatable="yes" context="debugpanel|stacklabel">Call Stack</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBoxText" id="threads">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <!-- see outputpanel.ui's source combobox: an explicit hexpand
+                     stops gtk3 weld's replacement widget from swallowing the
+                     row's free width -->
+                <property name="hexpand">False</property>
+                <property name="width-request">120</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">4</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="stackwindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="height-request">90</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <property name="propagate-natural-width">True</property>
+            <child>
+              <object class="GtkTreeView" id="stack">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="model">stackstore</property>
+                <property name="headers-visible">False</property>
+                <property name="headers-clickable">False</property>
+                <property name="search-column">0</property>
+                <property name="show-expanders">False</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection"/>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="stackcolumnfunction">
+                    <property name="expand">True</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="rendererfunction"/>
+                      <attributes>
+                        <attribute name="text">0</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="stackcolumnplace">
+                    <child>
+                      <object class="GtkCellRendererText" id="rendererframeplace"/>
+                      <attributes>
+                        <attribute name="text">1</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">5</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="variableslabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes" context="debugpanel|variableslabel">Variables</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">6</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="variableswindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="height-request">100</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <property name="propagate-natural-width">True</property>
+            <child>
+              <object class="GtkTreeView" id="variables">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="model">varstore</property>
+                <property name="headers-visible">False</property>
+                <property name="headers-clickable">False</property>
+                <property name="search-column">0</property>
+                <property name="show-expanders">True</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection"/>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="varcolumnname">
+                    <property name="expand">True</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="renderername"/>
+                      <attributes>
+                        <attribute name="text">0</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="varcolumnvalue">
+                    <property name="expand">True</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="renderervalue"/>
+                      <attributes>
+                        <attribute name="text">1</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="varcolumntype">
+                    <child>
+                      <object class="GtkCellRendererText" id="renderertype"/>
+                      <attributes>
+                        <attribute name="text">2</attribute>
+                      </attributes>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">7</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="consolelabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes" context="debugpanel|consolelabel">Console</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">8</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="consolewindow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <property name="height-request">80</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="shadow-type">in</property>
+            <child>
+              <object class="GtkTextView" id="console">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="editable">False</property>
+                <property name="monospace">True</property>
+                <property name="wrap-mode">word-char</property>
+                <property name="buffer">consolebuffer</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">9</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkEntry" id="consoleentry">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hexpand">True</property>
+            <property name="placeholder-text" translatable="yes" context="debugpanel|consoleentry|placeholder_text">debugger command, or =expression to evaluate</property>
+            <property name="tooltip-text" translatable="yes" context="debugpanel|consoleentry|tooltip_text">Plain text goes to the debugger's own command line (gdb); start with = to evaluate an expression in the selected frame</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">10</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="status">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="halign">start</property>
+            <property name="ellipsize">end</property>
+            <property name="label"></property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">11</property>
+          </packing>
+        </child>
+      </object>
+      <packing>
+        <property name="left-attach">0</property>
+        <property name="top-attach">0</property>
+      </packing>
+    </child>
+  </object>
+</interface>

@@ -1,0 +1,32 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module complete {
+
+/** One proposal of the completion list. */
+struct CompletionItem
+{
+    /** what the list shows, e.g. "push_back(const T& value)" */
+    string Label;
+    /** what is inserted when the item is taken, e.g. "push_back" */
+    string InsertText;
+    ::com::sun::star::code::complete::CompletionItemKind Kind;
+    /** shown beside the label: the result type or a signature */
+    string Detail;
+    /** the brief documentation comment of the entity, where the source has one */
+    string Documentation;
+    /** sort key: the list ordered by it ascending is the provider's ranking */
+    string SortText;
+    /** true if the entity is marked deprecated; shown struck through */
+    boolean Deprecated;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

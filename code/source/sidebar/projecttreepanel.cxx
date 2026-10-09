@@ -94,7 +94,7 @@ OUString ProjectTreePanel::LabelOf(const uno::Reference<XProject>& xProject,
     return xProject->getName();
 }
 
-void ProjectTreePanel::InsertItem(const weld::TreeIter* pParent, const uno::Reference<XProjectItem>& xItem,
+std::unique_ptr<weld::TreeIter> ProjectTreePanel::InsertItem(const weld::TreeIter* pParent, const uno::Reference<XProjectItem>& xItem,
                                   const OUString& rLabel)
 {
     const ItemKind eKind = xItem->getKind();
@@ -110,6 +110,7 @@ void ProjectTreePanel::InsertItem(const weld::TreeIter* pParent, const uno::Refe
     std::unique_ptr<weld::TreeIter> xRow(mxTree->make_iterator());
     mxTree->insert(pParent, -1, &rLabel, &aId, nullptr, nullptr, bExpandable, xRow.get());
     mxTree->set_image(*xRow, aIcon);
+    return xRow;
 }
 
 void ProjectTreePanel::Rebuild()
@@ -173,8 +174,14 @@ IMPL_LINK(ProjectTreePanel, ExpandingHdl, const weld::TreeIter&, rIter, bool)
 
     try
     {
+        const std::set<OUString> aEmphasized = maEmphasisOf ? maEmphasisOf(it->second) : std::set<OUString>();
         for (const auto& xChild : it->second->getChildren())
-            InsertItem(&rIter, xChild, xChild->getName());
+        {
+            const OUString aName = xChild->getName();
+            std::unique_ptr<weld::TreeIter> xRow = InsertItem(&rIter, xChild, aName);
+            if (aEmphasized.count(aName))
+                mxTree->set_text_emphasis(*xRow, true, 0);
+        }
     }
     catch (const uno::Exception& rException)
     {

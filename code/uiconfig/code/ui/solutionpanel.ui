@@ -70,6 +70,20 @@
       </object>
     </child>
     <child>
+      <object class="GtkSeparatorMenuItem" id="startupsep">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="setstartup">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="solutionpanel|setstartup">Set as _Startup Target</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
       <object class="GtkSeparatorMenuItem" id="propertiessep">
         <property name="visible">True</property>
         <property name="can-focus">False</property>

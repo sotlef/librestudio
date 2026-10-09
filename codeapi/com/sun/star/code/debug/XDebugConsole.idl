@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Capability: the underlying tool's own command line.  Found with
+    queryInterface on the session, as XNativeDebugSession is; tool-specific
+    by nature -- what the commands are and what they print is the tool's
+    business (gdb's for the gdb session), and a session need not offer it
+    at all. */
+interface XDebugConsole
+{
+    /** Runs Command as the tool's own CLI would read it and returns what
+        the tool printed in answer. */
+    string executeCommand( [in] string Command )
+        raises( ::com::sun::star::code::debug::DebugException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

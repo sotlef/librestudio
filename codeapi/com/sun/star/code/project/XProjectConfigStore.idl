@@ -34,6 +34,17 @@ interface XProjectConfigStore
     void setCurrentConfiguration( [in] string ProjectUrl, [in] string Name )
         raises( ::com::sun::star::lang::IllegalArgumentException,
                 ::com::sun::star::io::IOException );
+
+    /** Values remembered for the project as a whole, independent of any
+        configuration (the startup target, for one).  Plain name/value
+        strings; unknown names round-trip untouched. */
+    sequence< ::com::sun::star::beans::StringPair > getProjectProperties( [in] string ProjectUrl );
+
+    /** Replaces the project-level values.  The configurations and the
+        current-configuration choice stay as they are. */
+    void setProjectProperties( [in] string ProjectUrl,
+        [in] sequence< ::com::sun::star::beans::StringPair > Properties )
+        raises( ::com::sun::star::io::IOException );
 };
 
 }; }; }; }; };

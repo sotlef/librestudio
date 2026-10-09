@@ -11,6 +11,7 @@
 
 #include <com/sun/star/code/project/ItemKind.hpp>
 #include <com/sun/star/code/project/XProjectFiles.hpp>
+#include <com/sun/star/code/project/XProjectTarget.hpp>
 #include <com/sun/star/code/project/XProjectTargets.hpp>
 #include <comphelper/sequence.hxx>
 #include <cppuhelper/implbase.hxx>
@@ -18,6 +19,7 @@
 #include <sal/log.hxx>
 #include <vcl/svapp.hxx>
 #include "projectpropertiesdialog.hxx"
+#include <startuptarget.hxx>
 
 #include <vcl/weld/Builder.hxx>
 #include <vcl/weld/Menu.hxx>
@@ -34,6 +36,7 @@
 #include <com/sun/star/code/project/XProjectManager.hpp>
 #include <com/sun/star/code/project/XProjectProperties.hpp>
 #include <com/sun/star/code/project/theProjectManager.hpp>
+#include <set>
 #include <vector>
 
 using namespace css;
@@ -80,6 +83,17 @@ private:
 SolutionPanel::SolutionPanel(weld::Widget* pParent, uno::Reference<ui::XSidebar> xSidebar)
     : ProjectTreePanel(pParent, u"SolutionPanel"_ustr, u"code/ui/solutionpanel.ui"_ustr, std::move(xSidebar))
 {
+    // The startup target is shown in bold.  Only the solution row has targets
+    // for children, and its project is asked once per expansion.
+    maEmphasisOf = [](const uno::Reference<XProjectItem>& xParent)
+    {
+        std::set<OUString> aNames;
+        if (const SolutionItem* pSolution = dynamic_cast<SolutionItem*>(xParent.get()))
+            if (auto xStartup = ::code::startup::ResolveStartupTarget(comphelper::getProcessComponentContext(),
+                                                                    pSolution->GetProject()))
+                aNames.insert(xStartup->getName());
+        return aNames;
+    };
     Start();
 }
 
@@ -113,7 +127,40 @@ bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, w
     const uno::Reference<XProjectProperties> xProperties(pSolution ? uno::Reference<uno::XInterface>(pSolution->GetProject())
                                                                    : uno::Reference<uno::XInterface>(xItem),
                                                          uno::UNO_QUERY);
-    if (!xBuildable.is() && !xCompilable.is() && !bFile && !xProperties.is())
+    // The project a target belongs to: a target does not name its project, so
+    // it is found among the open projects' targets.  A target that is already
+    // the startup target gets no command: the menu offers only what does something.
+    uno::Reference<XProject> xStartupProject;
+    OUString aStartupName;
+    if (const uno::Reference<XProjectTarget> xTarget(xItem, uno::UNO_QUERY);
+        xTarget.is() && xItem->getKind() == ItemKind_TARGET && ::code::startup::IsLaunchable(xTarget))
+    {
+        try
+        {
+            for (const auto& xProject : theProjectManager::get(xContext)->getOpenProjects())
+            {
+                const uno::Reference<XProjectTargets> xTargets(xProject, uno::UNO_QUERY);
+                if (!xTargets.is())
+                    continue;
+                for (const auto& rTarget : xTargets->getTargets())
+                    if (rTarget == xTarget)
+                        xStartupProject = xProject;
+                if (xStartupProject.is())
+                {
+                    const auto xResolved = ::code::startup::ResolveStartupTarget(xContext, xStartupProject);
+                    if (xResolved.is() && xResolved->getName() == xTarget->getName())
+                        xStartupProject.clear();
+                    break;
+                }
+            }
+        }
+        catch (const uno::Exception&)
+        {
+            xStartupProject.clear();
+        }
+        aStartupName = xTarget->getName();
+    }
+    if (!xBuildable.is() && !xCompilable.is() && !bFile && !xProperties.is() && !xStartupProject.is())
         return false;
 
     std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(&rParent, u"code/ui/solutionpanel.ui"_ustr));
@@ -144,6 +191,11 @@ bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, w
             xMenu->set_sensitive(rIdent, false);
     if (xCompilable.is() && bBuilding)
         xMenu->set_sensitive(u"compile"_ustr, false);
+    if (!xStartupProject.is())
+    {
+        xMenu->remove(u"setstartup"_ustr);
+        xMenu->remove(u"startupsep"_ustr);
+    }
     if (!xProperties.is())
     {
         xMenu->remove(u"properties"_ustr);
@@ -159,6 +211,11 @@ bool SolutionPanel::ShowContextMenu(const uno::Reference<XProjectItem>& xItem, w
         {
             const OUString aName = pSolution ? pSolution->GetProject()->getName() : xItem->getName();
             RunProjectPropertiesDialog(&rParent, aName + " Properties", xProperties);
+            return true;
+        }
+        if (aCommand == "setstartup")
+        {
+            theProjectManager::get(xContext)->setStartupTarget(xStartupProject->getUrl(), aStartupName);
             return true;
         }
         if (aCommand == "open")

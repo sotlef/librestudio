@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module complete {
+
+/** Where the editor asks for completion: providers register themselves here,
+    and a request is routed to the one for its document.  Synchronous -- the
+    answer is the return value; an editor that must not block calls from a
+    thread of its own and drops the answer if the caret moved meanwhile. */
+interface XCompletionController
+{
+    void registerProvider( [in] ::com::sun::star::code::complete::XCompletionProvider Provider );
+    void unregisterProvider( [in] string Name );
+    sequence< ::com::sun::star::code::complete::XCompletionProvider > getProviders();
+    /** Asks the first registered provider that supports the document; an
+        empty result if there is none or it fails. */
+    ::com::sun::star::code::complete::CompletionResult complete(
+        [in] ::com::sun::star::code::complete::CompletionRequest Request );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

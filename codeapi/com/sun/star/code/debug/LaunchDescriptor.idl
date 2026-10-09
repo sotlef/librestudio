@@ -1,0 +1,31 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** What to debug and how to start it. */
+struct LaunchDescriptor
+{
+    /** the program, as a file URL or a system path */
+    string Program;
+    /** its command line, one argument per entry, not quoted */
+    sequence< string > Arguments;
+    /** where it runs, as a file URL; empty for the IDE's own */
+    string WorkingDirectory;
+    /** "NAME=value" entries added to (or replacing in) the environment the
+        program gets */
+    sequence< string > Environment;
+    /** stop at the program's entry before its first line runs, so that
+        breakpoints can still be reached early */
+    boolean StopAtEntry;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

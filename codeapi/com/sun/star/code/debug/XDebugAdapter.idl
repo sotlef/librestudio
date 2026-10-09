@@ -1,0 +1,30 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** One debugger, registered with theDebugManager (as the version control
+    systems are with theVcsManager).  Makes the sessions. */
+interface XDebugAdapter
+{
+    /** "gdb", ... */
+    string getName();
+    /** the languages it debugs, lowercase: "c", "c++", ... */
+    sequence< string > getLanguages();
+    /** whether this adapter can debug what Descriptor names, here and now:
+        its tool is installed, the program is of its kind */
+    boolean canDebug( [in] ::com::sun::star::code::debug::LaunchDescriptor Descriptor );
+    ::com::sun::star::code::debug::XDebugSession launch(
+            [in] ::com::sun::star::code::debug::LaunchDescriptor Descriptor )
+        raises( ::com::sun::star::code::debug::DebugException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -59,6 +59,30 @@
       single-instance="true">
     <singleton name="com.sun.star.code.semantic.theSemanticTokenController"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.DebugManager"
+      constructor="com_sun_star_comp_code_DebugManager_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.debug.theDebugManager"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.GdbDebugPlugin"
+      constructor="com_sun_star_comp_code_GdbDebugPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.RefactoringController"
+      constructor="com_sun_star_comp_code_RefactoringController_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.refactor.theRefactoringController"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.SyntaxAnalyzers"
+      constructor="com_sun_star_comp_code_SyntaxAnalyzers_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.syntax.theSyntaxAnalyzers"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.CompletionController"
+      constructor="com_sun_star_comp_code_CompletionController_get_implementation"
+      single-instance="true">
+    <singleton name="com.sun.star.code.complete.theCompletionController"/>
+  </implementation>
   <implementation name="com.sun.star.comp.code.SymbolIndex"
       constructor="com_sun_star_comp_code_SymbolIndex_get_implementation"
       single-instance="true">

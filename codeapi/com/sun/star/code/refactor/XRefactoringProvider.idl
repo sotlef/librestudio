@@ -1,0 +1,33 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module refactor {
+
+/** One language's refactoring engine, registered with
+    theRefactoringController.  This interface carries only identity and
+    routing; what the engine can actually do is expressed by further
+    capability interfaces that the object implements and that clients
+    discover with queryInterface (as a vcs XRepository expresses its
+    capabilities): XRenameProvider today, an XExtractFunctionProvider, an
+    XExtractVariableProvider or an XChangeSignatureProvider the same way
+    later, without this interface changing.  Called on the requesting
+    thread; a refactoring may parse and take seconds, so an editor that must
+    not block calls from a thread of its own. */
+interface XRefactoringProvider
+{
+    string getName();
+    /** lowercase language identifiers, e.g. "c", "c++" */
+    sequence< string > getLanguages();
+    /** whether this provider understands the document */
+    boolean supports( [in] string Url );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

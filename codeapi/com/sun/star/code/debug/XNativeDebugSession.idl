@@ -1,0 +1,31 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Capability: what only a debugger of native code has — a process to join
+    by its id, flat memory to read.  Found with queryInterface on the
+    session, as the Git interfaces are found on a vcs repository.  A managed
+    runtime would offer what only it has (loaded assemblies, the garbage
+    collector, ...) through an XManagedDebugSession the same way; that
+    interface is not defined yet. */
+interface XNativeDebugSession
+{
+    /** joins a process that already runs, instead of resume() starting one */
+    void attachToProcess( [in] long Pid )
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** Count bytes at Address, as a hex dump: two digits per byte, in
+        memory order, nothing between them. */
+    string readMemory( [in] hyper Address, [in] long Count )
+        raises( ::com::sun::star::code::debug::DebugException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

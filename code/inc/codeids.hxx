@@ -92,4 +92,15 @@
 // hidden) if it is in none.  A click opens the branches popup.
 #define SID_CODE_STATUS_VCS          (SID_CODE_START + 20)
 
+// The toolbar's startup item (.uno:CodeStartup): the Start button with the
+// combo box of the project's launchable targets; a custom item window, so
+// the slot only keeps the item enabled.
+#define SID_CODE_STARTUP             (SID_CODE_START + 21)
+
+// Runs the startup target under the debugger (.uno:CodeStartDebugging).
+#define SID_CODE_START_DEBUGGING     (SID_CODE_START + 22)
+
+// Runs the startup target without it (.uno:CodeStartWithoutDebugging).
+#define SID_CODE_START_WITHOUT_DEBUGGING (SID_CODE_START + 23)
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

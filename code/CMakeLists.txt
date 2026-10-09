@@ -31,6 +31,8 @@ librestudio_add_sdi_target(code_sdi
 add_executable(code
     "${CMAKE_SOURCE_DIR}/code/source/codeapp.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/configurationcontrol.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/startupcontrol.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/runcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/configureprojectdialog.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codedocshell.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/codeviewshell.cxx"
@@ -108,6 +110,8 @@ if (ENABLE_QT6)
 endif()
 
 target_link_libraries(code PRIVATE ICU::uc ICU::i18n
+    # codecommon: RunProcess and BackgroundJob for runcontroller.cxx
+    codecommon
     comphelper cppu cppuhelper sal sfx fwk svxcore svx svl svt tk tl ucbhelper utl vcl vclmain)
 
 # Same reason every vcl workbench program above gets one: UNO/configmgr
@@ -128,6 +132,7 @@ install(TARGETS code RUNTIME DESTINATION program)
 # uui/filterconfig -- "code" (the executable) does not link it.
 add_library(codesidebar SHARED
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/codepanelfactory.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/sidebar/debugpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/errorlistpanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/findresultspanel.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/sidebar/gitchangespanel.cxx"
@@ -145,6 +150,8 @@ add_library(codesidebar SHARED
 
 target_include_directories(codesidebar PRIVATE
     "${CMAKE_SOURCE_DIR}/code/source"
+    # startuptarget.hxx: the startup target the Debug and Solution panels show
+    "${CMAKE_SOURCE_DIR}/code/inc"
     "${udkapi_normal_HEADERS_INCLUDE_DIR}"
     "${offapi_normal_HEADERS_INCLUDE_DIR}"
     "${codeapi_normal_HEADERS_INCLUDE_DIR}")
@@ -206,18 +213,23 @@ add_library(codeservices SHARED
     "${CMAKE_SOURCE_DIR}/code/source/services/code.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/compilecommands.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/compileroutputfilter.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/completioncontroller.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/debugmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/documentmanager.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/editoropenhandler.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/finder.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/gdbdebugger.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/gitvcs.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/jobregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/outputcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectconfigstore.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectformatregistry.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/projectmanager.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/refactoringcontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/semantictokencontroller.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolindex.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/symbolstore.cxx"
+    "${CMAKE_SOURCE_DIR}/code/source/services/syntaxanalyzers.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/taskhub.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/tooldescription.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/services/tooldescriptions.cxx"
@@ -261,7 +273,10 @@ add_library(cmakeproj SHARED
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeformatreader.cxx"
     "${CMAKE_SOURCE_DIR}/code/source/cmake/cmakeproject.cxx")
 
-target_include_directories(cmakeproj PRIVATE "${CMAKE_SOURCE_DIR}/code/source/cmake")
+target_include_directories(cmakeproj PRIVATE
+    "${CMAKE_SOURCE_DIR}/code/source/cmake"
+    # startuptarget.hxx: the keys of the stored launch properties
+    "${CMAKE_SOURCE_DIR}/code/inc")
 target_link_libraries(cmakeproj PRIVATE codecommon comphelper cppu cppuhelper sal tl vcl)
 
 librestudio_add_component(cmakeproj
@@ -291,7 +306,10 @@ find_library(LIBCLANG_LIBRARY NAMES clang libclang.so.19.1 libclang.so.20.1 libc
 if (LIBCLANG_INCLUDE_DIR AND LIBCLANG_LIBRARY)
     add_library(codeclang SHARED
         "${CMAKE_SOURCE_DIR}/code/source/clang/clangsemantictokens.cxx"
-        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsymbols.cxx")
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsymbols.cxx"
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangcomplete.cxx"
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangsyntax.cxx"
+        "${CMAKE_SOURCE_DIR}/code/source/clang/clangrename.cxx")
     target_include_directories(codeclang PRIVATE
         "${LIBCLANG_INCLUDE_DIR}"
         "${udkapi_normal_HEADERS_INCLUDE_DIR}"
@@ -375,6 +393,8 @@ set(CODE_UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/cmakeconfigpanel.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configurationbox.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/configureprojectdialog.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/debugpanel.ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/startupbox.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editordocumentcontent.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/editormdi.ui"
     "${CMAKE_CURRENT_SOURCE_DIR}/uiconfig/code/ui/errorlistpanel.ui"

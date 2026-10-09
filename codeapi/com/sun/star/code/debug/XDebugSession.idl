@@ -1,0 +1,82 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** One debugging of one program: the core every debugger has.  What only
+    some have is in capability interfaces that the session implements and
+    that clients discover with queryInterface: XNativeDebugSession for
+    native code today, an XManagedDebugSession for managed runtimes one day
+    (see XNativeDebugSession).
+
+    A session begins STARTING: the tool is up and the program loaded but not
+    running, so breakpoints set now are there from the first line; the first
+    resume() starts the program (stopping at its entry when the launch asked
+    for that).  Once it is EXITED nothing runs again; a new debugging is a
+    new session.  terminate() must be called in the end, whatever happened:
+    it ends the tool.
+
+    The calls return when the tool has answered, which may take a moment:
+    call them from a thread of your own, not the UI thread.  ThreadId 0
+    means no one thread (the whole program, or the tool's own choice).
+    Lines are zero-based, as core::Position counts. */
+interface XDebugSession
+{
+    ::com::sun::star::code::debug::DebugSessionState getState();
+
+    /** starts the program when it does not run yet, else lets it go on */
+    void resume( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    void pause( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    void stepOver( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    void stepInto( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** runs to the end of the current function */
+    void stepOut( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** ends the program (if it still runs) and the tool; the session is
+        EXITED afterwards */
+    void terminate()
+        raises( ::com::sun::star::code::debug::DebugException );
+
+    /** Takes Url, Line, Condition and Enabled from Request and returns the
+        breakpoint as the backend took it: with its Id, Verified, and the
+        line it really landed on. */
+    ::com::sun::star::code::debug::Breakpoint addBreakpoint(
+            [in] ::com::sun::star::code::debug::Breakpoint Request )
+        raises( ::com::sun::star::code::debug::DebugException );
+    void removeBreakpoint( [in] long Id )
+        raises( ::com::sun::star::code::debug::DebugException );
+    sequence< ::com::sun::star::code::debug::Breakpoint > getBreakpoints();
+
+    sequence< ::com::sun::star::code::debug::DebugThread > getThreads()
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** the innermost frame first; only of a stopped thread */
+    sequence< ::com::sun::star::code::debug::StackFrame > getStackFrames( [in] long ThreadId )
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** Reference 0: the locals of the frame FrameId names; else the
+        children behind a Variable::Reference (FrameId is not looked at
+        then).  The handles die when the program runs again. */
+    sequence< ::com::sun::star::code::debug::Variable > getVariables(
+            [in] long FrameId, [in] long Reference )
+        raises( ::com::sun::star::code::debug::DebugException );
+    /** Expression in the program's language, evaluated in the frame;
+        returns the value as text. */
+    string evaluate( [in] long FrameId, [in] string Expression )
+        raises( ::com::sun::star::code::debug::DebugException );
+
+    void addListener( [in] ::com::sun::star::code::debug::XDebugSessionListener Listener );
+    void removeListener( [in] ::com::sun::star::code::debug::XDebugSessionListener Listener );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

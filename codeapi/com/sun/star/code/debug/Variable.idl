@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** A variable, or one member of one, as the backend shows it. */
+struct Variable
+{
+    string Name;
+    /** the value rendered as text; may be empty for an aggregate */
+    string Value;
+    string TypeName;
+    boolean HasChildren;
+    /** a handle to hand back to XDebugSession::getVariables() for the
+        children; 0 for a leaf.  Good only while the program stays stopped. */
+    long Reference;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

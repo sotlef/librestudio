@@ -1,0 +1,32 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module refactor {
+
+/** The answer to XRenameProvider::prepareRename: whether the name at the
+    position can be renamed at all, and what the rename dialog starts from. */
+struct RenameTarget
+{
+    boolean Valid;
+    /** the current name */
+    string Name;
+    /** what the dialog's input field is filled with; the current name unless
+        the provider knows better */
+    string Placeholder;
+    /** the identifier itself at the request position, so the editor can
+        select it; only the name, not the whole declaration */
+    ::com::sun::star::code::core::Range Range;
+    /** why the name cannot be renamed, when Valid is false; e.g. "a keyword
+        cannot be renamed" */
+    string Reason;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

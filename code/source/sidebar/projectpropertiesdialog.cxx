@@ -11,6 +11,9 @@
 
 #include <com/sun/star/code/project/ProjectProperty.hpp>
 #include <com/sun/star/code/project/ProjectPropertyPage.hpp>
+#include <com/sun/star/code/project/XProjectPropertyEditor.hpp>
+#include <com/sun/star/io/IOException.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
 #include <vcl/svapp.hxx>
@@ -18,7 +21,9 @@
 #include <vcl/weld/Dialog.hxx>
 #include <vcl/font.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/vclenum.hxx>
 #include <vcl/weld/Label.hxx>
+#include <vcl/weld/MessageDialog.hxx>
 #include <vcl/weld/TreeView.hxx>
 #include <vcl/weld/Widget.hxx>
 
@@ -37,6 +42,7 @@ class PropertiesDialog
 {
 public:
     PropertiesDialog(weld::Widget* pParent, const OUString& rTitle,
+                     const uno::Reference<XProjectProperties>& xProperties,
                      const uno::Sequence<ProjectPropertyPage>& rPages)
         : m_xBuilder(Application::CreateBuilder(pParent, u"code/ui/projectpropertiesdialog.ui"_ustr))
         , m_xDialog(m_xBuilder->weld_dialog(u"ProjectPropertiesDialog"_ustr))
@@ -44,6 +50,8 @@ public:
         , m_xProperties(m_xBuilder->weld_tree_view(u"properties"_ustr))
         , m_xDescriptionName(m_xBuilder->weld_label(u"descriptionname"_ustr))
         , m_xDescriptionText(m_xBuilder->weld_label(u"descriptiontext"_ustr))
+        , m_xSource(xProperties)
+        , m_xEditor(xProperties, uno::UNO_QUERY)
         , m_aPages(rPages)
     {
         m_xDialog->set_title(rTitle);
@@ -51,9 +59,10 @@ public:
         aBold.SetWeight(WEIGHT_BOLD);
         m_xDescriptionName->set_font(aBold);
         m_xProperties->set_column_fixed_widths({ 220 });
-        // The value column is edited for the cells that are lists of values (the
-        // tree makes the list, set_cell_choices); the dialog only shows, so an
-        // edit is never taken and the cell goes back to what it had.
+        // The value column is edited for the cells the provider marks editable
+        // (text or a typed value) and for the cells that are lists of values
+        // (the tree makes the list, set_cell_choices); a list on a property that
+        // is not editable is only looked at, the cell goes back to what it had.
         m_xProperties->set_column_editables({ false, true });
         m_xProperties->connect_editing(LINK(this, PropertiesDialog, EditingStartedHdl),
                                        LINK(this, PropertiesDialog, EditingDoneHdl));
@@ -62,11 +71,18 @@ public:
         FillPages();
     }
 
+    ~PropertiesDialog()
+    {
+        if (m_pRefreshEvent)
+            Application::RemoveUserEvent(m_pRefreshEvent);
+    }
+
     void Run() { m_xDialog->run(); }
 
 private:
     DECL_LINK(PageHdl, weld::ItemView&, void);
     DECL_LINK(PropertyHdl, weld::ItemView&, void);
+    DECL_LINK(RefreshHdl, void*, void);
 
     // "C/C++/Preprocessor" is the page Preprocessor below the heading C/C++;
     // a heading no page names is made, so the tree has the shape of the paths
@@ -111,6 +127,8 @@ private:
 
     void ShowPage()
     {
+        // a repaint of the same page keeps the chosen row
+        const OUString aKeptId = m_xProperties->get_selected_id();
         m_xProperties->clear();
         m_xDescriptionName->set_label(OUString());
         m_xDescriptionText->set_label(OUString());
@@ -139,7 +157,11 @@ private:
         m_xProperties->thaw();
         if (m_xProperties->n_children())
         {
-            m_xProperties->select(0);
+            int nRow = 0;
+            if (!aKeptId.isEmpty() && aKeptId.toInt32() < m_xProperties->n_children())
+                nRow = aKeptId.toInt32(); // the row id is the property's index and rows are in that order
+            m_xProperties->select(nRow);
+            m_xProperties->scroll_to_row(nRow);
             ShowValue();
         }
     }
@@ -173,24 +195,95 @@ private:
     std::unique_ptr<weld::TreeView> m_xProperties;
     std::unique_ptr<weld::Label> m_xDescriptionName;
     std::unique_ptr<weld::Label> m_xDescriptionText;
-    const uno::Sequence<ProjectPropertyPage> m_aPages;
+    // what the provider said, read again after each accepted edit
+    uno::Reference<XProjectProperties> m_xSource;
+    // null when the provider cannot be written to: nothing is editable then
+    uno::Reference<XProjectPropertyEditor> m_xEditor;
+    uno::Sequence<ProjectPropertyPage> m_aPages;
+    ImplSVEvent* m_pRefreshEvent = nullptr;
 };
 
 IMPL_LINK_NOARG(PropertiesDialog, PageHdl, weld::ItemView&, void) { ShowPage(); }
 IMPL_LINK_NOARG(PropertiesDialog, PropertyHdl, weld::ItemView&, void) { ShowValue(); }
-// Only the cells that were given values (set_cell_choices) are edited; the
-// tree opens their list, the dialog has nothing to do with where or how.
+// The tree opens the editor (a text cell or the list) only for the cells that
+// say yes here: the ones the provider lets be written, and the lists.
 IMPL_LINK(PropertiesDialog, EditingStartedHdl, const weld::TreeIter&, rIter, bool)
 {
     const OUString aPageId = m_xPages->get_selected_id();
     if (aPageId.isEmpty())
         return false;
     const ProjectProperty& rProperty = m_aPages[aPageId.toInt32()].Properties[m_xProperties->get_id(rIter).toInt32()];
-    return rProperty.Choices.hasElements();
+    return (rProperty.Editable && m_xEditor.is()) || rProperty.Choices.hasElements();
 }
 
-// The dialog shows and does not change: whatever is chosen is not taken, and the cell keeps its value.
-IMPL_LINK_NOARG(PropertiesDialog, EditingDoneHdl, const weld::TreeView::IterColText&, bool) { return false; }
+// Whatever is typed or chosen goes to the provider, which decides.  The value
+// column only: the names are never edited.  Empty text is a reset to the default.
+// True is answered when it took it (the tree then keeps the text), false when
+// it refused or the property is only looked at (the cell keeps what it had).
+// What the cell shows after a take is not the typed text for certain (a reset,
+// a value the provider writes another way, Emphasized) so the page is read
+// again; that cannot be done in here, the tree is still in the middle of the
+// edit and must not be cleared under its own signal, so it is posted.
+IMPL_LINK(PropertiesDialog, EditingDoneHdl, const weld::TreeView::IterColText&, rEdit, bool)
+{
+    if (rEdit.m_nColumn != 1)
+        return false;
+    const OUString aPageId = m_xPages->get_selected_id();
+    if (aPageId.isEmpty())
+        return false;
+    const ProjectPropertyPage& rPage = m_aPages[aPageId.toInt32()];
+    const ProjectProperty& rProperty = rPage.Properties[m_xProperties->get_id(rEdit.m_rIter).toInt32()];
+    if (!rProperty.Editable || !m_xEditor.is())
+        return false; // a list that is only looked at
+    OUString aError;
+    bool bFailed = false;
+    try
+    {
+        m_xEditor->setProperty(rPage.Path, rProperty.Name, rEdit.m_sText);
+    }
+    catch (const lang::IllegalArgumentException& rException)
+    {
+        aError = rException.Message;
+        bFailed = true;
+    }
+    catch (const io::IOException& rException)
+    {
+        aError = rException.Message;
+        bFailed = true;
+    }
+    catch (const uno::Exception& rException)
+    {
+        aError = rException.Message;
+        bFailed = true;
+    }
+    if (bFailed)
+    {
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
+            m_xDialog.get(), VclMessageType::Error, VclButtonsType::Ok, rProperty.Name));
+        xBox->set_secondary_text(aError);
+        xBox->run();
+        return false;
+    }
+    if (!m_pRefreshEvent)
+        m_pRefreshEvent = Application::PostUserEvent(LINK(this, PropertiesDialog, RefreshHdl));
+    return true;
+}
+
+IMPL_LINK_NOARG(PropertiesDialog, RefreshHdl, void*, void)
+{
+    m_pRefreshEvent = nullptr;
+    try
+    {
+        m_aPages = m_xSource->getPropertyPages();
+    }
+    catch (const uno::Exception& rException)
+    {
+        // the old pages stay; the cell shows what was typed
+        SAL_WARN("code", "cannot read the properties again: " << rException.Message);
+        return;
+    }
+    ShowPage();
+}
 }
 
 void RunProjectPropertiesDialog(weld::Widget* pParent, const OUString& rTitle,
@@ -205,7 +298,7 @@ void RunProjectPropertiesDialog(weld::Widget* pParent, const OUString& rTitle,
     {
         SAL_WARN("code", "cannot read the properties of " << rTitle << ": " << rException.Message);
     }
-    PropertiesDialog(pParent, rTitle, aPages).Run();
+    PropertiesDialog(pParent, rTitle, xProperties, aPages).Run();
 }
 }
 

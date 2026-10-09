@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax {
+
+/** The analyzers that are registered, nothing more: parsing is on demand and
+    the registry keeps no results.  A second registration under a name replaces
+    the first. */
+interface XSyntaxAnalyzers
+{
+    void registerAnalyzer( [in] ::com::sun::star::code::syntax::XSyntaxAnalyzer Analyzer );
+    void unregisterAnalyzer( [in] string Name );
+    sequence< ::com::sun::star::code::syntax::XSyntaxAnalyzer > getAnalyzers();
+    /** The first analyzer that supports Url, in registration order; void if
+        none does. */
+    ::com::sun::star::code::syntax::XSyntaxAnalyzer findAnalyzer( [in] string Url );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

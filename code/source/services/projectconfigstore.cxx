@@ -48,6 +48,9 @@ namespace pt = boost::property_tree;
 //     "format": "librestudio-project-configuration",
 //     "version": "1",
 //     "current": "Debug",              the configuration builds go to (optional)
+//     "properties": {                  values of the project as a whole,
+//       "StartupTarget": "app"         independent of any configuration (optional)
+//     },
 //     "configurations": {              one member per configuration, in order
 //       "Debug":   { "BuildType": "Debug", "BuildDirectory": "file:///..." },
 //       "Release": { ... }
@@ -79,6 +82,9 @@ public:
     void SAL_CALL setCurrentConfiguration(const OUString& rProjectUrl, const OUString& rName) override;
     void SAL_CALL setConfigurations(const OUString& rProjectUrl,
                                     const uno::Sequence<ProjectConfiguration>& rConfigurations) override;
+    uno::Sequence<beans::StringPair> SAL_CALL getProjectProperties(const OUString& rProjectUrl) override;
+    void SAL_CALL setProjectProperties(const OUString& rProjectUrl,
+                                       const uno::Sequence<beans::StringPair>& rProperties) override;
 
     // XServiceInfo
     OUString SAL_CALL getImplementationName() override
@@ -101,6 +107,7 @@ struct Stored
 {
     std::vector<ProjectConfiguration> aConfigurations;
     OUString aCurrent;
+    std::vector<beans::StringPair> aProperties; // of the project as a whole
 };
 
 Stored Read(const OUString& rProjectUrl);
@@ -167,6 +174,11 @@ Stored Read(const OUString& rProjectUrl)
             return aStored;
         aStored.aCurrent = OUString::fromUtf8(aTree.get<std::string>("current", ""));
 
+        if (const auto aProperties = aTree.get_child_optional("properties"))
+            for (const auto& rProperty : *aProperties)
+                aStored.aProperties.push_back({ OUString::fromUtf8(rProperty.first),
+                                                OUString::fromUtf8(rProperty.second.data()) });
+
         for (const auto& rConfiguration : aTree.get_child("configurations"))
         {
             ProjectConfiguration aConfiguration;
@@ -196,6 +208,15 @@ void Write(const OUString& rProjectUrl, const Stored& rStored, const uno::Refere
     aTree.put("version", FormatVersion);
     if (!rStored.aCurrent.isEmpty())
         aTree.put("current", OUStringToOString(rStored.aCurrent, RTL_TEXTENCODING_UTF8).getStr());
+    if (!rStored.aProperties.empty())
+    {
+        pt::ptree aProperties;
+        for (const beans::StringPair& rProperty : rStored.aProperties)
+            // push_back, not put(): a name is a key, never a path to split at dots
+            aProperties.push_back({ OUStringToOString(rProperty.First, RTL_TEXTENCODING_UTF8).getStr(),
+                                    pt::ptree(OUStringToOString(rProperty.Second, RTL_TEXTENCODING_UTF8).getStr()) });
+        aTree.add_child("properties", aProperties);
+    }
     pt::ptree aConfigurations;
     for (const ProjectConfiguration& rConfiguration : rStored.aConfigurations)
     {
@@ -237,6 +258,21 @@ void ProjectConfigStore::setConfigurations(const OUString& rProjectUrl,
     aStored.aConfigurations.assign(rConfigurations.begin(), rConfigurations.end());
     // the current one stays current if it survived; getCurrentConfiguration()
     // falls back to the first otherwise
+    Write(rProjectUrl, aStored, getXWeak());
+}
+
+uno::Sequence<beans::StringPair> ProjectConfigStore::getProjectProperties(const OUString& rProjectUrl)
+{
+    std::scoped_lock aGuard(m_aMutex);
+    return comphelper::containerToSequence(Read(rProjectUrl).aProperties);
+}
+
+void ProjectConfigStore::setProjectProperties(const OUString& rProjectUrl,
+                                              const uno::Sequence<beans::StringPair>& rProperties)
+{
+    std::scoped_lock aGuard(m_aMutex);
+    Stored aStored = Read(rProjectUrl); // the configurations and the current one stay
+    aStored.aProperties.assign(rProperties.begin(), rProperties.end());
     Write(rProjectUrl, aStored, getXWeak());
 }
 }

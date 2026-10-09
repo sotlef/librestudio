@@ -70,6 +70,21 @@
           <value xml:lang="en-US">Solution Configuration</value>
         </prop>
       </node>
+      <node oor:name=".uno:CodeStartup" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Startup Target</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeStartDebugging" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Start Debugging</value>
+        </prop>
+      </node>
+      <node oor:name=".uno:CodeStartWithoutDebugging" oor:op="replace">
+        <prop oor:name="Label" oor:type="xs:string">
+          <value xml:lang="en-US">Start Without Debugging</value>
+        </prop>
+      </node>
       <node oor:name=".uno:CodeOpenMenu" oor:op="replace">
         <prop oor:name="Label" oor:type="xs:string">
           <value xml:lang="en-US">~Open</value>

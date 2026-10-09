@@ -1,0 +1,25 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module complete {
+
+/** The answer to one CompletionRequest.  The items are not filtered against
+    what stands left of the caret; that is the editor's part, which filters as
+    the user types on without asking again. */
+struct CompletionResult
+{
+    sequence< ::com::sun::star::code::complete::CompletionItem > Items;
+    /** true if the list was cut short, so typing on should ask again rather
+        than only filter what is here */
+    boolean Incomplete;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

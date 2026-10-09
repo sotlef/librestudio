@@ -25,6 +25,7 @@
 #include <com/sun/star/code/project/XProjectFormatReader.hpp>
 #include <com/sun/star/code/project/XProjectListener.hpp>
 #include <com/sun/star/code/project/XProjectManager.hpp>
+#include <com/sun/star/code/project/XProjectTargets.hpp>
 #include <com/sun/star/code/project/theProjectFormatRegistry.hpp>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -72,6 +73,8 @@ public:
     uno::Sequence<ProjectConfiguration> SAL_CALL getConfigurations(const OUString& rUrl) override;
     OUString SAL_CALL getCurrentConfiguration(const OUString& rUrl) override;
     void SAL_CALL setCurrentConfiguration(const OUString& rUrl, const OUString& rName) override;
+    OUString SAL_CALL getStartupTarget(const OUString& rUrl) override;
+    void SAL_CALL setStartupTarget(const OUString& rUrl, const OUString& rName) override;
     void SAL_CALL addProjectListener(const uno::Reference<XProjectListener>& xListener) override;
     void SAL_CALL removeProjectListener(const uno::Reference<XProjectListener>& xListener) override;
 
@@ -313,6 +316,69 @@ void ProjectManager::setCurrentConfiguration(const OUString& rUrl, const OUStrin
     // it tells its listeners (ITEMS_CHANGED, through modified()) if it changed
     if (uno::Reference<XProjectConfigurationState> xState{ xProject, uno::UNO_QUERY })
         xState->reload();
+}
+
+OUString ProjectManager::getStartupTarget(const OUString& rUrl)
+{
+    const OUString aUrl = NormalizeUrl(rUrl);
+    OUString aStored;
+    for (const beans::StringPair& rProperty :
+         theProjectConfigStore::get(m_xContext)->getProjectProperties(aUrl))
+        if (rProperty.First == "StartupTarget")
+        {
+            aStored = rProperty.Second;
+            break;
+        }
+    if (aStored.isEmpty())
+        return {};
+
+    // A stored name that no longer names a target of the project reads as
+    // empty, so callers fall back to their own default.  A project that is
+    // not open (or lists no targets) cannot be checked; the name is taken
+    // at its word then.
+    uno::Reference<XProject> xProject;
+    {
+        std::unique_lock aGuard(m_aMutex);
+        xProject = find(aUrl);
+    }
+    uno::Reference<XProjectTargets> xTargets(xProject, uno::UNO_QUERY);
+    if (!xTargets.is())
+        return aStored;
+    for (const auto& rTarget : xTargets->getTargets())
+        if (rTarget->getName() == aStored)
+            return aStored;
+    return {};
+}
+
+void ProjectManager::setStartupTarget(const OUString& rUrl, const OUString& rName)
+{
+    const OUString aUrl = NormalizeUrl(rUrl);
+    auto xStore = theProjectConfigStore::get(m_xContext);
+
+    std::vector<beans::StringPair> aProperties
+        = comphelper::sequenceToContainer<std::vector<beans::StringPair>>(
+            xStore->getProjectProperties(aUrl));
+    const auto it = std::find_if(aProperties.begin(), aProperties.end(),
+                                 [](const beans::StringPair& r)
+                                 { return r.First == "StartupTarget"; });
+    if (rName.isEmpty())
+    {
+        if (it == aProperties.end())
+            return;
+        aProperties.erase(it);
+    }
+    else if (it != aProperties.end())
+    {
+        if (it->Second == rName)
+            return;
+        it->Second = rName;
+    }
+    else
+        aProperties.push_back({ u"StartupTarget"_ustr, rName });
+    xStore->setProjectProperties(aUrl, comphelper::containerToSequence(aProperties));
+
+    std::unique_lock aGuard(m_aMutex);
+    fire(aGuard, find(aUrl), ProjectEventKind_PROPERTIES_CHANGED, aUrl);
 }
 
 void ProjectManager::addProjectListener(const uno::Reference<XProjectListener>& xListener)

@@ -1,0 +1,42 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax {
+
+/** What a syntax node is, in words every language has.  A consumer that needs
+    the parser's own classification reads SyntaxNode::DetailKind instead; this
+    set stays small so that a generic view (an outline, folding) need not know
+    any parser. */
+enum SyntaxNodeKind
+{
+    /** the root: the whole file */
+    TRANSLATION_UNIT,
+    NAMESPACE,
+    CLASS,
+    /** a struct, or what is nearest to one (a union, a record) */
+    STRUCT,
+    ENUM,
+    FUNCTION,
+    METHOD,
+    /** a variable, field or enumerator */
+    VARIABLE,
+    PARAMETER,
+    STATEMENT,
+    EXPRESSION,
+    LITERAL,
+    COMMENT,
+    /** a preprocessor directive, a macro definition or expansion */
+    PREPROCESSOR,
+    /** everything else: DetailKind says what the parser called it */
+    UNKNOWN
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

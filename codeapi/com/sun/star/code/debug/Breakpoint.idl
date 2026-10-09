@@ -1,0 +1,33 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** A place where the program stops.  Lines are zero-based, as
+    com::sun::star::code::core::Position counts them; a backend that counts
+    from one translates, not the client. */
+struct Breakpoint
+{
+    /** identity within the session, given out by the session; 0 in a request */
+    long Id;
+    string Url;
+    /** zero-based */
+    long Line;
+    /** an expression in the program's language; the program stops only when
+        it is true.  Empty: it always stops. */
+    string Condition;
+    boolean Enabled;
+    /** the backend resolved it to a place in the running code; false while
+        the code is not loaded (yet) */
+    boolean Verified;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -1,0 +1,29 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module refactor {
+
+/** Where the editor finds a refactoring engine: providers register
+    themselves here, and a document is routed to the one that understands
+    it.  The controller routes and nothing more -- what the engine can do is
+    asked of the provider itself, with queryInterface for its capability
+    interfaces. */
+interface XRefactoringController
+{
+    void registerProvider( [in] ::com::sun::star::code::refactor::XRefactoringProvider Provider );
+    void unregisterProvider( [in] string Name );
+    sequence< ::com::sun::star::code::refactor::XRefactoringProvider > getProviders();
+    /** The first registered provider that supports the document; null if
+        there is none. */
+    ::com::sun::star::code::refactor::XRefactoringProvider findProvider( [in] string Url );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

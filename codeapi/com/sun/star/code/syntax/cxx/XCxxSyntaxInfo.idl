@@ -1,0 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module syntax { module cxx {
+
+/** What is C and C++ about an analyzer, obtained by queryInterface on an
+    XSyntaxAnalyzer that lists those languages. */
+interface XCxxSyntaxInfo
+{
+    /** The language standard Url is compiled with, as the -std= of its compile
+        command spells it ("c++20", "gnu11", ...); empty where the build does
+        not say. */
+    string getStandard( [in] string Url );
+};
+
+}; }; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

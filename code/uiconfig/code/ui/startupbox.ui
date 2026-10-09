@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
+<interface domain="code">
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkMenu" id="startmenu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="withoutdebugging">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes" context="startupbox|withoutdebugging">Start _Without Debugging</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkBox" id="StartupBox">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="spacing">3</property>
+    <child>
+      <object class="GtkButton" id="start">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="valign">center</property>
+        <property name="relief">none</property>
+        <property name="tooltip-text" translatable="yes" context="startupbox|start|tooltip_text">Start Debugging</property>
+        <child internal-child="accessible">
+          <object class="AtkObject" id="start-atkobject">
+            <property name="AtkObject::accessible-name" translatable="yes" context="startupbox|start|accessible_name">Start Debugging</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="expand">False</property>
+        <property name="fill">True</property>
+        <property name="position">0</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkComboBoxText" id="target">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="hexpand">False</property>
+        <property name="valign">center</property>
+        <property name="width-request">130</property>
+        <child internal-child="accessible">
+          <object class="AtkObject" id="target-atkobject">
+            <property name="AtkObject::accessible-name" translatable="yes" context="startupbox|target|accessible_name">Startup Target</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="expand">False</property>
+        <property name="fill">True</property>
+        <property name="position">1</property>
+      </packing>
+    </child>
+    <child>
+      <object class="GtkButton" id="more">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="valign">center</property>
+        <property name="relief">none</property>
+        <property name="label">▾</property>
+        <property name="tooltip-text" translatable="yes" context="startupbox|more|tooltip_text">More ways to start</property>
+        <child internal-child="accessible">
+          <object class="AtkObject" id="more-atkobject">
+            <property name="AtkObject::accessible-name" translatable="yes" context="startupbox|more|accessible_name">More ways to start</property>
+          </object>
+        </child>
+      </object>
+      <packing>
+        <property name="expand">False</property>
+        <property name="fill">True</property>
+        <property name="position">2</property>
+      </packing>
+    </child>
+  </object>
+</interface>

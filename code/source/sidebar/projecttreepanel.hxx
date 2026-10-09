@@ -15,6 +15,7 @@
 #include <com/sun/star/ui/XSidebar.hpp>
 #include <sfx2/sidebar/PanelLayout.hxx>
 
+#include <functional>
 #include <map>
 #include <set>
 #include <memory>
@@ -64,8 +65,14 @@ protected:
 
     void Rebuild();
 
+    /// Optional: names of the children of xParent whose rows are shown in bold.
+    /// Asked once per expansion of a row, not per child.
+    std::function<std::set<OUString>(const css::uno::Reference<css::code::project::XProjectItem>& xParent)>
+        maEmphasisOf;
+
 private:
-    void InsertItem(const weld::TreeIter* pParent,
+    std::unique_ptr<weld::TreeIter>
+    InsertItem(const weld::TreeIter* pParent,
                     const css::uno::Reference<css::code::project::XProjectItem>& xItem,
                     const OUString& rLabel);
 

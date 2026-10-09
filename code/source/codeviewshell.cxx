@@ -33,12 +33,23 @@
 #include "sidebar/outputchildwindow.hxx"
 #include "sidebar/outputdockingwindow.hxx"
 
+#include <com/sun/star/code/core/JobEvent.hpp>
+#include <com/sun/star/code/core/XBackgroundJobListener.hpp>
+#include <com/sun/star/code/debug/theDebugManager.hpp>
+#include <cppuhelper/implbase.hxx>
+#include <rtl/ref.hxx>
+#include <sfx2/sidebar/SidebarController.hxx>
+#include <vcl/svapp.hxx>
+
 #include <codeids.hxx>
+#include <startuptarget.hxx>
+#include "runcontroller.hxx"
 #include "optionsdialog.hxx"
 #include "finddialog.hxx"
 #include "gotosymboldialog.hxx"
 #include "vcsstatusbarcontrol.hxx"
 #include <sfx2/objface.hxx>
+#include <mutex>
 #include <vector>
 #include <sfx2/request.hxx>
 #include <sfx2/frame.hxx>
@@ -59,6 +70,117 @@ namespace uno = css::uno;
 
 namespace code
 {
+namespace
+{
+// ---- Start (Without) Debugging ----------------------------------------------
+//
+// The startup target is built first, as Visual Studio does, and starts when
+// the build succeeds (the Build channel already says why when it does not).
+// The build job reports on its own thread; the start is posted to the main
+// thread, where the sidebar and the Debug panel live.
+
+void ShowStartMessage(const OUString& rText)
+{
+    if (Workbench* pWorkbench = Workbench::Instance())
+        pWorkbench->showMessage(rText, 6000);
+}
+
+// main thread
+void StartNow(const uno::Reference<uno::XComponentContext>& xContext,
+              const css::code::debug::LaunchDescriptor& rDescriptor, bool bWithDebugger)
+{
+    if (bWithDebugger)
+    {
+        try
+        {
+            // The request first: a living Debug panel hears it at once, and
+            // one the deck switch creates below hears it on subscribing.
+            css::code::debug::theDebugManager::get(xContext)->requestLaunch(rDescriptor);
+        }
+        catch (const uno::Exception& rException)
+        {
+            ShowStartMessage(u"Cannot start debugging: "_ustr + rException.Message);
+            return;
+        }
+        SfxViewFrame* pFrame = SfxViewFrame::Current();
+        sfx2::sidebar::SidebarController* pController
+            = pFrame ? sfx2::sidebar::SidebarController::GetSidebarControllerForView(
+                           pFrame->GetViewShell())
+                     : nullptr;
+        if (pController)
+            pController->OpenThenSwitchToDeck(u"DebugDeck");
+    }
+    else if (!run::Start(xContext, rDescriptor))
+        ShowStartMessage(u"A program is already running."_ustr);
+}
+
+class StartAfterBuild final
+    : public cppu::WeakImplHelper<css::code::core::XBackgroundJobListener>
+{
+public:
+    StartAfterBuild(uno::Reference<uno::XComponentContext> xContext,
+                    css::code::debug::LaunchDescriptor aDescriptor, bool bWithDebugger)
+        : m_xContext(std::move(xContext))
+        , m_aDescriptor(std::move(aDescriptor))
+        , m_bWithDebugger(bWithDebugger)
+    {
+    }
+
+    void Watch(const uno::Reference<css::code::core::XBackgroundJob>& xJob)
+    {
+        m_xJob = xJob;
+        xJob->addJobListener(this);
+        // the job may have ended before the listener was in place
+        Check(xJob->getStatus());
+    }
+
+    void SAL_CALL jobChanged(const css::code::core::JobEvent& rEvent) override
+    {
+        Check(rEvent.Status);
+    }
+    void SAL_CALL disposing(const css::lang::EventObject&) override {}
+
+private:
+    void Check(css::code::core::JobStatus eStatus)
+    {
+        if (eStatus == css::code::core::JobStatus_RUNNING)
+            return;
+        {
+            std::scoped_lock aGuard(m_aMutex);
+            if (m_bDone)
+                return;
+            m_bDone = true;
+        }
+        try
+        {
+            m_xJob->removeJobListener(this);
+        }
+        catch (const uno::Exception&)
+        {
+        }
+        if (eStatus != css::code::core::JobStatus_SUCCEEDED)
+            return;
+        // to the main thread, alive until the handler ran
+        acquire();
+        Application::PostUserEvent(LINK(this, StartAfterBuild, StartHdl));
+    }
+
+    DECL_LINK(StartHdl, void*, void);
+
+    const uno::Reference<uno::XComponentContext> m_xContext;
+    const css::code::debug::LaunchDescriptor m_aDescriptor;
+    const bool m_bWithDebugger;
+    uno::Reference<css::code::core::XBackgroundJob> m_xJob;
+    std::mutex m_aMutex;
+    bool m_bDone = false;
+};
+
+IMPL_LINK_NOARG(StartAfterBuild, StartHdl, void*, void)
+{
+    StartNow(m_xContext, m_aDescriptor, m_bWithDebugger);
+    release(); // the acquire() of Check()
+}
+}
 
 SFX_IMPL_NAMED_VIEWFACTORY(Shell, "Default")
 {
@@ -188,6 +310,62 @@ void Shell::Execute(SfxRequest& rReq)
             {
                 if (Workbench* pWorkbench = Workbench::Instance())
                     pWorkbench->showMessage(u"Cannot build: "_ustr + rException.Message, 8000);
+            }
+            break;
+        }
+        case SID_CODE_START_DEBUGGING:
+        case SID_CODE_START_WITHOUT_DEBUGGING:
+        {
+            const bool bWithDebugger = rReq.GetSlot() == SID_CODE_START_DEBUGGING;
+            uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+            try
+            {
+                // the active project, or the one open: the choice the startup box shows
+                auto xManager = css::code::project::theProjectManager::get(xContext);
+                auto xProject = xManager->getActiveProject();
+                if (!xProject.is())
+                    if (const auto aOpen = xManager->getOpenProjects(); aOpen.hasElements())
+                        xProject = aOpen[0];
+                const auto xTarget = startup::ResolveStartupTarget(xContext, xProject);
+                css::uno::Reference<css::code::debug::XLaunchable> xLaunchable(xTarget, css::uno::UNO_QUERY);
+                if (!xLaunchable.is())
+                {
+                    ShowStartMessage(u"No startup target to run."_ustr);
+                    break;
+                }
+                const css::code::debug::LaunchDescriptor aDescriptor = xLaunchable->createLaunchDescriptor();
+                if (aDescriptor.Program.isEmpty())
+                {
+                    ShowStartMessage(u"The startup target has nothing to run."_ustr);
+                    break;
+                }
+                if (!bWithDebugger && run::IsRunning())
+                {
+                    ShowStartMessage(u"A program is already running."_ustr);
+                    break;
+                }
+
+                // built first, as Visual Studio does; what is on disk is what gets built
+                css::uno::Reference<css::code::build::XBuildable> xBuildable(xTarget, css::uno::UNO_QUERY);
+                auto xBuild = css::code::build::theBuildController::get(xContext);
+                if (!xBuildable.is())
+                {
+                    StartNow(xContext, aDescriptor, bWithDebugger); // nothing to build with
+                    break;
+                }
+                if (xBuild->getRunningBuild().is())
+                {
+                    ShowStartMessage(u"A build is already running."_ustr);
+                    break;
+                }
+                css::code::document::theDocumentManager::get(xContext)->saveAll();
+                rtl::Reference<StartAfterBuild> xStart
+                    = new StartAfterBuild(xContext, aDescriptor, bWithDebugger);
+                xStart->Watch(xBuild->build(xBuildable));
+            }
+            catch (const uno::Exception& rException)
+            {
+                ShowStartMessage(u"Cannot start: "_ustr + rException.Message);
             }
             break;
         }
@@ -389,6 +567,32 @@ void Shell::GetState(SfxItemSet& rSet)
     }
     if (rSet.GetItemState(SID_CODE_CONFIGURATION, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_CONFIGURATION));
+    if (rSet.GetItemState(SID_CODE_STARTUP, false) != SfxItemState::UNKNOWN)
+        rSet.Put(SfxVoidItem(SID_CODE_STARTUP));
+    // Enabled with any project open: whether its startup target can really
+    // run is answered (with a message) on Execute -- resolving it here would
+    // read the configuration store on every status round.
+    if (rSet.GetItemState(SID_CODE_START_DEBUGGING, false) != SfxItemState::UNKNOWN
+        || rSet.GetItemState(SID_CODE_START_WITHOUT_DEBUGGING, false) != SfxItemState::UNKNOWN)
+    {
+        bool bProject = false;
+        try
+        {
+            auto xManager = css::code::project::theProjectManager::get(
+                comphelper::getProcessComponentContext());
+            bProject = xManager->getActiveProject().is() || xManager->getOpenProjects().hasElements();
+        }
+        catch (const uno::Exception&)
+        {
+        }
+        if (!bProject)
+        {
+            if (rSet.GetItemState(SID_CODE_START_DEBUGGING, false) != SfxItemState::UNKNOWN)
+                rSet.DisableItem(SID_CODE_START_DEBUGGING);
+            if (rSet.GetItemState(SID_CODE_START_WITHOUT_DEBUGGING, false) != SfxItemState::UNKNOWN)
+                rSet.DisableItem(SID_CODE_START_WITHOUT_DEBUGGING);
+        }
+    }
     if (rSet.GetItemState(SID_CODE_STATUS_TASKS, false) != SfxItemState::UNKNOWN)
         rSet.Put(SfxVoidItem(SID_CODE_STATUS_TASKS));
     if (rSet.GetItemState(SID_CODE_STATUS_VCS, false) != SfxItemState::UNKNOWN)

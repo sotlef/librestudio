@@ -1,0 +1,35 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module complete {
+
+/** The answering side: knows a language and proposes what may stand at a
+    place.  It is called on the requesting thread, never assumed to be the UI
+    thread by the controller; completion is interactive, so a provider should
+    answer in well under a second and may return CompletionResult::Incomplete
+    rather than be slow.
+
+    Kept language-neutral on purpose.  What is C- or C++-specific -- say the
+    completion of include paths after '#include <' -- is a possible future
+    capability interface a provider would additionally implement, not part of
+    this one. */
+interface XCompletionProvider
+{
+    string getName();
+    /** lowercase language identifiers, e.g. "c", "c++" */
+    sequence< string > getLanguages();
+    /** whether complete() would understand this document */
+    boolean supports( [in] string Url );
+    ::com::sun::star::code::complete::CompletionResult complete(
+        [in] ::com::sun::star::code::complete::CompletionRequest Request );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

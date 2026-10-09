@@ -1,0 +1,27 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module debug {
+
+/** Source is the session. */
+struct DebugEvent : ::com::sun::star::lang::EventObject
+{
+    ::com::sun::star::code::debug::DebugEventKind Kind;
+    /** the session's state after the event, whatever the Kind */
+    ::com::sun::star::code::debug::DebugSessionState State;
+    /** what was printed, for OUTPUT; empty otherwise */
+    string Text;
+    /** the thread the event is about (the one that stopped, appeared, ...);
+        0 when it is about no one thread */
+    long ThreadId;
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

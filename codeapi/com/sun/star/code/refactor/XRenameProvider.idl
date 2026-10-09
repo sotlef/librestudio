@@ -1,0 +1,38 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreStudio project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+module com { module sun { module star { module code { module refactor {
+
+/** The rename capability of a refactoring engine, discovered with
+    queryInterface on an XRefactoringProvider.  Positions are as everywhere
+    in this API: zero-based, columns in UTF-16 code units. */
+interface XRenameProvider
+{
+    /** Whether the name at Position can be renamed, asked before the rename
+        dialog is shown.  Text is the document as the editor holds it; empty
+        means the file on disk.  An unrenameable place is an answer, not an
+        error: Valid is false and Reason says why. */
+    ::com::sun::star::code::refactor::RenameTarget prepareRename(
+        [in] string Url, [in] ::com::sun::star::code::core::Position Position,
+        [in] string Text );
+
+    /** Every known occurrence of the name at Position replaced by NewName,
+        over all files the provider can see; nothing is applied.  Raises for
+        an unrenameable place (what prepareRename would have declined), a new
+        name that is no identifier of the language, or a file that cannot be
+        analysed. */
+    ::com::sun::star::code::refactor::WorkspaceEdit rename(
+        [in] string Url, [in] ::com::sun::star::code::core::Position Position,
+        [in] string NewName, [in] string Text )
+        raises( ::com::sun::star::code::refactor::RefactorException );
+};
+
+}; }; }; }; };
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */

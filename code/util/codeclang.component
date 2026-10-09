@@ -17,4 +17,16 @@
       constructor="com_sun_star_comp_code_ClangSymbolPlugin_get_implementation">
     <service name="com.sun.star.code.core.Plugin"/>
   </implementation>
+  <implementation name="com.sun.star.comp.code.ClangRenamePlugin"
+      constructor="com_sun_star_comp_code_ClangRenamePlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.ClangSyntaxPlugin"
+      constructor="com_sun_star_comp_code_ClangSyntaxPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
+  <implementation name="com.sun.star.comp.code.ClangCompletionPlugin"
+      constructor="com_sun_star_comp_code_ClangCompletionPlugin_get_implementation">
+    <service name="com.sun.star.code.core.Plugin"/>
+  </implementation>
 </component>

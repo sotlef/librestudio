@@ -15,6 +15,8 @@
 
 #include <com/sun/star/code/build/XBuildable.hpp>
 #include <com/sun/star/code/build/XCompilable.hpp>
+#include <com/sun/star/code/debug/LaunchDescriptor.hpp>
+#include <com/sun/star/code/debug/XLaunchable.hpp>
 #include <com/sun/star/code/project/ItemKind.hpp>
 #include <com/sun/star/code/project/ProjectConfiguration.hpp>
 #include <com/sun/star/code/project/TargetType.hpp>
@@ -25,6 +27,8 @@
 #include <com/sun/star/code/project/XProjectFile.hpp>
 #include <com/sun/star/code/project/XProjectFiles.hpp>
 #include <com/sun/star/code/project/XProjectProperties.hpp>
+#include <com/sun/star/code/project/XProjectPropertyEditor.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/code/tool/XToolDescriptions.hpp>
 #include <com/sun/star/code/tool/theToolDescriptions.hpp>
 #include <com/sun/star/code/project/XProjectTarget.hpp>
@@ -44,6 +48,8 @@
 #include <rtl/strbuf.hxx>
 #include <rtl/ustrbuf.hxx>
 #include <sal/log.hxx>
+
+#include <startuptarget.hxx>
 
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -182,7 +188,8 @@ OUString SystemPathOf(const OUString& rUrl)
 void AddRow(Rows& rRows, const OUString& rName, const OUString& rValue, const OUString& rDescription = OUString())
 {
     if (!rValue.isEmpty())
-        rRows.emplace_back(rName, rValue, rDescription, false, uno::Sequence<OUString>(), -1);
+        rRows.emplace_back(rName, rValue, rDescription, false, uno::Sequence<OUString>(), -1,
+                           false);
 }
 
 void AddPage(Pages& rPages, const OUString& rPath, const Rows& rRows)
@@ -328,7 +335,7 @@ bool CommandPages(const uno::Reference<uno::XComponentContext>& xContext, const 
                             nSelected = i;
                 ProjectProperty aRow(rProperty.Name, aText, rProperty.Description,
                                      pDefaults ? bool(rProperty.Overridden) : !rProperty.IsDefault,
-                                     rProperty.Choices, nSelected);
+                                     rProperty.Choices, nSelected, false);
                 aRows.push_back(std::move(aRow));
             }
             AddPage(rPages, rRoot + "/" + rCategory.Name, aRows);
@@ -632,16 +639,97 @@ public:                                                                         
                                                                                                   \
 private:
 
+// ---- the stored launch properties ------------------------------------------
+//
+// An executable target can be run (debug::XLaunchable).  How is stored in the
+// current configuration of the project, under the keys startuptarget.hxx
+// spells (Debug and Release run with different paths and arguments), and
+// shown as the editable "Debugging" page.
+
+// the properties of the configuration builds go to just now; empty when the
+// project has none
+std::map<OUString, OUString>
+CurrentConfigurationProperties(const uno::Reference<uno::XComponentContext>& xContext,
+                               const OUString& rProjectUrl)
+{
+    std::map<OUString, OUString> aProperties;
+    try
+    {
+        auto xStore = theProjectConfigStore::get(xContext);
+        const OUString aCurrent = xStore->getCurrentConfiguration(rProjectUrl);
+        for (const ProjectConfiguration& rConfiguration : xStore->getConfigurations(rProjectUrl))
+            if (rConfiguration.Name == aCurrent)
+                for (const beans::StringPair& rProperty : rConfiguration.Properties)
+                    aProperties[rProperty.First] = rProperty.Second;
+    }
+    catch (const uno::Exception& rException)
+    {
+        SAL_WARN("code.cmake", "cannot read the configuration store: " << rException.Message);
+    }
+    return aProperties;
+}
+
+// a command line into arguments: split at blanks, with double quotes keeping
+// a blank-carrying argument together
+std::vector<OUString> SplitCommandLine(const OUString& rLine)
+{
+    std::vector<OUString> aArguments;
+    OUStringBuffer aArgument;
+    bool bQuoted = false, bAny = false;
+    for (sal_Int32 i = 0; i < rLine.getLength(); ++i)
+    {
+        const sal_Unicode c = rLine[i];
+        if (c == '"')
+            bQuoted = !bQuoted, bAny = true;
+        else if (!bQuoted && (c == ' ' || c == '\t'))
+        {
+            if (bAny)
+                aArguments.push_back(aArgument.makeStringAndClear());
+            bAny = false;
+        }
+        else
+            aArgument.append(c), bAny = true;
+    }
+    if (bAny)
+        aArguments.push_back(aArgument.makeStringAndClear());
+    return aArguments;
+}
+
+std::vector<OUString> SplitList(const OUString& rText, sal_Unicode cSeparator)
+{
+    std::vector<OUString> aParts;
+    for (sal_Int32 nIndex = 0; nIndex >= 0;)
+    {
+        const OUString aPart = rText.getToken(0, cSeparator, nIndex).trim();
+        if (!aPart.isEmpty())
+            aParts.push_back(aPart);
+    }
+    return aParts;
+}
+
+OUString FileUrlOf(const OUString& rPathOrUrl)
+{
+    if (rPathOrUrl.isEmpty() || rPathOrUrl.startsWith("file:"))
+        return rPathOrUrl;
+    OUString aUrl;
+    return osl::FileBase::getFileURLFromSystemPath(rPathOrUrl, aUrl) == osl::FileBase::E_None
+               ? aUrl
+               : rPathOrUrl;
+}
+
 // A target can be built on its own, in the current configuration of its project.
 class TargetNode final
-    : public cppu::WeakImplHelper<XProjectItem, XProjectTarget, css::code::build::XBuildable, XProjectProperties>
+    : public cppu::WeakImplHelper<XProjectItem, XProjectTarget, css::code::build::XBuildable,
+                                  XProjectProperties, XProjectPropertyEditor,
+                                  css::code::debug::XLaunchable>
 {
 public:
     TargetNode(uno::Reference<uno::XComponentContext> xContext, OUString aProjectUrl, const OUString& rName,
-               TargetType eType)
+               TargetType eType, std::vector<OUString> aArtifactPaths)
         : m_xContext(std::move(xContext))
         , m_aProjectUrl(std::move(aProjectUrl))
         , m_eType(eType)
+        , m_aArtifactPaths(std::move(aArtifactPaths))
     {
         m_aData.aName = rName;
     }
@@ -658,10 +746,11 @@ public:
     {
         return StartBuild(m_xContext, m_aProjectUrl, m_aData.aName, BuildMode::Clean);
     }
-    uno::Sequence<ProjectPropertyPage> SAL_CALL getPropertyPages() override
-    {
-        return comphelper::containerToSequence(m_aPages);
-    }
+    uno::Sequence<ProjectPropertyPage> SAL_CALL getPropertyPages() override;
+    void SAL_CALL setProperty(const OUString& rPagePath, const OUString& rName,
+                              const OUString& rValue) override;
+    sal_Bool SAL_CALL getLaunchable() override { return m_eType == TargetType_EXECUTABLE; }
+    css::code::debug::LaunchDescriptor SAL_CALL createLaunchDescriptor() override;
     CMAKEPROJ_ITEM_METHODS(ItemKind_TARGET)
 
 public:
@@ -671,7 +760,144 @@ public:
     const uno::Reference<uno::XComponentContext> m_xContext;
     const OUString m_aProjectUrl;
     const TargetType m_eType;
+    // what the build makes, as system paths; the first is what runs
+    const std::vector<OUString> m_aArtifactPaths;
+
+private:
+    // the stored launch values, with the old configuration-wide keys the
+    // Debug panel used to write as a read-only fallback
+    struct LaunchValues
+    {
+        OUString aCommand, aArguments, aWorkingDirectory, aEnvironment;
+        bool bCommandStored = false, bArgumentsStored = false, bWorkingDirectoryStored = false,
+             bEnvironmentStored = false;
+    };
+    LaunchValues ReadLaunchValues() const;
 };
+
+TargetNode::LaunchValues TargetNode::ReadLaunchValues() const
+{
+    const std::map<OUString, OUString> aStored
+        = CurrentConfigurationProperties(m_xContext, m_aProjectUrl);
+    auto read = [&](const OUString& rKey, const OUString& rLegacyKey, OUString& rValue, bool& rbStored)
+    {
+        if (const auto it = aStored.find(rKey); it != aStored.end() && !it->second.isEmpty())
+        {
+            rValue = it->second;
+            rbStored = true;
+        }
+        else if (const auto itLegacy = aStored.find(rLegacyKey); itLegacy != aStored.end())
+            rValue = itLegacy->second; // the old key counts as a default, not as set
+    };
+    const OUString& rName = m_aData.aName;
+    LaunchValues aValues;
+    read(::code::startup::CommandKey(rName), u"DebugProgram"_ustr, aValues.aCommand,
+         aValues.bCommandStored);
+    read(::code::startup::ArgumentsKey(rName), u"DebugArguments"_ustr, aValues.aArguments,
+         aValues.bArgumentsStored);
+    read(::code::startup::WorkingDirectoryKey(rName), u"DebugWorkingDirectory"_ustr,
+         aValues.aWorkingDirectory, aValues.bWorkingDirectoryStored);
+    read(::code::startup::EnvironmentKey(rName), u""_ustr, aValues.aEnvironment,
+         aValues.bEnvironmentStored);
+    return aValues;
+}
+
+uno::Sequence<ProjectPropertyPage> TargetNode::getPropertyPages()
+{
+    Pages aPages = m_aPages;
+    // The CMake pages are a frozen snapshot; the Debugging page is computed
+    // on every call, so the dialog re-reads fresh values right after a write.
+    if (getLaunchable())
+    {
+        const LaunchValues aValues = ReadLaunchValues();
+        const OUString aArtifact = m_aArtifactPaths.empty() ? OUString() : m_aArtifactPaths.front();
+        const OUString aArtifactDirectory
+            = aArtifact.copy(0, std::max<sal_Int32>(aArtifact.lastIndexOf('/'), 0));
+        Rows aRows;
+        auto add = [&aRows](const OUString& rName, const OUString& rValue, bool bStored,
+                            const OUString& rDescription)
+        {
+            // rows stay even when empty: an empty cell the user can fill
+            aRows.emplace_back(rName, rValue, rDescription, bStored, uno::Sequence<OUString>(),
+                               -1, true);
+        };
+        add(u"Command"_ustr, aValues.aCommand.isEmpty() ? aArtifact : aValues.aCommand,
+            aValues.bCommandStored,
+            u"The program Start runs; the target's built file when not set. Stored in the current configuration; an empty value brings the default back."_ustr);
+        add(u"Command Arguments"_ustr, aValues.aArguments, aValues.bArgumentsStored,
+            u"The command line the program gets, quoted as in a shell. Stored in the current configuration."_ustr);
+        add(u"Working Directory"_ustr,
+            aValues.aWorkingDirectory.isEmpty() ? aArtifactDirectory : aValues.aWorkingDirectory,
+            aValues.bWorkingDirectoryStored,
+            u"Where the program runs; its own directory when not set. Stored in the current configuration."_ustr);
+        add(u"Environment"_ustr, aValues.aEnvironment, aValues.bEnvironmentStored,
+            u"NAME=value entries added to the program's environment, separated by \";\". Stored in the current configuration."_ustr);
+        AddPage(aPages, u"Debugging"_ustr, aRows);
+    }
+    return comphelper::containerToSequence(aPages);
+}
+
+void TargetNode::setProperty(const OUString& rPagePath, const OUString& rName,
+                             const OUString& rValue)
+{
+    if (rPagePath != "Debugging")
+        throw lang::IllegalArgumentException("the page is not editable: " + rPagePath, getXWeak(),
+                                             0);
+    OUString aKey;
+    if (rName == "Command")
+        aKey = ::code::startup::CommandKey(m_aData.aName);
+    else if (rName == "Command Arguments")
+        aKey = ::code::startup::ArgumentsKey(m_aData.aName);
+    else if (rName == "Working Directory")
+        aKey = ::code::startup::WorkingDirectoryKey(m_aData.aName);
+    else if (rName == "Environment")
+        aKey = ::code::startup::EnvironmentKey(m_aData.aName);
+    else
+        throw lang::IllegalArgumentException("no editable property named " + rName, getXWeak(), 1);
+
+    auto xStore = theProjectConfigStore::get(m_xContext);
+    const OUString aCurrent = xStore->getCurrentConfiguration(m_aProjectUrl);
+    if (aCurrent.isEmpty())
+        throw lang::IllegalArgumentException(
+            u"the project has no configuration to keep the value in"_ustr, getXWeak(), 0);
+    auto aConfigurations = comphelper::sequenceToContainer<std::vector<ProjectConfiguration>>(
+        xStore->getConfigurations(m_aProjectUrl));
+    for (ProjectConfiguration& rConfiguration : aConfigurations)
+    {
+        if (rConfiguration.Name != aCurrent)
+            continue;
+        auto aProperties = comphelper::sequenceToContainer<std::vector<beans::StringPair>>(
+            rConfiguration.Properties);
+        std::erase_if(aProperties,
+                      [&](const beans::StringPair& r) { return r.First == aKey; });
+        if (!rValue.isEmpty()) // empty forgets the value: the default returns
+            aProperties.push_back({ aKey, rValue });
+        rConfiguration.Properties = comphelper::containerToSequence(aProperties);
+    }
+    xStore->setConfigurations(m_aProjectUrl, comphelper::containerToSequence(aConfigurations));
+}
+
+css::code::debug::LaunchDescriptor TargetNode::createLaunchDescriptor()
+{
+    const LaunchValues aValues = ReadLaunchValues();
+    css::code::debug::LaunchDescriptor aDescriptor;
+    aDescriptor.Program = aValues.aCommand.isEmpty()
+                              ? (m_aArtifactPaths.empty() ? OUString() : m_aArtifactPaths.front())
+                              : aValues.aCommand;
+    aDescriptor.Arguments = comphelper::containerToSequence(SplitCommandLine(aValues.aArguments));
+    OUString aWorkingDirectory = aValues.aWorkingDirectory;
+    if (aWorkingDirectory.isEmpty() && !m_aArtifactPaths.empty())
+    {
+        const OUString& rArtifact = m_aArtifactPaths.front();
+        aWorkingDirectory = rArtifact.copy(0, std::max<sal_Int32>(rArtifact.lastIndexOf('/'), 0));
+    }
+    aDescriptor.WorkingDirectory = FileUrlOf(aWorkingDirectory);
+    aDescriptor.Environment = comphelper::containerToSequence(SplitList(aValues.aEnvironment, ';'));
+    // stopping at the entry is the debug session's way of starting, not a
+    // property of the target: the caller sets it
+    aDescriptor.StopAtEntry = false;
+    return aDescriptor;
+}
 
 class GroupNode final : public cppu::WeakImplHelper<XSourceGroup>
 {
@@ -817,9 +1043,15 @@ Structure ReadStructure(const uno::Reference<uno::XComponentContext>& xContext, 
             if (!ReadJson(aReplyUrl + "/" + OUString::fromUtf8(rTargetRef.second.get<std::string>("jsonFile")), aTarget))
                 continue;
 
+            // what the build makes, as the "Output Files" row shows it; the
+            // first artifact is what XLaunchable runs
+            std::vector<OUString> aArtifacts;
+            for (const OUString& rPath : StringsOf(aTarget, "artifacts", "path"))
+                aArtifacts.push_back(Utf8(NormalizePath(aBuildRoot + "/" + rPath.toUtf8().getStr())));
+
             rtl::Reference<TargetNode> xTarget = new TargetNode(
                 xContext, rProjectUrl, OUString::fromUtf8(aTarget.get<std::string>("name", "")),
-                TargetTypeOf(aTarget.get<std::string>("type", "")));
+                TargetTypeOf(aTarget.get<std::string>("type", "")), std::move(aArtifacts));
 
             xTarget->m_aPages = TargetPages(xContext, aTarget, aSourceRoot, aBuildRoot, *xToolchains);
 
