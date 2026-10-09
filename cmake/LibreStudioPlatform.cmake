@@ -401,7 +401,24 @@ endif ()
 # These are GCC/Clang flags (meaningful for both Linux and macOS, which build
 # with the same compilers); cl.exe/link.exe understand neither, so both blocks
 # below are skipped under MSVC rather than passed through and rejected.
-if (NOT MSVC)
+if (MSVC)
+    # com_MSC_defs.mk's gb_CFLAGS/gb_CXXFLAGS: UTF-8 sources, big objects, the
+    # same set of warnings switched off, and a __cplusplus that tells the truth.
+    # C and C++ only: the assembler (ml64) takes none of these.
+    add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:/utf-8;/bigobj;/Zc:__cplusplus;/Zc:inline;/EHsc;/wd4127;/wd4201;/wd4244;/wd4250;/wd4251;/wd4267;/wd4275;/wd4505;/wd4611;/wd4706>")
+    # cl.exe has no /Zc:dllexportInlines- (upstream's gb_CXXFLAGS uses it only
+    # with clang-cl), so a template base instantiated by a dllexport class --
+    # e.g. cppu::ImplInheritanceHelper<comphelper::OAccessible, ...> -- is both
+    # exported by comphelper and instantiated again in its users, which link.exe
+    # reports as LNK2005.  The definitions are identical; keep the first.
+    add_link_options(/FORCE:MULTIPLE)
+    # The libm/librt/libdl that unix targets name on their link lines are part
+    # of the C runtime here; these empty targets let those lines stand.
+    foreach (_unix_only_lib IN ITEMS m rt dl)
+        add_library(${_unix_only_lib} INTERFACE)
+    endforeach ()
+    unset(_unix_only_lib)
+else ()
     add_compile_options(-fPIC -fno-strict-aliasing)
 
     # gbuild links shared libraries with -Wl,-z,defs
@@ -489,7 +506,23 @@ elseif (APPLE)
     add_compile_definitions(MACOSX UNX)
 elseif (WIN32)
     # windows.mk's gb_OSDEFS/gb_WIN_VERSION_DEFS: -DWIN32 -DWNT (no UNX/LINUX).
-    add_compile_definitions(WIN32 WNT)
+    add_compile_definitions(WIN32 WNT
+        # windows.mk's gb_WIN_VERSION_DEFS / gb_OSDEFS: Windows 10 baseline, and
+        # no min()/max() macros from <windows.h> (they break std::numeric_limits<>::max()).
+        _WIN32_WINNT=_WIN32_WINNT_WIN10 NOMINMAX
+        # com_MSC_class.mk: the sources include <windef.h> and friends directly,
+        # which wants the target architecture spelled out.
+        $<$<STREQUAL:${LIBRESTUDIO_CPPU_ENV},mscx>:_AMD64_=1>
+        $<$<STREQUAL:${LIBRESTUDIO_CPPU_ENV},msci>:_X86_=1>
+        # com_MSC_defs.mk's gb_COMPILERDEFS
+        BOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE
+        BOOST_MEM_FN_ENABLE_CDECL
+        _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+        _SILENCE_CXX17_OLD_ALLOCATOR_MEMBERS_DEPRECATION_WARNING
+        _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
+        _SILENCE_CXX23_DENORM_DEPRECATION_WARNING
+        _CRT_NON_CONFORMING_SWPRINTFS _CRT_NONSTDC_NO_DEPRECATE
+        _CRT_SECURE_NO_DEPRECATE _SCL_SECURE_NO_WARNINGS)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     add_compile_definitions(FREEBSD UNX)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "NetBSD")

@@ -1,0 +1,75 @@
+# Standalone project for Skia, built by clang-cl.  Generated from
+# external/skia/skia.cmake; see there for why this is not part of the main build.
+cmake_minimum_required(VERSION 3.20)
+project(skia C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(SKIA_ROOT "@skia_SOURCE_DIR@")
+set(LS_ROOT "@CMAKE_SOURCE_DIR@")
+set(LS_BIN "@CMAKE_BINARY_DIR@")
+set(SKIA_EXTERNAL_INCLUDES "@SKIA_EXTERNAL_INCLUDES@")
+set(SKIA_EXTERNAL_LIBS "@SKIA_EXTERNAL_LIBS@")
+
+include("${LS_ROOT}/external/skia/skia_sources.cmake")
+
+function(skia_abs out)
+    set(_l "")
+    foreach (_s IN LISTS ARGN)
+        list(APPEND _l "${SKIA_ROOT}/${_s}")
+    endforeach ()
+    set(${out} "${_l}" PARENT_SCOPE)
+endfunction()
+
+skia_abs(_main ${SKIA_TARBALL_SOURCES})
+skia_abs(_ssse3 ${SKIA_SSSE3_SOURCES})
+skia_abs(_avx ${SKIA_AVX_SOURCES})
+skia_abs(_avx2 ${SKIA_AVX2_SOURCES})
+skia_abs(_avx512 ${SKIA_AVX512_SOURCES})
+set(_lo "")
+foreach (_s IN LISTS SKIA_LO_SOURCES SKIA_LO_SSSE3_SOURCES)
+    list(APPEND _lo "${LS_ROOT}/${_s}")
+endforeach ()
+
+add_library(skia SHARED ${_main} ${_ssse3} ${_avx} ${_avx2} ${_avx512} ${_lo})
+set_target_properties(skia PROPERTIES OUTPUT_NAME skialo PREFIX "")
+
+# Per-source instruction sets (LO_CLANG_CXXFLAGS_INTRINSICS_*), kept off the
+# rest of the library; and -Zc:dllexportInlines- for them so the AVX-built
+# inline copies cannot win at link time.
+set_source_files_properties(${_ssse3} "${LS_ROOT}/external/skia/source/skia_opts_ssse3.cxx"
+    PROPERTIES COMPILE_OPTIONS "-mssse3;-Zc:dllexportInlines-")
+set_source_files_properties(${_avx} PROPERTIES COMPILE_OPTIONS "-mavx;-Zc:dllexportInlines-")
+set_source_files_properties(${_avx2} PROPERTIES
+    COMPILE_OPTIONS "-mavx2;-mf16c;-mfma;-Zc:dllexportInlines-")
+set_source_files_properties(${_avx512} PROPERTIES
+    COMPILE_OPTIONS "-mavx512f;-mavx512vl;-mavx512bw;-mavx512dq;-mavx512cd;-Zc:dllexportInlines-")
+
+target_compile_definitions(skia PRIVATE
+    SKIA_IMPLEMENTATION=1 SKIA_DLL
+    "SK_USER_CONFIG_HEADER=<config_skia.h>"
+    SK_CPU_X64_LEVEL=SK_CPU_X64_LEVEL_SSE2
+    SK_ENABLE_SKSL_IN_RASTER_PIPELINE
+    UNICODE _UNICODE
+    WIN32 WNT NOMINMAX _WIN32_WINNT=_WIN32_WINNT_WIN10 _AMD64_=1
+    _CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS
+    LIBO_INTERNAL_ONLY)
+
+target_include_directories(skia PRIVATE
+    "${SKIA_ROOT}"
+    "${SKIA_ROOT}/modules/skcms"
+    "${SKIA_ROOT}/third_party/vulkanmemoryallocator"
+    "${SKIA_ROOT}/third_party/vulkanmemoryallocator/include"
+    "${SKIA_ROOT}/src/gpu/vk/vulkanmemoryallocator"
+    "${SKIA_ROOT}/src/ports"
+    "${SKIA_ROOT}/include/third_party/vulkan"
+    "${LS_ROOT}/external/skia/inc"
+    "${LS_ROOT}/include"
+    "${LS_BIN}/config_host"
+    ${SKIA_EXTERNAL_INCLUDES})
+
+# gb_Library_set_warnings_disabled
+target_compile_options(skia PRIVATE -w)
+target_link_libraries(skia PRIVATE ${SKIA_EXTERNAL_LIBS}
+    "${LS_BIN}/lib/uno_sal.lib"
+    fontsub ole32 oleaut32 user32 usp10 gdi32 advapi32 shell32 dxguid)

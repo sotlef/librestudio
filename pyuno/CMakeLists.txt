@@ -197,5 +197,4 @@ install(TARGETS pyuno_wrapper LIBRARY DESTINATION program)
 # specific constraint, and cmake/LibreStudioTest.cmake's header comment for
 # why CMAKE_SOURCE_DIR (not CMAKE_CURRENT_SOURCE_DIR) is required in the
 # path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/pyuno/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/pyuno/CppunitTest_deferred.cmake")

@@ -21,6 +21,21 @@ function(librestudio_vendor_harfbuzz)
     set(HARFBUZZ_SRC "${harfbuzz_SOURCE_DIR}/src")
     set(HARFBUZZ_BUILD "${CMAKE_BINARY_DIR}/harfbuzz-build")
 
+    # pkgconf's search-path separator is ';' on Windows and ':' elsewhere; a
+    # literal ';' would be split into separate arguments here, hence the genex.
+    if (WIN32)
+        set(_hb_pkg_sep "$<SEMICOLON>")
+        # -fPIC is not an MSVC option, and every object is position
+        # independent there anyway.
+        set(_hb_fpic_args "")
+    else ()
+        set(_hb_pkg_sep ":")
+        set(_hb_fpic_args "-Dc_args=-fPIC" "-Dcpp_args=-fPIC")
+    endif ()
+    set(_hb_env_pkg "$ENV{PKG_CONFIG_PATH}")
+    string(REPLACE ";" "$<SEMICOLON>" _hb_env_pkg "${_hb_env_pkg}")
+    set(_hb_pkg_path "${LIBRESTUDIO_GRAPHITE2_PKGCONFIG_DIR}${_hb_pkg_sep}${_hb_env_pkg}")
+
     include(ExternalProject)
     # The options are upstream's: static, subset enabled, ICU built in, and
     # graphite2 from the system; tests and utilities are left out, and
@@ -47,7 +62,7 @@ function(librestudio_vendor_harfbuzz)
             # pkg-config skips it, falling through to the real system
             # graphite2.pc on the inherited path.
             "${CMAKE_COMMAND}" -E env "PYTHONWARNINGS="
-                "PKG_CONFIG_PATH=${LIBRESTUDIO_GRAPHITE2_PKGCONFIG_DIR}:$ENV{PKG_CONFIG_PATH}"
+                "PKG_CONFIG_PATH=${_hb_pkg_path}"
             "${MESON_EXECUTABLE}" setup --wrap-mode nofallback
                 --buildtype release
                 -Ddefault_library=static
@@ -61,8 +76,7 @@ function(librestudio_vendor_harfbuzz)
                 -Dicu=enabled
                 -Dicu_builtin=true
                 -Dgraphite2=enabled
-                "-Dc_args=-fPIC"
-                "-Dcpp_args=-fPIC"
+                ${_hb_fpic_args}
                 "${harfbuzz_SOURCE_DIR}"
         BUILD_COMMAND "${MESON_EXECUTABLE}" compile -C "${HARFBUZZ_BUILD}" libs
         INSTALL_COMMAND ""

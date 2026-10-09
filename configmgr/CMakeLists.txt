@@ -114,5 +114,4 @@ install(TARGETS configmgr LIBRARY DESTINATION program)
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/configmgr/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/configmgr/CppunitTest_deferred.cmake")

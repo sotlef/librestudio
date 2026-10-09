@@ -345,6 +345,9 @@ endif ()
 # names, same style as vcl/CMakeLists.txt's own WIN32 block (dwrite ole32
 # setupapi shell32 version).
 if (WIN32)
+    target_sources(sfx PRIVATE
+        "${CMAKE_SOURCE_DIR}/sfx2/source/appl/shutdowniconw32.cxx"
+        "${CMAKE_SOURCE_DIR}/sfx2/source/doc/syspathw32.cxx")
     target_link_libraries(sfx PRIVATE
         advapi32 gdi32 ole32 shell32 uuid)
 endif ()
@@ -692,5 +695,4 @@ librestudio_add_cppunit_test(sfx2_controlleritem
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/sfx2/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/sfx2/CppunitTest_deferred.cmake")

@@ -661,5 +661,4 @@ librestudio_add_cppunit_test(chart2_correlation_coefficient
         "${CMAKE_SOURCE_DIR}/chart2/inc"
         "${CMAKE_SOURCE_DIR}/chart2/source/inc")
 
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/chart2/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/chart2/CppunitTest_deferred.cmake")

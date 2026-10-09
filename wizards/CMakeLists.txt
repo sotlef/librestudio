@@ -770,8 +770,7 @@ install(FILES
 # already-working component in the tree), not something owned by wizards/
 # CMakeLists.txt alone.
 if (LIBRESTUDIO_ENABLE_JAVA)
-    cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-        "${CMAKE_SOURCE_DIR}/wizards/Jar_wizards_deferred.cmake")
+    librestudio_include_deferred("${CMAKE_SOURCE_DIR}/wizards/Jar_wizards_deferred.cmake")
 endif ()
 
 # --- AllLangMoTarget_wiz: out of scope ---------------------------------------

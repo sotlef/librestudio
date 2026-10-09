@@ -93,6 +93,5 @@ if (LIBRESTUDIO_ENABLE_JAVA)
             nlpsolver/ThirdParty/EvolutionarySolver/src/net/adaptivebox/deps/behavior/DEGTBehavior
             nlpsolver/ThirdParty/EvolutionarySolver/src/net/adaptivebox/sco/SCAgent)
 
-    cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-        "${CMAKE_SOURCE_DIR}/nlpsolver/Jar_nlpsolver_deferred.cmake")
+    librestudio_include_deferred("${CMAKE_SOURCE_DIR}/nlpsolver/Jar_nlpsolver_deferred.cmake")
 endif ()

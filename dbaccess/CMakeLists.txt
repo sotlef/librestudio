@@ -758,7 +758,6 @@ unset(_dba_uiconfig_outputs)
 # COMPONENTS), use_configuration -> CONFIGURATION, use_uiconfigs(dbaccess)
 # -> UICONFIG dbaccess (this file's own new "dbaccess_uiconfig" ALL target,
 # ported alongside this wiring).
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/dbaccess/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/dbaccess/CppunitTest_deferred.cmake")
 
 endif (ENABLE_DBCONNECTIVITY)

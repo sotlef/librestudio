@@ -66,7 +66,14 @@ install(TARGETS sot LIBRARY DESTINATION program)
 # own test_sot.cxx cannot be used yet: it builds on unotest's fixtures, and
 # unotest links vcl.
 #
-add_executable(sot_storage_check qa/cppunit/sot_storage_check.cxx)
+# EXCLUDE_FROM_ALL where there is no popen(): the check shells out to compare
+# against a reference dump.
+if (WIN32)
+    set(_sot_check_all EXCLUDE_FROM_ALL)
+else ()
+    set(_sot_check_all "")
+endif ()
+add_executable(sot_storage_check ${_sot_check_all} qa/cppunit/sot_storage_check.cxx)
 
 target_include_directories(sot_storage_check PRIVATE
     "${CMAKE_SOURCE_DIR}/sot/inc"

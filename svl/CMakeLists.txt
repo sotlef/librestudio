@@ -58,9 +58,19 @@ add_library(zxcvbn-c STATIC
 target_include_directories(zxcvbn-c PRIVATE
     "${ZXCVBN_C_DIR}" "${zxcvbn_c_SOURCE_DIR}")
 target_link_libraries(zxcvbn-c PRIVATE m)
+# zxcvbn.c includes "stdafx.h" under _WIN32 ("for pre-compiled headers"); the
+# tarball ships none, so an empty one stands in.
+if (WIN32)
+    file(WRITE "${ZXCVBN_C_DIR}/stdafx.h" "/* intentionally empty */
+")
+endif ()
 # gb_StaticLibrary_set_warnings_disabled: it is not our source and it is not
 # warning-clean under -Wall -Wextra.
-target_compile_options(zxcvbn-c PRIVATE -w)
+if (MSVC)
+    target_compile_options(zxcvbn-c PRIVATE /w)
+else ()
+    target_compile_options(zxcvbn-c PRIVATE -w)
+endif ()
 set_target_properties(zxcvbn-c PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # --- svl ---------------------------------------------------------------------
@@ -379,5 +389,4 @@ librestudio_add_cppunit_test(svl_items
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/svl/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/svl/CppunitTest_deferred.cmake")

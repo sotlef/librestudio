@@ -581,6 +581,10 @@ set(VCL_SOURCES
 set(LIBRESTUDIO_BUILD_TYPE "DESKTOP" CACHE STRING
     "configure.ac's BUILD_TYPE: DESKTOP, plus OPENCL, SKIA, PDFIUM or AFDKO")
 
+if (ENABLE_SKIA AND NOT "SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+    list(APPEND LIBRESTUDIO_BUILD_TYPE SKIA)
+endif ()
+
 option(LIBRESTUDIO_ENABLE_BREAKPAD "Link the breakpad crash reporter" OFF)
 option(LIBRESTUDIO_SYSTEM_LIBFIXMATH
     "Use a system libfixmath instead of the fix16 bundled in tools/" OFF)
@@ -606,10 +610,10 @@ if (USING_X11)
     if (ENABLE_CPDB)
         list(APPEND VCL_SOURCES vcl/unx/generic/printer/cpdmgr)
     endif ()
-else ()
+elseif (NOT WIN32)
     message(FATAL_ERROR
         "Library_vcl.mk has no branch for a build without X11; the headless "
-        "and Windows cases would need writing first")
+        "case would need writing first")
 endif ()
 
 if (NOT DISABLE_GUI)
@@ -886,7 +890,11 @@ librestudio_pkgconfig(
     VERSION 14.3.0
     DRIVER harfbuzz)
 
-pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+# gio is the unix session/desktop integration; Library_vcl.mk lists it
+# unconditionally but there is no gio on the platform that has no use for it.
+if (NOT WIN32)
+    pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+endif ()
 
 # lcms2/libeot/libwebp (2026-09-29, system-or-vendor refactor): resolved
 # via librestudio_pkgconfig() into LIBRESTUDIO_LCMS2_TARGET/LIBRESTUDIO_
@@ -898,7 +906,11 @@ pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 # no version floor in configure.ac (grepped: plain `libo_CHECK_SYSTEM_
 # MODULE`/no PKG_CHECK_MODULES version constraint for either).
 librestudio_pkgconfig(NAME LCMS2 MODULES lcms2)
-librestudio_pkgconfig(NAME LIBEOT MODULES libeot VERSION 0.01)
+# libeot (embedded OpenType fonts) is an autotools build; ENABLE_EOT is off on
+# Windows (config headers only turn it on for a system libeot), nothing needs it.
+if (NOT WIN32)
+    librestudio_pkgconfig(NAME LIBEOT MODULES libeot VERSION 0.01)
+endif ()
 librestudio_pkgconfig(NAME LIBWEBP MODULES libwebp)
 # libjxl is not optional and not guarded by an #if anywhere: the reader in
 # vcl/source/filter/jxl/reader.cxx includes it unconditionally.  It comes in two
@@ -940,7 +952,12 @@ if (NOT DISABLE_GUI)
     # place and is added when that build type is asked for.
     pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
     if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
-        pkg_check_modules(SKIA REQUIRED IMPORTED_TARGET skia)
+        if (WIN32)
+            librestudio_pkgconfig(NAME SKIA MODULES skia DRIVER skia
+                FORCE_VENDOR_VAR LIBRESTUDIO_FORCE_VENDOR_SKIA)
+        else ()
+            pkg_check_modules(SKIA REQUIRED IMPORTED_TARGET skia)
+        endif ()
     endif ()
 endif ()
 
@@ -983,8 +1000,8 @@ endif ()
 target_compile_definitions(vcl PRIVATE
     VCL_DLLIMPLEMENTATION
     DLLIMPLEMENTATION_UITEST
-    CUI_DLL_NAME="libcuilo.so"
-    TK_DLL_NAME="libtklo.so")
+    CUI_DLL_NAME="${CMAKE_SHARED_LIBRARY_PREFIX}cuilo${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    TK_DLL_NAME="${CMAKE_SHARED_LIBRARY_PREFIX}tklo${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
 if (LIBRESTUDIO_SYSTEM_LIBFIXMATH)
     find_library(LIBFIXMATH_LIBRARY NAMES fixmath REQUIRED)
@@ -1005,9 +1022,16 @@ target_link_libraries(vcl PRIVATE
     ICU::uc
     ${LIBRESTUDIO_JPEG_TARGET} ${LIBRESTUDIO_PNG_TARGET} TIFF::TIFF
     ${LIBRESTUDIO_HARFBUZZ_TARGET}
-    PkgConfig::GIO ${LIBRESTUDIO_GRAPHITE2_TARGET} ${LIBRESTUDIO_LCMS2_TARGET}
-    ${LIBRESTUDIO_LIBEOT_TARGET} ${LIBRESTUDIO_LIBWEBP_TARGET} ${LIBRESTUDIO_LIBJXL_TARGET}
-    m)
+    ${LIBRESTUDIO_GRAPHITE2_TARGET} ${LIBRESTUDIO_LCMS2_TARGET}
+    ${LIBRESTUDIO_LIBWEBP_TARGET} ${LIBRESTUDIO_LIBJXL_TARGET})
+
+if (NOT WIN32)
+    target_link_libraries(vcl PRIVATE ${LIBRESTUDIO_LIBEOT_TARGET})
+endif ()
+
+if (NOT WIN32)
+    target_link_libraries(vcl PRIVATE PkgConfig::GIO m)
+endif ()
 
 if (LIBRESTUDIO_ENABLE_BREAKPAD)
     target_link_libraries(vcl PRIVATE crashreport)
@@ -1048,7 +1072,11 @@ endif ()
 if (NOT DISABLE_GUI)
     target_link_libraries(vcl PRIVATE PkgConfig::EPOXY)
     if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
-        target_link_libraries(vcl PRIVATE PkgConfig::SKIA)
+        if (WIN32)
+            target_link_libraries(vcl PRIVATE ${LIBRESTUDIO_SKIA_TARGET})
+        else ()
+            target_link_libraries(vcl PRIVATE PkgConfig::SKIA)
+        endif ()
     endif ()
 endif ()
 
@@ -1072,9 +1100,14 @@ endif ()
 # through the filtered parameter, see librestudio_add_component().  The ifeq
 # chain at the top of the .mk picks that suffix by platform; unx is its else
 # branch, which is also the one the headless alternative does not take.
+if (WIN32)
+    set(_vcl_component_impl "${CMAKE_SOURCE_DIR}/vcl/vcl.common.component.windows")
+else ()
+    set(_vcl_component_impl "${CMAKE_SOURCE_DIR}/vcl/vcl.common.component.unx")
+endif ()
 librestudio_add_component(vcl
     COMPONENT      "${CMAKE_SOURCE_DIR}/vcl/vcl.common.component"
-    IMPLEMENTATION "${CMAKE_SOURCE_DIR}/vcl/vcl.common.component.unx"
+    IMPLEMENTATION "${_vcl_component_impl}"
     LIBRARY        vcl
     LAYER          OOO)
 
@@ -1175,8 +1208,10 @@ endif ()
 # 70-75 and 147-152, Library_vclplug_gtk3.mk line 57 — so they are found once,
 # outside either block.  -lm and -ldl are the unix branch of the same rule and
 # stay with the library that asks for them.
-find_library(SM_LIBRARY NAMES SM REQUIRED)
-find_library(ICE_LIBRARY NAMES ICE REQUIRED)
+if (UNIX)
+    find_library(SM_LIBRARY NAMES SM REQUIRED)
+    find_library(ICE_LIBRARY NAMES ICE REQUIRED)
+endif ()
 
 if (ENABLE_GEN)
     set(VCLPLUG_GEN_SOURCES
@@ -1766,6 +1801,117 @@ if (ENABLE_QT6)
     install(TARGETS vclplug_qt6 LIBRARY DESTINATION program)
 endif ()
 
+# --- vclplug_win ---------------------------------------------------------------
+
+# The Windows back end (GDI/DirectWrite/GDI+, OLE clipboard and drag and drop).
+# Library_vclplug_win.mk: a plug-in like vclplug_gen -- libvcl loads it by name
+# and gb_Library_set_plugin_for(...,vcl) links vcl into it -- but, unlike the
+# unix back ends, it has a component file of its own (the OLE clipboard and
+# drag and drop services), registered through librestudio_add_component().
+#
+# vcl/salsrc (WinResTarget_vcl.mk) is the .rc of cursors and bitmaps the frame
+# code loads with LoadCursor()/LoadBitmap() against its own module handle, so
+# it is linked here.  Library_vcl.mk adds the same resource to libvcl as well;
+# nothing in libvcl loads from it, so it is only compiled once.
+if (ENABLE_WIN)
+    set(VCLPLUG_WIN_SOURCES
+        vcl/source/opengl/win/context
+        vcl/win/app/WindowsInstance
+        vcl/win/app/salinfo
+        vcl/win/app/salinst
+        vcl/win/app/salshl
+        vcl/win/app/saltimer
+        vcl/win/dtrans/APNDataObject
+        vcl/win/dtrans/clipboardmanager
+        vcl/win/dtrans/DataFmtTransl
+        vcl/win/dtrans/DOTransferable
+        vcl/win/dtrans/DtObjFactory
+        vcl/win/dtrans/DTransHelper
+        vcl/win/dtrans/Fetc
+        vcl/win/dtrans/FetcList
+        vcl/win/dtrans/FmtFilter
+        vcl/win/dtrans/ftransl
+        vcl/win/dtrans/generic_clipboard
+        vcl/win/dtrans/globals
+        vcl/win/dtrans/idroptarget
+        vcl/win/dtrans/ImplHelper
+        vcl/win/dtrans/MtaOleClipb
+        vcl/win/dtrans/source
+        vcl/win/dtrans/sourcecontext
+        vcl/win/dtrans/target
+        vcl/win/dtrans/targetdragcontext
+        vcl/win/dtrans/targetdropcontext
+        vcl/win/dtrans/TxtCnvtHlp
+        vcl/win/dtrans/WinClipboard
+        vcl/win/dtrans/XNotifyingDataObject
+        vcl/win/dtrans/XTDataObject
+        vcl/win/gdi/gdiimpl
+        vcl/win/gdi/salbmp
+        vcl/win/gdi/salfont
+        vcl/win/gdi/salgdi
+        vcl/win/gdi/salgdi2
+        vcl/win/gdi/salgdi_gdiplus
+        vcl/win/gdi/salnativewidgets-luna
+        vcl/win/gdi/salprn
+        vcl/win/gdi/salvd
+        vcl/win/gdi/winlayout
+        vcl/win/gdi/DWriteTextRenderer
+        vcl/win/window/keynames
+        vcl/win/window/salframe
+        vcl/win/window/salmenu
+        vcl/win/window/salobj)
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        list(APPEND VCLPLUG_WIN_SOURCES vcl/skia/win/gdiimpl)
+    endif ()
+
+    librestudio_expand_cxx(VCLPLUG_WIN_SOURCES)
+
+    set(VCL_SALSRC_DIR "${CMAKE_SOURCE_DIR}/vcl/win/src")
+    add_library(vclplug_win SHARED ${VCLPLUG_WIN_SOURCES}
+        "${VCL_SALSRC_DIR}/salsrc.rc")
+    set_source_files_properties("${VCL_SALSRC_DIR}/salsrc.rc" PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/vcl/inc;${VCL_SALSRC_DIR}"
+        OBJECT_DEPENDS "${VCL_SALSRC_DIR}/50.bmp;${VCL_SALSRC_DIR}/50.png")
+
+    target_include_directories(vclplug_win PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${CMAKE_SOURCE_DIR}/vcl/inc/win"
+        "${FROZEN_INCLUDE_DIR}"
+        "${OFFICECFG_INCLUDE_DIR}"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(vclplug_win
+        officecfg_headers udkapi_normal_headers offapi_normal_headers)
+    target_compile_definitions(vclplug_win PRIVATE
+        VCLPLUG_WIN_IMPLEMENTATION VCL_INTERNALS)
+
+    pkg_check_modules(EPOXY_WIN REQUIRED IMPORTED_TARGET epoxy)
+    target_link_libraries(vclplug_win PRIVATE
+        vcl
+        basegfx comphelper cppu cppuhelper i18nlangtag i18nutil sal salhelper
+        sot tl utl
+        Boost::boost
+        ICU::uc
+        ${LIBRESTUDIO_HARFBUZZ_TARGET} ${LIBRESTUDIO_GRAPHITE2_TARGET}
+        PkgConfig::EPOXY_WIN
+        advapi32 d2d1 dwmapi dwrite gdi32 gdiplus imm32 ole32 oleaut32
+        shell32 shlwapi uuid uxtheme version winspool)
+
+    if ("SKIA" IN_LIST LIBRESTUDIO_BUILD_TYPE)
+        target_link_libraries(vclplug_win PRIVATE ${LIBRESTUDIO_SKIA_TARGET})
+    endif ()
+    if (LIBRESTUDIO_ENABLE_BREAKPAD)
+        target_link_libraries(vclplug_win PRIVATE crashreport)
+    endif ()
+
+    librestudio_add_component(vclplug_win
+        COMPONENT "${CMAKE_SOURCE_DIR}/vcl/vclplug_win.component"
+        LIBRARY   vclplug_win
+        LAYER     OOO)
+    librestudio_set_library_output_name(vclplug_win vclplug_win OOO)
+    install(TARGETS vclplug_win RUNTIME DESTINATION program LIBRARY DESTINATION program)
+endif ()
+
 # --- svptest -------------------------------------------------------------------
 
 # The smallest program that starts VCL: it bootstraps UNO, calls InitVCL(), puts
@@ -1810,18 +1956,22 @@ endif ()
 #
 # Module_vcl.mk declares it among a group of workbench programs, under a guard
 # for cross-compiling and iOS/Android; none of those apply here.
-add_executable(svptest "${CMAKE_SOURCE_DIR}/vcl/workben/svptest.cxx")
+# Module_vcl.mk builds svptest on Windows too, but it drives the headless (svp)
+# back end, which a Windows build does not have.
+if (NOT WIN32)
+    add_executable(svptest "${CMAKE_SOURCE_DIR}/vcl/workben/svptest.cxx")
 
-target_include_directories(svptest PRIVATE
-    "${CMAKE_SOURCE_DIR}/vcl/inc"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(svptest udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
+    target_include_directories(svptest PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(svptest udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
 
-target_link_libraries(svptest PRIVATE
-    vcl tl sal comphelper cppu cppuhelper)
+    target_link_libraries(svptest PRIVATE
+        vcl tl sal comphelper cppu cppuhelper)
 
-install(TARGETS svptest RUNTIME DESTINATION program)
+    install(TARGETS svptest RUNTIME DESTINATION program)
+endif ()
 
 # --- vclmain and the workbench programs ----------------------------------------
 
@@ -1873,64 +2023,73 @@ add_dependencies(visualbackendtest udkapi_normal_headers offapi_normal_headers g
 target_link_libraries(visualbackendtest PRIVATE
     basegfx comphelper cppu cppuhelper tl sal salhelper vcl vclmain)
 
-# tl, sal, utl, vcl, cppu, cppuhelper, comphelper, and harfbuzz — the last
-# because it reads vcl/inc/font/TrueTypeFont.hxx, which includes hb.h and
-# hb-ot.h.  LIBRESTUDIO_HARFBUZZ_TARGET rather than the target names, so that
-# this keeps working whichever way the top level got harfbuzz.
-add_executable(fftester "${CMAKE_SOURCE_DIR}/vcl/workben/fftester.cxx")
-target_include_directories(fftester PRIVATE
-    "${CMAKE_SOURCE_DIR}/vcl/inc"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
-target_link_libraries(fftester PRIVATE
-    tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGET})
+# Module_vcl.mk: fftester, listfonts, listglyphs and svpclient are
+# $(filter-out ANDROID iOS WNT,$(OS)).
+if (NOT WIN32)
+    # tl, sal, utl, vcl, cppu, cppuhelper, comphelper, and harfbuzz — the last
+    # because it reads vcl/inc/font/TrueTypeFont.hxx, which includes hb.h and
+    # hb-ot.h.  LIBRESTUDIO_HARFBUZZ_TARGET rather than the target names, so that
+    # this keeps working whichever way the top level got harfbuzz.
+    add_executable(fftester "${CMAKE_SOURCE_DIR}/vcl/workben/fftester.cxx")
+    target_include_directories(fftester PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(fftester udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
+    target_link_libraries(fftester PRIVATE
+        tl sal utl vcl cppu cppuhelper comphelper ${LIBRESTUDIO_HARFBUZZ_TARGET})
 
-# tl, sal, vcl, cppu, cppuhelper, comphelper, i18nlangtag.  The last is not
-# decoration: the program asks MsLangId for the language of the system, and
-# without i18nlangtag on the link line that symbol is simply missing.
-add_executable(listfonts "${CMAKE_SOURCE_DIR}/vcl/workben/listfonts.cxx")
-target_include_directories(listfonts PRIVATE
-    "${CMAKE_SOURCE_DIR}/vcl/inc"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(listfonts udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
-target_link_libraries(listfonts PRIVATE
-    tl sal vcl cppu cppuhelper comphelper i18nlangtag)
+    # tl, sal, vcl, cppu, cppuhelper, comphelper, i18nlangtag.  The last is not
+    # decoration: the program asks MsLangId for the language of the system, and
+    # without i18nlangtag on the link line that symbol is simply missing.
+    add_executable(listfonts "${CMAKE_SOURCE_DIR}/vcl/workben/listfonts.cxx")
+    target_include_directories(listfonts PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(listfonts udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
+    target_link_libraries(listfonts PRIVATE
+        tl sal vcl cppu cppuhelper comphelper i18nlangtag)
 
-# The same list as listfonts, plus harfbuzz and graphite — this one is about
-# what the shapers make of a font.
-add_executable(listglyphs "${CMAKE_SOURCE_DIR}/vcl/workben/listglyphs.cxx")
-target_include_directories(listglyphs PRIVATE
-    "${CMAKE_SOURCE_DIR}/vcl/inc"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
-target_link_libraries(listglyphs PRIVATE
-    tl sal vcl cppu cppuhelper comphelper i18nlangtag
-    ${LIBRESTUDIO_HARFBUZZ_TARGET} ${LIBRESTUDIO_GRAPHITE2_TARGET})
+    # The same list as listfonts, plus harfbuzz and graphite — this one is about
+    # what the shapers make of a font.
+    add_executable(listglyphs "${CMAKE_SOURCE_DIR}/vcl/workben/listglyphs.cxx")
+    target_include_directories(listglyphs PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(listglyphs udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
+    target_link_libraries(listglyphs PRIVATE
+        tl sal vcl cppu cppuhelper comphelper i18nlangtag
+        ${LIBRESTUDIO_HARFBUZZ_TARGET} ${LIBRESTUDIO_GRAPHITE2_TARGET})
 
-# tl, sal, vcl, cppu, cppuhelper, comphelper; VCL_INTERNALS; and its own main().
-add_executable(svpclient "${CMAKE_SOURCE_DIR}/vcl/workben/svpclient.cxx")
-target_compile_definitions(svpclient PRIVATE VCL_INTERNALS)
-target_include_directories(svpclient PRIVATE
-    "${CMAKE_SOURCE_DIR}/vcl/inc"
-    "${udkapi_normal_HEADERS_INCLUDE_DIR}"
-    "${offapi_normal_HEADERS_INCLUDE_DIR}")
-add_dependencies(svpclient udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
-target_link_libraries(svpclient PRIVATE
-    tl sal vcl cppu cppuhelper comphelper)
+    # tl, sal, vcl, cppu, cppuhelper, comphelper; VCL_INTERNALS; and its own main().
+    add_executable(svpclient "${CMAKE_SOURCE_DIR}/vcl/workben/svpclient.cxx")
+    target_compile_definitions(svpclient PRIVATE VCL_INTERNALS)
+    target_include_directories(svpclient PRIVATE
+        "${CMAKE_SOURCE_DIR}/vcl/inc"
+        "${udkapi_normal_HEADERS_INCLUDE_DIR}"
+        "${offapi_normal_HEADERS_INCLUDE_DIR}")
+    add_dependencies(svpclient udkapi_normal_headers offapi_normal_headers gcc3_uno officecfg_registry)
+    target_link_libraries(svpclient PRIVATE
+        tl sal vcl cppu cppuhelper comphelper)
+endif ()
 
-install(TARGETS icontest visualbackendtest fftester listfonts listglyphs svpclient
-    RUNTIME DESTINATION program)
+set(VCL_WORKBENCH_PROGRAMS icontest visualbackendtest)
+if (NOT WIN32)
+    list(APPEND VCL_WORKBENCH_PROGRAMS svptest fftester listfonts listglyphs svpclient)
+endif ()
+install(TARGETS icontest visualbackendtest RUNTIME DESTINATION program)
+if (NOT WIN32)
+    install(TARGETS fftester listfonts listglyphs svpclient RUNTIME DESTINATION program)
+endif ()
 
 # Each of these bootstraps UNO and, through it, configmgr — which reads
 # CONFIGURATION_LAYERS from rtl::Bootstrap's default ini, not from unorc (see
 # the long comment above svptest for why the two are different files).  Give
 # each program its own "<name>rc" with the same content as unorc so that
 # default ini resolves to something that actually names the registry.
-foreach (_vcl_workbench_prog IN ITEMS
-    svptest icontest visualbackendtest fftester listfonts listglyphs svpclient)
+foreach (_vcl_workbench_prog IN LISTS VCL_WORKBENCH_PROGRAMS)
     librestudio_generate_unorc("${LIBRESTUDIO_PROGRAM_DIR}/${_vcl_workbench_prog}rc")
 endforeach ()
 
@@ -2083,5 +2242,4 @@ librestudio_add_cppunit_test(vcl_unit_conversion
 # that file's own header comment for the specific constraint, and
 # cmake/LibreStudioTest.cmake's header comment for why CMAKE_SOURCE_DIR (not
 # CMAKE_CURRENT_SOURCE_DIR) is required in the path argument below.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/vcl/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/vcl/CppunitTest_deferred.cmake")

@@ -969,5 +969,4 @@ endif (ENABLE_DBCONNECTIVITY)
 # technical reason (ado: Windows-only COM API; firebird_sdbc/mysqlc: need an
 # external client library this port has not vendored) -- not a scope
 # decision, just not attempted in this pass.
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/connectivity/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/connectivity/CppunitTest_deferred.cmake")

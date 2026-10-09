@@ -1202,5 +1202,4 @@ librestudio_set_library_output_name(sdqahelper sdqahelper PLAIN)
 # CMakeLists.txt, same ordering constraint as every other module's own
 # CppunitTest_deferred.cmake). See that file's own header comment for the
 # real structure (2 shared gbuild macros covering 12 of the 35).
-cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL include
-    "${CMAKE_SOURCE_DIR}/sd/CppunitTest_deferred.cmake")
+librestudio_include_deferred("${CMAKE_SOURCE_DIR}/sd/CppunitTest_deferred.cmake")

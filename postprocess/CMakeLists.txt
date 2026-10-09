@@ -228,7 +228,7 @@ install(FILES "${POSTPROCESS_FC_LOCAL_CONF}" DESTINATION share/fonts/truetype)
 # already-simplified-away ordering pass), so they are correctly not scanned
 # here at all.
 find_program(XSLTPROC_EXECUTABLE xsltproc REQUIRED)
-find_program(PYTHON3_EXECUTABLE NAMES python3 REQUIRED)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 
 set(WITH_THEMES
     breeze breeze_dark breeze_dark_svg breeze_svg

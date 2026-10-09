@@ -62,9 +62,15 @@ function(librestudio_add_package_mirror name)
 
     set(_pkg_outputs "")
     foreach (_pkg_pair IN LISTS _pkg_PAIRS)
-        string(REPLACE ":" ";" _pkg_pair "${_pkg_pair}")
-        list(GET _pkg_pair 0 _pkg_src)
-        list(GET _pkg_pair 1 _pkg_destdir)
+        # Split at the colon between the two absolute paths -- not at a drive
+        # letter's ("D:/..." on Windows), which is why this is not a plain
+        # string(REPLACE ":" ";").
+        if (_pkg_pair MATCHES "^(([A-Za-z]:)?[^:]*):(.*)$")
+            set(_pkg_src "${CMAKE_MATCH_1}")
+            set(_pkg_destdir "${CMAKE_MATCH_3}")
+        else ()
+            message(FATAL_ERROR "librestudio_add_package_mirror(${name}): bad PAIRS entry '${_pkg_pair}'")
+        endif ()
         get_filename_component(_pkg_name "${_pkg_src}" NAME)
         set(_pkg_dest "${_pkg_destdir}/${_pkg_name}")
         add_custom_command(
